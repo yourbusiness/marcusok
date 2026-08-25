@@ -4,6 +4,7 @@ import {
   App as AntdApp,
   Button,
   Card,
+  Checkbox,
   Col,
   Descriptions,
   Flex,
@@ -28,6 +29,7 @@ import {
   type ExportMode,
   type ExportPhase,
   type ExportResult,
+  type MergeRange,
 } from "@marcusok/excel-exporter";
 import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
 import wasmUrl from "modern-xlsx/wasm/modern_xlsx_wasm_bg.wasm?url";
@@ -85,6 +87,79 @@ const COLUMNS: ColumnConfig[] = [
   { key: "status", header: "状态", width: 12 },
 ];
 
+/**
+ * 同一批字段的三级分组表头（H=3）：ID 纵向跨满 3 行表头，分组表头横向跨其
+ * 叶子列，合并区间由 flattenColumnTree 自动生成（A1:A3、B1:C1、D1:F1、D2:E2、F2:F3）。
+ * 叶子顺序与 COLUMNS 一致，因此两种布局下"城市"都是第 3 个叶子列（col=2）。
+ */
+const GROUPED_COLUMNS: ColumnConfig[] = [
+  { key: "id", header: "ID", width: 10 },
+  {
+    header: "客户信息",
+    children: [
+      { key: "name", header: "姓名", width: 16 },
+      { key: "city", header: "城市", width: 12 },
+    ],
+  },
+  {
+    header: "订单明细",
+    children: [
+      {
+        header: "金额与日期",
+        children: [
+          {
+            key: "amount",
+            header: "金额",
+            width: 14,
+            format: { type: "number", decimals: 2, thousands: true },
+          },
+          {
+            key: "orderDate",
+            header: "下单日期",
+            width: 14,
+            format: { type: "date" },
+          },
+        ],
+      },
+      { key: "status", header: "状态", width: 12 },
+    ],
+  },
+];
+
+/** 叶子列数量 = 实际数据列数（分组列不产生数据列）。 */
+function countLeaves(cols: ColumnConfig[]): number {
+  return cols.reduce(
+    (n, c) => n + (c.children?.length ? countLeaves(c.children) : 1),
+    0,
+  );
+}
+
+/** 表头行数 = 1 + 列树最大深度（扁平表头为 1）。 */
+function headerDepth(cols: ColumnConfig[]): number {
+  return (
+    1 +
+    Math.max(
+      0,
+      ...cols.map((c) => (c.children?.length ? headerDepth(c.children) : 0)),
+    )
+  );
+}
+
+/**
+ * 演示 merges：每 10 行纵向合并"城市"列。MergeRange 相对数据区 0 基定位，
+ * 与表头行数无关（库内部会加表头偏移）。仅演示合并机制——合并区内只显示
+ * 左上角单元格的值。
+ */
+function buildCityMerges(totalRows: number, cityLeafCol = 2): MergeRange[] {
+  const merges: MergeRange[] = [];
+  for (let row = 0; row + 1 < totalRows; row += 10) {
+    const rowspan = Math.min(10, totalRows - row);
+    if (rowspan > 1)
+      merges.push({ row, col: cityLeafCol, rowspan, colspan: 1 });
+  }
+  return merges;
+}
+
 interface RunRecord {
   id: number;
   at: string; // HH:mm:ss
@@ -110,6 +185,8 @@ export default function BasicExportDemo() {
   const { message } = AntdApp.useApp();
   const [rows, setRows] = useState<number>(DEFAULT_ROWS);
   const [mode, setMode] = useState<ExportMode>("auto");
+  const [headerMode, setHeaderMode] = useState<"flat" | "grouped">("flat");
+  const [withMerges, setWithMerges] = useState(false);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<{
     percent: number;
@@ -201,7 +278,9 @@ export default function BasicExportDemo() {
       Math.min(200_000, Number.isFinite(rows) ? rows : DEFAULT_ROWS),
     );
     const requestedMode = mode;
-    const cols = COLUMNS.length;
+    const exportColumns = headerMode === "grouped" ? GROUPED_COLUMNS : COLUMNS;
+    const cols = countLeaves(exportColumns);
+    const merges = withMerges ? buildCityMerges(totalRows) : undefined;
     // 数据生成不计入导出耗时，保证各模式对比的是引擎本身的性能。
     const dataset = createDataset(totalRows);
     const t0 = performance.now();
@@ -220,7 +299,20 @@ export default function BasicExportDemo() {
 
     try {
       const result = await exportExcel({
-        sheets: [{ name: "示例表", columns: COLUMNS, data: dataset }],
+        sheets: [
+          {
+            name: "示例表",
+            columns: exportColumns,
+            data: dataset,
+            // 多级表头时冻结全部表头行并把筛选锚定在最后一行表头；
+            // 扁平模式保持原有行为（不冻结、不筛选）。
+            ...(headerMode === "grouped" && {
+              freezeRows: headerDepth(exportColumns),
+              autoFilter: true,
+            }),
+            ...(merges && merges.length > 0 && { merges }),
+          },
+        ],
         filename: "play-demo.xlsx",
         mode: requestedMode,
         onProgress: (p) => {
@@ -328,7 +420,9 @@ export default function BasicExportDemo() {
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
         配置行数与模式后导出，展示文件大小、耗时、吞吐等指标；多次导出会记录在下方
-        历史中对比（行数 ≥ 20,000 走 Worker，≥ 50,000 走流式）。
+        历史中对比（行数 ≥ 20,000 走 Worker，≥ 50,000 走流式）。「多级分组」演示
+        children 三级表头（自动合并表头格），「数据区合并」演示 merges（每 10
+        行纵向合并城市列）——两者在 stream 路径同样生效（样式除外）。
       </Typography.Paragraph>
 
       <Card>
@@ -361,6 +455,26 @@ export default function BasicExportDemo() {
               onChange={setMode}
               options={MODES.map((m) => ({ value: m, label: MODE_LABEL[m] }))}
             />
+          </Space>
+          <Space orientation="vertical" size={6}>
+            <Typography.Text type="secondary">表头结构</Typography.Text>
+            <Segmented<"flat" | "grouped">
+              options={[
+                { label: "扁平", value: "flat" },
+                { label: "多级分组", value: "grouped" },
+              ]}
+              value={headerMode}
+              onChange={setHeaderMode}
+            />
+          </Space>
+          <Space orientation="vertical" size={6}>
+            <Typography.Text type="secondary">数据区合并</Typography.Text>
+            <Checkbox
+              checked={withMerges}
+              onChange={(e) => setWithMerges(e.target.checked)}
+            >
+              每 10 行合并城市列
+            </Checkbox>
           </Space>
           <Space>
             <Button

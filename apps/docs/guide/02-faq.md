@@ -26,7 +26,7 @@ configureWasm({
 
 ### Stream 模式下样式不生效
 
-Stream 路径 v1 不支持单元格样式、表头样式与列宽/冻结/筛选/合并等布局特性（会在 console 打印警告）。需要完整样式时，控制在 5 万行以内走 Workbook 路径。详见 [Worker 与流式](/packages/excel-exporter/guide/06-worker-stream)。
+Stream 路径 v1 支持多行表头（`children`）与数据区合并（`merges`），但不支持单元格样式、表头样式与列宽/冻结/筛选等布局特性（会在 console 打印警告）。需要完整样式时，控制在 5 万行以内走 Workbook 路径。详见 [Worker 与流式](/packages/excel-exporter/guide/06-worker-stream)。
 
 ### 导出是本地完成的吗？
 

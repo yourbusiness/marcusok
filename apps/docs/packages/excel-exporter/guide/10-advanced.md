@@ -74,6 +74,10 @@ await exportExcel({
 - 分组表头样式用该列的 `headerStyle`，叶子表头样式同理（未设置时回退到表级 `headerStyle`）；
 - 任意路径（main / worker / stream / SheetJS 兜底）都支持多级表头，stream 与兜底路径同样保留合并（样式除外）。
 
+在线体验：下方是 `sales-grouped` 数据集的 mock 预览（两级分组表头，与导出文件的表头结构一致）；到 [包首页](/packages/excel-exporter/) 的演示面板选择 `sales-grouped` 数据集即可导出带多级表头与数据区合并的真实文件。
+
+<MockPreview dataset="sales-grouped" :rows="5" />
+
 ## 合并单元格
 
 ```ts

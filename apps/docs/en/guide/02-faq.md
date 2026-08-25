@@ -26,7 +26,7 @@ You are most likely on the `main` + `Workbook.toBuffer()` path, which has a clif
 
 ### Styles do not apply in stream mode
 
-Stream (v1) does not support cell styles, header styles or layout features such as width, freeze, filter and merges (a console warning is printed). Keep exports under 50k rows when you need full styling. See [Worker & streaming](/en/packages/excel-exporter/guide/06-worker-stream).
+Stream (v1) supports multi-row headers (`children`) and data-area merges (`merges`), but not cell styles, header styles or layout features such as width, freeze and filter (a console warning is printed). Keep exports under 50k rows when you need full styling. See [Worker & streaming](/en/packages/excel-exporter/guide/06-worker-stream).
 
 ### Is my data uploaded anywhere?
 

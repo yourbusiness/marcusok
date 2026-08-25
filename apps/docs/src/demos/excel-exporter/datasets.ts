@@ -1,4 +1,4 @@
-import type { FormatSpec } from "@marcusok/excel-exporter";
+import type { FormatSpec, MergeRange } from "@marcusok/excel-exporter";
 import { createRng } from "../../utils/random";
 
 export interface ExcelHint {
@@ -8,10 +8,13 @@ export interface ExcelHint {
 }
 
 export interface MockColumn {
-  key: string;
+  /** 叶子列必填；分组列（带 children）可省略，只贡献表头行。 */
+  key?: string;
   header: { zh: string; en: string };
   width?: number;
   hint?: ExcelHint;
+  /** 分组列：生成多行表头，表头格自动跨其全部叶子列合并。 */
+  children?: MockColumn[];
 }
 
 export interface MockDataset {
@@ -19,7 +22,27 @@ export interface MockDataset {
   fileName: string;
   sheetName: { zh: string; en: string };
   columns: MockColumn[];
+  /** 数据区合并（相对数据区 0 基），按实际导出行数生成。 */
+  merges?: (rowCount: number) => MergeRange[];
   rows(count: number, seed?: number): Record<string, unknown>[];
+}
+
+/** 叶子列（实际数据列），按表头从左到右的顺序。 */
+export function leafColumns(columns: MockColumn[]): MockColumn[] {
+  return columns.flatMap((c) =>
+    c.children?.length ? leafColumns(c.children) : [c],
+  );
+}
+
+/** 表头行数 = 1 + 列树最大深度（扁平表头为 1）。 */
+export function headerDepth(columns: MockColumn[]): number {
+  return (
+    1 +
+    Math.max(
+      0,
+      ...columns.map((c) => (c.children?.length ? headerDepth(c.children) : 0)),
+    )
+  );
 }
 
 const SALES_STATUS: Record<string, string> = {
@@ -260,7 +283,84 @@ const staff: MockDataset = {
   },
 };
 
-export const mockDatasets: MockDataset[] = [sales, inventory, staff];
+/**
+ * 销售明细的多级表头变体（H=2）：复用 sales 的行生成器，列组织为分组树。
+ * 演示 merges：每 5 行纵向合并"状态"列（第 9 个叶子列，col=8）——仅演示
+ * 合并机制，合并区内只显示左上角单元格的值。
+ */
+const salesGrouped: MockDataset = {
+  key: "sales-grouped",
+  fileName: "sales-grouped",
+  sheetName: { zh: "销售明细（分组表头）", en: "Sales (Grouped Header)" },
+  columns: [
+    {
+      header: { zh: "订单信息", en: "Order" },
+      children: [
+        { key: "orderId", header: { zh: "订单号", en: "Order ID" }, width: 18 },
+        {
+          key: "date",
+          header: { zh: "日期", en: "Date" },
+          width: 12,
+          hint: { kind: "format", spec: { type: "date" } },
+        },
+        { key: "region", header: { zh: "区域", en: "Region" }, width: 10 },
+      ],
+    },
+    {
+      header: { zh: "商品销售", en: "Item" },
+      children: [
+        { key: "product", header: { zh: "商品", en: "Product" }, width: 18 },
+        { key: "channel", header: { zh: "渠道", en: "Channel" }, width: 10 },
+        { key: "quantity", header: { zh: "数量", en: "Qty" }, width: 8 },
+      ],
+    },
+    {
+      header: { zh: "金额", en: "Amount" },
+      children: [
+        {
+          key: "unitPrice",
+          header: { zh: "单价", en: "Unit Price" },
+          width: 12,
+          hint: {
+            kind: "format",
+            spec: { type: "number", decimals: 2, thousands: true },
+          },
+        },
+        {
+          key: "amount",
+          header: { zh: "金额", en: "Amount" },
+          width: 14,
+          hint: { kind: "style", preset: "currency" },
+        },
+      ],
+    },
+    {
+      key: "status",
+      header: { zh: "状态", en: "Status" },
+      width: 10,
+      hint: {
+        kind: "format",
+        spec: { type: "enum", map: SALES_STATUS, fallback: "未知" },
+      },
+    },
+  ],
+  merges(rowCount) {
+    const merges: MergeRange[] = [];
+    for (let row = 0; row + 1 < rowCount; row += 5) {
+      const rowspan = Math.min(5, rowCount - row);
+      if (rowspan > 1) merges.push({ row, col: 8, rowspan, colspan: 1 });
+    }
+    return merges;
+  },
+  rows: (count, seed) => sales.rows(count, seed),
+};
+
+export const mockDatasets: MockDataset[] = [
+  sales,
+  inventory,
+  staff,
+  salesGrouped,
+];
 
 export function getDataset(key: string): MockDataset {
   const ds = mockDatasets.find((d) => d.key === key);

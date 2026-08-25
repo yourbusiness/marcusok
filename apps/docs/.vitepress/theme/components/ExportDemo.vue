@@ -4,7 +4,9 @@ import { useData } from "vitepress";
 import type { ColumnConfig } from "@marcusok/excel-exporter";
 import {
   getDataset,
+  headerDepth,
   mockDatasets,
+  type MockColumn,
 } from "../../../src/demos/excel-exporter/datasets";
 
 const { lang } = useData();
@@ -83,18 +85,25 @@ async function run() {
 
     const ds = getDataset(datasetKey.value);
     const data = ds.rows(rowsCount.value);
-    const columns: ColumnConfig[] = ds.columns.map((c) => {
+    // 递归映射：分组列（children）成为多行表头，width/style/format 只落在叶子列。
+    const toColumnConfig = (c: MockColumn): ColumnConfig => {
       const col: ColumnConfig = {
-        key: c.key,
         header: isEn.value ? c.header.en : c.header.zh,
       };
+      if (c.children?.length) {
+        col.children = c.children.map(toColumnConfig);
+        return col;
+      }
+      col.key = c.key;
       if (c.width) col.width = c.width;
       if (c.hint?.kind === "style" && c.hint.preset) {
         col.style = StylePresets[c.hint.preset as keyof typeof StylePresets];
       }
       if (c.hint?.kind === "format" && c.hint.spec) col.format = c.hint.spec;
       return col;
-    });
+    };
+    const columns: ColumnConfig[] = ds.columns.map(toColumnConfig);
+    const merges = ds.merges?.(rowsCount.value);
 
     const res = await exportExcel({
       filename: `${ds.fileName}-${rowsCount.value}`,
@@ -103,8 +112,10 @@ async function run() {
           name: ds.sheetName[isEn.value ? "en" : "zh"],
           columns,
           data,
-          freezeRows: 1,
+          // 多级表头冻结全部表头行；筛选锚定在最后一行表头。
+          freezeRows: headerDepth(ds.columns),
           autoFilter: true,
+          ...(merges?.length && { merges }),
         },
       ],
       mode: selectedMode.value,
