@@ -88,12 +88,12 @@ export interface PackageEntry {
   tagline: LocalizedText;
   keywords: string[];
   /**
-   * Whether this package ships an en/ doc mirror. Single source of truth
-   * for nav/sidebar/home visibility in the English locale. Validated
-   * against the actual en/packages/<dir>/ directory by validateDocsTree
+   * Whether this package ships a zh/ doc mirror. Single source of truth
+   * for nav/sidebar/home visibility in the Chinese locale. Validated
+   * against the actual zh/packages/<dir>/ directory by validateDocsTree
    * (config.ts) at build time, so the flag and dir can never drift.
    */
-  en: boolean;
+  zh: boolean;
   /**
    * Optional extra sidebar groups besides the default guide/examples/api.
    * `id` must be a directory under packages/<dir>/ containing the markdown.
@@ -146,8 +146,8 @@ export function resolvePackageSections(p: PackageEntry): PackageSection[] {
 /**
  * Home-page stats: package count (always first) followed by the given
  * packages' declared `homeStats`. Defaults to the full registry; callers on
- * the English site pass the locale-filtered list so zh-only packages do not
- * leak stats onto the en home page. Keys are guaranteed unique.
+ * the Chinese site pass the locale-filtered list so en-only packages do not
+ * leak stats onto the zh home page. Keys are guaranteed unique.
  */
 export function getAllHomeStats(
   pkgs: readonly PackageEntry[] = packages,
@@ -185,7 +185,7 @@ export const packages: PackageEntry[] = [
     npmName: "@marcusok/excel-exporter",
     version: excelExporterPkg.version,
     status: "stable",
-    en: true,
+    zh: true,
     tagline: {
       zh: "Excel 导出引擎（WASM + Fast stream，10 万行约 0.8s）",
       en: "Excel export engine (WASM + Fast stream, ~0.8s at 100k rows)",

@@ -1,35 +1,35 @@
-# 安装与配置
+# Installation & Configuration
 
-## 环境要求
+## Requirements
 
-- Node `>= 22`（包的 `engines` 要求）；包管理器不限，本文示例命令用 pnpm，npm / yarn 等价
-- 浏览器需要支持 WebAssembly（现代浏览器均支持）
-- 依赖：`modern-xlsx@^1.2.0` 为必装 peerDependency；`xlsx`（SheetJS）为可选兜底依赖
+- Node `>= 22` (the package's `engines` requirement); any package manager works — examples use pnpm, npm / yarn are equivalent
+- Browsers need WebAssembly support (all modern browsers)
+- `modern-xlsx@^1.2.0` is a required peerDependency; `xlsx` (SheetJS) is optional for the fallback
 
-## 安装
+## Install
 
 ```bash
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
-需要兜底时额外安装 SheetJS：
+Install SheetJS only if you want a local fallback:
 
 ```bash
 pnpm add xlsx
 ```
 
-不安装时，兜底路径会自动从 SheetJS 官方 CDN 加载 `xlsx.mjs`（0.20.3），但生产环境更推荐自托管。
+Without it, the fallback dynamically loads `xlsx.mjs` (0.20.3) from the official SheetJS CDN — self-hosting is recommended for production.
 
-## 浏览器：静态资源部署
+## Browser: static assets
 
-浏览器运行需要两份资源可被站点访问：
+Two assets must be reachable by your site:
 
-| 资源               | 说明                                                                                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `modern-xlsx.wasm` | WASM 核心（约 1.9MB），`configureWasm({ wasmUrl })` 指定                                                                                                     |
-| `export.worker.js` | Worker 多线程入口，`configureWasm({ workerUrl })` 指定；浏览器中凡进入 Worker 的路径都需要（auto ≥ 20,000 行，以及显式 `mode: "worker"` / `mode: "stream"`） |
+| Asset              | Description                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modern-xlsx.wasm` | WASM core (~1.9MB), pointed to by `configureWasm({ wasmUrl })`                                                                                                                        |
+| `export.worker.js` | Worker entry, pointed to by `configureWasm({ workerUrl })`; needed by every browser path that enters a Worker (auto ≥ 20,000 rows, plus explicit `mode: "worker"` / `mode: "stream"`) |
 
-推荐在 Vite 插件的 `buildStart` 中从 `require.resolve` 反推真实路径拷贝到 `public/assets/`（避免硬编码 node_modules 路径，pnpm 符号链接下更稳）：
+Recommended: a Vite plugin that resolves real paths from `require.resolve` in `buildStart` and copies them to `public/assets/` (robust under pnpm symlinks):
 
 ```ts
 // vite.config.ts
@@ -63,7 +63,7 @@ export default defineConfig({
 });
 ```
 
-应用入口统一配置：
+Configure once at app entry:
 
 ```ts
 import { configureWasm } from "@marcusok/excel-exporter";
@@ -74,17 +74,17 @@ configureWasm({
 });
 ```
 
-### configureWasm 参数
+### configureWasm options
 
-| 参数         | 类型            | 默认值   | 说明                                                            |
-| ------------ | --------------- | -------- | --------------------------------------------------------------- |
-| `wasmUrl`    | `string \| URL` | —        | 自托管 WASM 地址，生产强烈建议显式配置避免 CDN 漂移             |
-| `workerUrl`  | `string \| URL` | —        | `export.worker.js` 地址，worker 模式必填                        |
-| `timeoutMs`  | `number`        | `10_000` | 单次加载超时                                                    |
-| `maxRetries` | `number`        | `3`      | 最大尝试次数；默认 3 次尝试，失败后按 300ms、600ms 指数退避等待 |
+| Option       | Type            | Default  | Description                                                         |
+| ------------ | --------------- | -------- | ------------------------------------------------------------------- |
+| `wasmUrl`    | `string \| URL` | —        | Self-hosted WASM URL; explicitly configuring it avoids CDN drift    |
+| `workerUrl`  | `string \| URL` | —        | `export.worker.js` URL; required for worker mode                    |
+| `timeoutMs`  | `number`        | `10_000` | Per-attempt load timeout                                            |
+| `maxRetries` | `number`        | `3`      | Max attempts; 3 by default — failed attempts wait 300ms, then 600ms |
 
-`configureWasm` 是合并语义：仅当 `wasmUrl` 变化时才重置已加载（或加载中）的 WASM 实例，只改超时/重试不会造成重复初始化；若此前加载失败（error 态），任意 `configureWasm` 调用都会清除错误态，下次导出按新配置重试。
+`configureWasm` merges options: only a changed `wasmUrl` resets an already-loaded (or mid-load) WASM instance; changing timeouts/retries alone never causes re-initialization. If a previous load failed (error state), any `configureWasm` call clears the error so the next export retries with the new settings.
 
 ## Node / SSR
 
-Node 环境无需部署浏览器静态资源，但**本地运行时需要先初始化 WASM**：自动探测得到的 `file://` 地址无法被 Node 的 fetch 加载，若不引导会自动降级到无样式的 SheetJS 兜底（console 会打印 `[excel-exporter]` 前缀的警告）。做法是在入口先 `initWasmSync(readFileSync(...))`（见 [Node/SSR](/packages/excel-exporter/guide/09-node-ssr) 的完整示例），或通过 `configureWasm({ wasmUrl })` 指定一个可 fetch 的 HTTP 地址。`auto` 模式下 Node 不会走 Worker，而是主线程执行；≥ 5 万行自动切换流式路径（流式路径不依赖 WASM）。
+No browser static assets are needed in Node, but **WASM must be initialized first when running locally**: the auto-detected `file://` URL cannot be fetched by Node, and without bootstrapping the export degrades to the style-less SheetJS fallback (with an `[excel-exporter]` console warning). Either call `initWasmSync(readFileSync(...))` at your entry (full example in [Node/SSR](/packages/excel-exporter/guide/09-node-ssr)) or point `configureWasm({ wasmUrl })` at a fetchable HTTP URL. `auto` never uses Workers in Node; ≥ 50k rows switch to streaming on the main thread (the stream path does not use WASM).

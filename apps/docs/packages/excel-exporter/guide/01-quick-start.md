@@ -1,8 +1,8 @@
-# 快速上手
+# Quick Start
 
-一个 `exportExcel` 调用即可完成导出。核心概念只有三个：`sheets`（工作簿）、`columns`（列定义）、`data`（行数据）。
+One `exportExcel` call exports your data. The core concepts: `sheets` (workbook pages), `columns` (column definitions) and `data` (row objects).
 
-## 最小示例
+## Minimal example
 
 ```ts
 import { exportExcel } from "@marcusok/excel-exporter";
@@ -13,54 +13,49 @@ await exportExcel({
     {
       name: "Sheet1",
       columns: [
-        { key: "name", header: "名称", width: 16 },
-        { key: "count", header: "数量", width: 10 },
+        { key: "name", header: "Name", width: 16 },
+        { key: "count", header: "Count", width: 10 },
       ],
       data: [
-        { name: "机械键盘", count: 12 },
-        { name: "无线鼠标", count: 8 },
+        { name: "Keyboard", count: 12 },
+        { name: "Mouse", count: 8 },
       ],
     },
   ],
 });
 ```
 
-浏览器中运行会自动下载 `hello.xlsx`；`filename` 不以 `.xlsx` 结尾时，末尾自动追加 `.xlsx`。
+This downloads `hello.xlsx` in the browser; `.xlsx` is appended unless `filename` already ends with it.
 
-## 带上样式与格式化
+## With styles and formatting
 
 ```ts
 import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
 
 await exportExcel({
-  filename: "销售明细-2026",
+  filename: "sales-report-2026",
   sheets: [
     {
-      name: "销售明细",
+      name: "Sales",
       freezeRows: 1,
       autoFilter: true,
       columns: [
-        { key: "orderId", header: "订单号", width: 18 },
-        {
-          key: "date",
-          header: "日期",
-          width: 12,
-          format: { type: "date" },
-        },
+        { key: "orderId", header: "Order ID", width: 18 },
+        { key: "date", header: "Date", width: 12, format: { type: "date" } },
         {
           key: "amount",
-          header: "金额",
+          header: "Amount",
           width: 14,
           style: StylePresets.currency,
         },
         {
           key: "status",
-          header: "状态",
+          header: "Status",
           width: 10,
           format: {
             type: "enum",
-            map: { paid: "已支付", pending: "待支付", refunded: "已退款" },
-            fallback: "未知",
+            map: { paid: "Paid", pending: "Pending", refunded: "Refunded" },
+            fallback: "Unknown",
           },
         },
       ],
@@ -83,14 +78,14 @@ await exportExcel({
 });
 ```
 
-要点：
+Notes:
 
-- `freezeRows: 1` 冻结表头；
-- `autoFilter: true` 为表头添加筛选；
-- `style` 作用于**数据单元格**（表头保持默认样式，与类型约定一致）；
-- `format` 是结构化、可跨线程的 `FormatSpec`，日期会转换为 Excel 日期序列并自动注入 `numFormat`，枚举值映射为中文文案。
+- `freezeRows: 1` freezes the header row;
+- `autoFilter: true` adds filter dropdowns;
+- `style` applies to **data cells only** (headers stay default, matching the type contract);
+- `format` is a structured, thread-safe `FormatSpec`: dates become Excel date serials with an auto-injected `numFormat`, enums map to readable labels.
 
-## 不自动下载，只拿 Blob
+## Blob only, no download
 
 ```ts
 const result = await exportExcel({
@@ -100,11 +95,10 @@ const result = await exportExcel({
 });
 
 if (result.success && result.blob) {
-  // 上传到 OSS / 发送给接口 / 自定义下载逻辑
   const form = new FormData();
   form.append("file", result.blob, "report.xlsx");
   await fetch("/api/upload", { method: "POST", body: form });
 }
 ```
 
-`ExportResult` 同时返回实际使用的 `engine`、`mode`、`duration` 与 `rowCount`，可据此展示性能指标或做埋点。
+`ExportResult` also reports the actual `engine`, `mode`, `duration` and `rowCount`, useful for metrics or telemetry.

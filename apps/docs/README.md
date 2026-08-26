@@ -1,7 +1,7 @@
 # @marcusok/docs
 
 面向 `marcus-monorepo` 所有库包的公开技术文档站（VitePress），部署于 GitHub Pages：
-`https://yourbusiness.github.io/marcus-monorepo/`。默认中文，提供英文版。
+`https://yourbusiness.github.io/marcus-monorepo/`。默认英文，提供中文版（`/zh/`）。
 
 ## 常用命令
 
@@ -24,10 +24,10 @@ pnpm typecheck     # turbo 全仓类型检查（docs 执行 vue-tsc --noEmit）
 .vitepress/config.ts                 # 站点配置（base、i18n、导航、自动侧边栏）
 .vitepress/registry.ts               # ★ 包注册表：新增包只需在此登记（含侧边栏/统计/亮点）
 .vitepress/theme/components/         # 自定义 Vue 组件（首页卡片、live demo 等）
-scripts/check-i18n.mjs               # zh/en 页面镜像校验（`pnpm test` 会执行）
+scripts/check-i18n.mjs               # en/zh 页面镜像校验（`pnpm test` 会执行）
 src/demos/<name>/                    # 每个包各自的确定性 mock 数据生成器
-packages/<name>/                     # 每个库包一份文档（guide / examples / api）
-en/                                  # 英文版镜像（根目录为中文默认）
+packages/<name>/                     # 每个库包一份文档（guide / examples / api，英文，即默认语言）
+zh/                                  # 中文版镜像（根目录为英文默认）
 ```
 
 ## 新增一个包
@@ -36,7 +36,7 @@ en/                                  # 英文版镜像（根目录为中文默�
 2. 在 `packages/<name>/` 下写文档（`guide/`、`examples/`、`api/`，md 文件即页面，H1 即侧边栏标题）；
 3. 在 `.vitepress/registry.ts` 的 `packages` 数组中加一条记录；
 4. 侧边栏、导航、首页包卡片自动生成；如需首页亮点，给该条目补 `homeStats`（统计卡片）与 `highlights`（亮点卡片）；如需非默认章节（如 `migration/`），用 `sections` 覆盖默认的 guide/examples/api 分组；
-5. 如需英文版，同步在 `en/packages/<name>/` 写英文页（文件名含数字前缀时须与中文一致）；**暂时只提供中文时不要创建 `en/packages/<name>/` 目录**，`pnpm test` 会跳过该包的镜像校验，en 导航/侧边栏/首页包卡片/统计/亮点会自动隐藏仅中文的包；之后补英文时建目录并补齐镜像页面即可；
+5. 如需中文版，同步在 `zh/packages/<name>/` 写中文页（文件名含数字前缀时须与英文一致）；**暂时只提供英文时不要创建 `zh/packages/<name>/` 目录**，`pnpm test` 会跳过该包的镜像校验，zh 导航/侧边栏/首页包卡片/统计/亮点会自动隐藏仅英文的包；之后补中文时建目录并补齐镜像页面即可；
 6. 页面顺序由文件名数字前缀控制：`NN-` 开头（如 `01-quick-start.md`）按数字升序排列，无前缀文件排在最后按字母序；
 7. 任何 `packages/**` 的改动都会触发 `deploy.yml`，合并到 main 后自动重建并部署文档站。
 

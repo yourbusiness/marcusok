@@ -1,47 +1,48 @@
 # play
 
-Monorepo 本地联调沙箱，基于 **React 19 + TypeScript + Vite 8 + Ant Design 6**
-搭建。每个被测包在 `src/demos/<pkg>/` 下有一个独立目录，demo 实现按需加载，
-首页只加载轻量元信息。
+The monorepo's local integration sandbox, built with **React 19 + TypeScript + Vite 8 + Ant Design 6**. Each package under test gets its own directory under `src/demos/<pkg>/`; demo implementations are loaded on demand and the home page only loads lightweight metadata.
 
-## 技术栈
+## Tech Stack
 
-| 依赖                 | 版本说明                                                |
-| -------------------- | ------------------------------------------------------- |
-| react / react-dom    | 19.2.x                                                  |
-| antd                 | 6.5.x（原生支持 React 19）                              |
-| vite                 | 8.2.x（Rolldown 内核）                                  |
-| @vitejs/plugin-react | 6.x                                                     |
-| vitest               | 4.1.x（peer 支持 vite 8）                               |
-| typescript           | 5.9.x（typescript-eslint 8.65 约束 < 6.1，暂不升 TS 7） |
+| Dependency           | Version notes                                                          |
+| -------------------- | ---------------------------------------------------------------------- |
+| react / react-dom    | 19.2.x                                                                 |
+| antd                 | 6.5.x (native React 19 support)                                        |
+| vite                 | 8.2.x (Rolldown core)                                                  |
+| @vitejs/plugin-react | 6.x                                                                    |
+| vitest               | 4.1.x (peer supports vite 8)                                           |
+| typescript           | 5.9.x (typescript-eslint 8.65 constrains < 6.1; not upgrading to TS 7) |
 
-## 用法
+## Usage
 
 ```bash
-# 推荐：从仓库根目录启动（统一 dev 启动器 scripts/dev.mjs）
+# Recommended: start from the repo root (unified dev launcher scripts/dev.mjs)
 pnpm dev
 
-# 只起 play：先 build 上游包，再启动 vite（不启动 tsup --watch 与 vitepress）
+# play only: build upstream packages first, then start vite (no tsup --watch or vitepress)
 pnpm dev:play
 ```
 
-两种方式的区别：
+The difference:
 
-- `pnpm dev`：执行 `node scripts/dev.mjs`，先跑一遍 `turbo run build`（把
-  `excel-exporter` 等包构建出 `dist/`，等价于 turbo dev 的 `dependsOn: ["^build"]`），
-  再并行启动全部三个 dev 服务：excel-exporter 的 `tsup --watch`、play 的 `vite`
-  （5173）、docs 的 `vitepress dev`（5174）。
-- `pnpm dev:play`：执行 `node scripts/dev.mjs play`，同样先 build 上游，
-  再只启动 play 的 vite。
+- `pnpm dev`: runs `node scripts/dev.mjs`, which first runs `turbo run build` once
+  (building `excel-exporter` and friends into `dist/`, equivalent to turbo dev's
+  `dependsOn: ["^build"]`), then starts all three dev services in parallel:
+  excel-exporter's `tsup --watch`, play's `vite` (5173), and docs'
+  `vitepress dev` (5174).
+- `pnpm dev:play`: runs `node scripts/dev.mjs play` — same upstream build, then
+  only play's vite.
 
-> dev 启动器（`scripts/dev.mjs`）已替代 `turbo run dev`：Windows 下
-> turbo → pnpm.CMD → cmd.exe → node 的多层包装会断开 Ctrl+C 信号传递，
-> 导致子进程残留占用端口；启动器由 node 直接拉起各进程，退出时按进程树清理。
+> The dev launcher (`scripts/dev.mjs`) has replaced `turbo run dev`: on Windows,
+> the turbo → pnpm.CMD → cmd.exe → node wrapper chain breaks Ctrl+C signal
+> delivery, leaving orphaned child processes holding ports; the launcher spawns
+> each process directly from node and cleans up the process tree on exit.
 
-Vite dev server 固定监听 `http://localhost:5173`（`strictPort`：端口被占用时直接
-报错，而不是静默换到 5174/5175；确需其它端口用 `vite --port <n>`）。
+The Vite dev server is pinned to `http://localhost:5173` (`strictPort`: if the
+port is taken it fails loudly instead of silently moving to 5174/5175; use
+`vite --port <n>` if you really need another port).
 
-质量门禁：
+Quality gates:
 
 ```bash
 pnpm --filter @marcusok/play typecheck
@@ -49,86 +50,106 @@ pnpm --filter @marcusok/play lint
 pnpm --filter @marcusok/play test
 ```
 
-> play 是 `private` 包，不参与 changeset 发布；`build`（`vite build`）仅作为
-> 产物可构建性校验（CI 与根目录 `pnpm build` 会执行，产出 `dist/` 不入库）。
+> play is a `private` package and does not participate in changeset publishing;
+> `build` (`vite build`) serves only as a buildability check (run by CI and the
+> root `pnpm build`; the output `dist/` is not committed).
 
-## 布局与交互
+## Layout & Interaction
 
-- 暗色可折叠侧边栏（品牌区 + demo 列表）+ 顶部栏（当前 demo 名 + 亮/暗主题切换）。
-- 首页用卡片网格展示 demo（label + description，悬停反馈）。
-- 主题由 `src/app/theme.ts` 统一配置：主色、圆角、亮/暗算法，选择存 localStorage。
-- 路由为轻量 hash 路由（`#/excel-exporter`），刷新不丢当前 demo、URL 可分享；
-  结构只有「概览 / 详情」两层，不需要引入 react-router。
+- Collapsible dark sidebar (brand area + demo list) plus a top bar (current demo
+  name + light/dark theme toggle).
+- The home page shows demos as a card grid (label + description, hover feedback).
+- Theming is centralized in `src/app/theme.ts`: primary color, border radius,
+  light/dark algorithms; the selection persists to localStorage.
+- Routing is a lightweight hash router (`#/excel-exporter`): refresh-safe and
+  shareable URLs; with only an "overview / detail" structure, react-router is
+  unnecessary.
 
-## Mock 数据
+## Mock Data
 
-`src/mock/rows.ts` 提供确定性 mock 生成器（mulberry32 伪随机，固定 seed）：
+`src/mock/rows.ts` provides a deterministic mock generator (mulberry32 PRNG with
+a fixed seed):
 
-- 档位：`100 / 1k / 10k / 50k / 100k / 200k`，常量 `DATASET_PRESETS`。
-- 默认档位：`10,000` 行（`DEFAULT_ROWS`，改这一处即可调整默认值）。
-- 字段混入字符串、数字、日期、枚举，供 excel-exporter 的 `format` / `numFormat`
-  验证使用。
+- Tiers: `100 / 1k / 10k / 50k / 100k / 200k`, exposed as the `DATASET_PRESETS`
+  constant.
+- Default tier: `10,000` rows (`DEFAULT_ROWS`; change this one constant to
+  adjust the default).
+- Fields mix strings, numbers, dates and enums to exercise excel-exporter's
+  `format` / `numFormat` handling.
 
-同一 seed 下同一档位数据完全一致，重复导出、横向对比性能时才不会被数据随机性干扰。
+With the same seed and tier the data is identical every time, so repeated
+exports and cross-run performance comparisons are not distorted by data
+randomness.
 
-## 新增一个包的联调
+## Adding a Package Sandbox
 
-1. 复制 `src/demos/_template/` → `src/demos/<your-pkg>/`
-2. 在 play `package.json` 的 dependencies 中声明
-   `"@marcusok/<your-pkg>": "workspace:*"`，然后 `pnpm install`
-3. 取消 `index.ts` 里的注释模板，填写 `name` / `label` / `description`，并在
-   `load()` 里动态 import 实现（返回 `{ default: React 组件 }`）
-4. **重启 dev server**：`import.meta.glob` 是启动时静态展开的，运行中新增的 demo
-   目录不会被发现（新增 demo、改 demo 名都需要重启）
+1. Copy `src/demos/_template/` → `src/demos/<your-pkg>/`
+2. Declare `"@marcusok/<your-pkg>": "workspace:*"` in play's `package.json`
+   dependencies, then run `pnpm install`
+3. Uncomment the template in `index.ts`, fill in `name` / `label` /
+   `description`, and dynamically import the implementation in `load()`
+   (returning `{ default: React component }`)
+4. **Restart the dev server**: `import.meta.glob` is expanded statically at
+   startup, so demo directories added at runtime are not discovered (adding a
+   demo or renaming one both require a restart)
 
-### 包布局约定（由测试强制校验）
+### Package layout conventions (enforced by tests)
 
-`pnpm --filter @marcusok/play test` 会校验以下规则，新包接入不合规会直接红：
+`pnpm --filter @marcusok/play test` validates the following rules; a
+non-compliant package fails the suite outright:
 
-- 每个被测包必须提供 `src/index.ts`（或 `src/index.tsx`）作为主入口，否则无法获得
-  源码别名 HMR。Vite 启动时对不合规的依赖包会打印警告并走 dist 解析。
-- 每个声明在 dependencies 里的 `@marcusok/*` 包，必须存在
-  `src/demos/<pkg>/index.ts`，且通过 `registerDemo({ name: "<pkg>", ... })` 注册。
+- Every package under test must provide `src/index.ts` (or `src/index.tsx`) as
+  its main entry, otherwise it cannot get source-alias HMR. Vite prints a
+  warning for non-compliant dependency packages at startup and falls back to
+  dist resolution.
+- Every `@marcusok/*` package declared in dependencies must have
+  `src/demos/<pkg>/index.ts` registering itself via
+  `registerDemo({ name: "<pkg>", ... })`.
 
-### Demo 生命周期
+### Demo lifecycle
 
-每个 demo 的入口 `index.ts` 只注册轻量元信息（`name` / `label` / `description` /
-`load`），实际 UI 在单独的 `*.demo.tsx` 里，由 `load()` 动态 import 按需加载：
+Each demo's `index.ts` entry only registers lightweight metadata (`name` /
+`label` / `description` / `load`); the actual UI lives in a separate
+`*.demo.tsx`, dynamically imported by `load()` on demand:
 
 ```ts
-// index.ts —— 只放元信息，不要在这里静态 import 重依赖
+// index.ts — metadata only; do not statically import heavy dependencies here
 registerDemo({
   name: "your-pkg",
-  label: "your-pkg · 说明",
-  description: "一句话说明这个 demo 演示什么。",
+  label: "your-pkg · summary",
+  description: "One sentence on what this demo shows.",
   async load() {
     return import("./your-pkg.demo.js");
   },
 });
 ```
 
-`load()` 返回的模块默认导出是 React 组件，由 `App.tsx` 的 Suspense 边界渲染；
-资源清理（定时器、fetch、WebSocket 等）在组件 `useEffect` 的 cleanup 里做，
-导航离开时自动执行，不再需要手写的 `destroy()` 机制。
+The module returned by `load()` must default-export a React component, rendered
+inside the Suspense boundary in `App.tsx`; resource cleanup (timers, fetch,
+WebSocket, etc.) happens in the component's `useEffect` cleanup, which runs
+automatically on navigation — no hand-written `destroy()` mechanism is needed.
 
-## 模块解析规则（vite.config.ts）
+## Module Resolution Rules (vite.config.ts)
 
-- 主入口 `@marcusok/<pkg>` → `src/index.ts(.tsx)` 源码（HMR 友好）。
-- 子路径 `@marcusok/<pkg>/<sub>` → 依次尝试：`src/<sub>.ts(.tsx)` /
-  `src/<sub>/index.*` 源码 → 根据包 `exports` 映射回源码（支持嵌套条件，如
-  `{"import": {"types": ..., "default": ...}}`；即使导出键名与源文件名不同也能走
-  源码）→ `dist/<sub>` 构建产物。因此子路径也能 HMR；用到 `dist/` 产物（如 worker）
-  时需上游 build。
-- 第三方包未在 `exports` 里暴露的子路径（如 `modern-xlsx/wasm/*`）：在
-  `vite.config.ts` 的 `externalOverrides` 数组里加一条
-  `{ pkg, dir, excludeFromOptimizeDeps }` 即可，resolver 会自动重写到物理文件。
-- 解析与别名的纯函数逻辑在 `src/vite/workspace-resolver.ts`，有单测覆盖
-  （`src/__tests__/workspace-resolver.test.ts`）。
+- Main entry `@marcusok/<pkg>` → `src/index.ts(.tsx)` source (HMR-friendly).
+- Subpath `@marcusok/<pkg>/<sub>` → tried in order: `src/<sub>.ts(.tsx)` /
+  `src/<sub>/index.*` source → mapped back to source via the package's `exports`
+  (nested conditions supported, e.g. `{"import": {"types": ..., "default": ...}}`;
+  source resolution works even when the export key differs from the source file
+  name) → `dist/<sub>` build output. So subpaths get HMR too; subpaths that use
+  `dist/` artifacts (like workers) require an upstream build.
+- Third-party subpaths not exposed via `exports` (e.g. `modern-xlsx/wasm/*`):
+  add a `{ pkg, dir, excludeFromOptimizeDeps }` entry to `externalOverrides` in
+  `vite.config.ts` and the resolver rewrites it to the physical file.
+- The pure-function resolution/alias logic lives in
+  `src/vite/workspace-resolver.ts` with unit-test coverage
+  (`src/__tests__/workspace-resolver.test.ts`).
 
-## Worker / WASM 资源
+## Worker / WASM Assets
 
-如果你的包用到 Worker 或 WASM 等运行时资源（无法通过普通 import 解析），需要用
-Vite 的 `?url` 后缀导入资源路径，再传给包的配置函数。参考 `excel-exporter` demo：
+If your package uses runtime assets like Workers or WASM (not resolvable via
+plain imports), import the asset path with Vite's `?url` suffix and pass it to
+the package's configure function. See the `excel-exporter` demo:
 
 ```ts
 import workerUrl from "@marcusok/your-pkg/dist/your.worker.js?url";
@@ -137,23 +158,28 @@ import wasmUrl from "your-wasm-dep/your.wasm?url";
 yourPkg.configure({ workerUrl, wasmUrl });
 ```
 
-注意 `@marcusok/<pkg>/dist/*.worker.js` 是构建产物，必须 build 上游包（`pnpm dev`
-与 `pnpm dev:play` 都会自动做）。dist 产物的改动不会触发 HMR（源码别名只覆盖
-主入口与子路径源码），改 worker 等产物后需手动 build 上游并刷新页面。不配置
-worker/wasm 的话，包可能会静默降级到 fallback 路径（如 excel-exporter 会降级到
-SheetJS，丢失样式）。
+Note that `@marcusok/<pkg>/dist/*.worker.js` is build output, so upstream
+packages must be built (both `pnpm dev` and `pnpm dev:play` do this
+automatically). Changes to dist output do not trigger HMR (the source alias only
+covers the main entry and subpath sources) — after changing a worker or similar
+artifact, rebuild the upstream package and refresh the page manually. Without
+worker/wasm configured, a package may silently degrade to a fallback path (e.g.
+excel-exporter falls back to SheetJS, losing styles).
 
-## 工具链
+## Toolchain
 
-- pnpm 版本由根 `package.json` 的 `packageManager` 固定（`pnpm@9.12.0`），请通过
-  corepack（或等价方式）运行，避免不同版本 pnpm 重写 lockfile 造成大范围 diff。
-- play 使用 Vite 8，要求 Node >= 22.12（play `package.json` 的
-  `engines` 已声明）；本机 Node 22.22.2 满足。
-- vitest 4.1.x 与 vite 8 对齐（peer 支持 `^6 || ^7 || ^8`），仓库内只有一套 vite
-  主版本。
+- The pnpm version is pinned by the root `package.json`'s `packageManager`
+  field (`pnpm@9.12.0`); run it via corepack (or equivalent) so different pnpm
+  versions don't rewrite the lockfile and produce huge diffs.
+- play uses Vite 8, which requires Node >= 22.12 (declared in play's
+  `package.json` `engines`); the local Node 22.22.2 satisfies this.
+- vitest 4.1.x aligns with vite 8 (peer supports `^6 || ^7 || ^8`); the repo
+  carries a single vite major version.
 
 ## HMR
 
-编辑 demo 源码后，`@vitejs/plugin-react` 提供 React Fast Refresh，原地热更新当前
-demo，不整页刷新；当前 hash 路由会被保留。demo 组件卸载时由 React 自动执行
-`useEffect` cleanup（等价于旧版手写 HMR 里的 `destroy()`）。
+After editing demo source, `@vitejs/plugin-react` provides React Fast Refresh —
+the current demo hot-updates in place without a full page reload, and the
+current hash route is preserved. When a demo component unmounts, React
+automatically runs its `useEffect` cleanup (equivalent to the hand-written
+`destroy()` in the old HMR setup).

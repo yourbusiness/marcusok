@@ -1,4 +1,4 @@
-# API：exportExcel 与配置
+# API: exportExcel & Configuration
 
 ## exportExcel
 
@@ -6,30 +6,30 @@
 exportExcel(options: ExportOptions): Promise<ExportResult>
 ```
 
-核心入口函数（`exportTable` / `exportEcharts` 等便捷封装最终都委托给它）。根据数据量与环境自动路由到 main / worker / stream，WASM 不可用时降级 SheetJS。
+The core entry point (convenience wrappers such as `exportTable` / `exportEcharts` delegate to it). Routes to main / worker / stream by row count and environment, degrading to SheetJS when WASM is unavailable.
 
 ## ExportOptions
 
-| 字段         | 类型                                               | 必填 | 说明                                                                                                                                        |
-| ------------ | -------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sheets`     | `SheetConfig[]`                                    | 是   | 工作表配置，至少一个                                                                                                                        |
-| `filename`   | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                                                                                                 |
-| `mode`       | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`，按行数自动路由                                                                                                               |
-| `onProgress` | `(progress: number) => void`                       | —    | 0 → 1；首尾 0 与 1 由 `exportExcel` 在所有路径各上报一次（含 SheetJS 兜底与最终失败的导出）；分段进度仅 stream 路径有（每 1000 行上报一次） |
-| `onPhase`    | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                                                                                      |
-| `download`   | `boolean`                                          | —    | 默认 `true` 触发浏览器下载；`false` 只返回 Blob                                                                                             |
+| Field        | Type                                               | Required | Description                                                                                                                                                                                                                     |
+| ------------ | -------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sheets`     | `SheetConfig[]`                                    | yes      | At least one sheet                                                                                                                                                                                                              |
+| `filename`   | `string`                                           | yes      | Download name; `.xlsx` is appended unless it already ends with it                                                                                                                                                               |
+| `mode`       | `"auto" \| "main" \| "worker" \| "stream"`         | —        | Default `"auto"`                                                                                                                                                                                                                |
+| `onProgress` | `(progress: number) => void`                       | —        | 0 → 1; the leading 0 and trailing 1 are each fired exactly once by `exportExcel` on every route (including the SheetJS fallback and ultimately failed exports); incremental progress only on the stream path (every 1,000 rows) |
+| `onPhase`    | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                                                                                                                                                                           |
+| `download`   | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                                                                                                                                                                                   |
 
 ## ExportResult
 
-| 字段        | 类型                         | 说明                         |
-| ----------- | ---------------------------- | ---------------------------- |
-| `success`   | `boolean`                    | 是否成功                     |
-| `blob?`     | `Blob`                       | 导出文件内容                 |
-| `engine?`   | `"modern-xlsx" \| "sheetjs"` | 实际使用的引擎               |
-| `mode?`     | `ExportMode`                 | 实际使用的模式               |
-| `duration?` | `number`                     | 完整导出耗时（ms）           |
-| `rowCount?` | `number`                     | 导出行数                     |
-| `error?`    | `Error`                      | 失败原因（兜底路径也会返回） |
+| Field       | Type                         | Description                                    |
+| ----------- | ---------------------------- | ---------------------------------------------- |
+| `success`   | `boolean`                    | Whether the export succeeded                   |
+| `blob?`     | `Blob`                       | The file content                               |
+| `engine?`   | `"modern-xlsx" \| "sheetjs"` | Engine actually used                           |
+| `mode?`     | `ExportMode`                 | Mode actually used                             |
+| `duration?` | `number`                     | Total duration in ms                           |
+| `rowCount?` | `number`                     | Exported row count                             |
+| `error?`    | `Error`                      | Failure reason (also set on the fallback path) |
 
 ## configureWasm
 
@@ -37,20 +37,20 @@ exportExcel(options: ExportOptions): Promise<ExportResult>
 configureWasm(options: LoaderOptions): void
 ```
 
-| 字段         | 默认值   | 说明                                                    |
-| ------------ | -------- | ------------------------------------------------------- |
-| `wasmUrl`    | —        | 自托管 `modern-xlsx.wasm` 地址                          |
-| `workerUrl`  | —        | `export.worker.js` 地址，worker 模式必填                |
-| `timeoutMs`  | `10_000` | 单次加载超时                                            |
-| `maxRetries` | `3`      | 最大加载尝试次数（默认共 3 次含首次，退避 300ms/600ms） |
+| Field        | Default  | Description                                                      |
+| ------------ | -------- | ---------------------------------------------------------------- |
+| `wasmUrl`    | —        | Self-hosted `modern-xlsx.wasm` URL                               |
+| `workerUrl`  | —        | `export.worker.js` URL; required for worker mode                 |
+| `timeoutMs`  | `10_000` | Per-attempt load timeout                                         |
+| `maxRetries` | `3`      | Max load attempts (3 total incl. the first; 300ms/600ms backoff) |
 
-## 其他导出符号
+## Other exported symbols
 
-- `WorkbookBuilder.create()` + `addSheet(config)` + `toBuffer()` / `toBlob()`：批量化构建，完整样式；
-- `exportAsStream(sheets, onProgress?)`：底层流式导出，返回 `Promise<{ bytes, rowCount }>`；
-- `exportTable(options)`：常见表格数据便捷导出，支持 AntD `title`/`dataIndex` 与 Element Plus `label`/`prop`；
-- `exportEcharts(options)`：常见 ECharts 数据便捷导出，支持类目轴多系列、饼图 `name/value`、散点 `[x,y]`；
-- `getWasmLoader()`：访问全局 WASM 加载器（状态：idle / loading / ready / error）。
+- `WorkbookBuilder.create()` + `addSheet(config)` + `toBuffer()` / `toBlob()`: batch build with full styling;
+- `exportAsStream(sheets, onProgress?)`: lower-level streaming, returns `Promise<{ bytes, rowCount }>`;
+- `exportTable(options)`: convenience for common table data; accepts AntD `title`/`dataIndex` and Element Plus `label`/`prop`;
+- `exportEcharts(options)`: convenience for common ECharts data; supports category-axis series, pie `name/value`, and scatter `[x,y]`;
+- `getWasmLoader()`: access the global WASM loader (state: idle / loading / ready / error).
 
 ```ts
 import {
@@ -64,4 +64,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> 入口还重导出了若干底层工具与类型（如 `format-utils` 的 `applyFormat` / `validateSheetName`、`LoaderOptions` / `LoadState`、`BorderStyle` 等），本文档只覆盖常用的稳定 API，完整列表见 `src/index.ts`。
+> The entry point also re-exports lower-level utilities and types (e.g. `applyFormat` / `validateSheetName` from `format-utils`, `LoaderOptions` / `LoadState`, `BorderStyle`). This page covers the commonly used stable API only; see `src/index.ts` for the full list.

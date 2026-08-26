@@ -1,16 +1,16 @@
-# 在线演示
+# Play
 
-下面的面板在浏览器里直接运行 `@marcusok/excel-exporter`：选择数据集、数据量与导出模式，点击导出即可得到真实 `.xlsx` 文件，同时展示进度、各阶段耗时与最终引擎信息。
+The panel below runs `@marcusok/excel-exporter` directly in your browser: pick a dataset, row count and export mode, click export to get a real `.xlsx` file, and watch progress, phase timings and the actual engine used.
 
 <ClientOnly>
   <PackageDemo dir="excel-exporter" />
 </ClientOnly>
 
-## 演示要点
+## What to try
 
-- **auto（推荐）**：按数据量自动选择 main / worker / stream 最优路径；
-- **main**：主线程同步构建，10 万行时可以看到明显的性能断崖；
-- **worker**：Web Worker 多线程，主线程只做一次结构化克隆；
-- **stream**：Fast stream，10 万行约 0.8s，但不支持样式与布局特性。
+- **auto (recommended)**: picks the optimal main / worker / stream path by row count;
+- **main**: synchronous main-thread build — notice the cliff at 100k rows;
+- **worker**: Web Worker threading; the main thread only does one structured clone;
+- **stream**: Fast stream, ~0.8s at 100k rows, but no styles or layout features.
 
-数据由文档站的确定性 mock 生成器产生（mulberry32 种子 PRNG），同一配置多次生成结果一致，方便复现。完整用法见 [excel-exporter 文档](/packages/excel-exporter/)。
+Data comes from the docs site's deterministic mock generator (mulberry32 seeded PRNG), so repeated runs with the same settings produce identical output. Full usage docs: [excel-exporter](/packages/excel-exporter/).

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Public documentation site for marcus-monorepo packages (VitePress, zh-CN default + en).",
+  "description": "Public documentation site for marcus-monorepo packages (VitePress, en-US default + zh).",
   "engines": {
     "node": ">=22.0.0"
   },

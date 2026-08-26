@@ -1,31 +1,31 @@
-# API：StylePresets 样式预设
+# API: StylePresets
 
-## 预设一览
+## Presets
 
-| 名称       | numFormat          | 其他样式                                   | 适用               |
-| ---------- | ------------------ | ------------------------------------------ | ------------------ |
-| `header`   | —                  | 加粗、12 号字、深蓝底 `1F4E79`、白字、居中 | 表头（手动应用时） |
-| `currency` | `#,##0.00`         | 右对齐                                     | 金额               |
-| `percent`  | `0.00%`            | 右对齐                                     | 占比、增长率       |
-| `date`     | `yyyy-MM-dd`       | 居中                                       | 日期列             |
-| `datetime` | `yyyy-MM-dd HH:mm` | 居中                                       | 日期时间列         |
-| `dataRow`  | —                  | 左对齐、垂直居中、底部细线 `D0D0D0`        | 数据行             |
-| `danger`   | —                  | 红色加粗 `C00000`、居中                    | 风险/异常值        |
+| Name       | numFormat          | Other styles                                                   | Use for                         |
+| ---------- | ------------------ | -------------------------------------------------------------- | ------------------------------- |
+| `header`   | —                  | Bold, size 12, `1F4E79` fill, white text, centered             | Headers (when applied manually) |
+| `currency` | `#,##0.00`         | Right-aligned                                                  | Amounts                         |
+| `percent`  | `0.00%`            | Right-aligned                                                  | Ratios, growth rates            |
+| `date`     | `yyyy-MM-dd`       | Centered                                                       | Date columns                    |
+| `datetime` | `yyyy-MM-dd HH:mm` | Centered                                                       | Date-time columns               |
+| `dataRow`  | —                  | Left-aligned, vertically centered, thin `D0D0D0` bottom border | Data rows                       |
+| `danger`   | —                  | Bold red `C00000`, centered                                    | Risk / anomalies                |
 
-## 用法
+## Usage
 
 ```ts
 import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
 
 columns: [
-  { key: "amount", header: "金额", width: 14, style: StylePresets.currency },
-  { key: "rate", header: "增长率", width: 12, style: StylePresets.percent },
-  { key: "date", header: "日期", width: 12, style: StylePresets.date },
-  { key: "flag", header: "状态", width: 10, style: StylePresets.danger },
+  { key: "amount", header: "Amount", width: 14, style: StylePresets.currency },
+  { key: "rate", header: "Growth", width: 12, style: StylePresets.percent },
+  { key: "date", header: "Date", width: 12, style: StylePresets.date },
+  { key: "flag", header: "Status", width: 10, style: StylePresets.danger },
 ];
 ```
 
-## 类型
+## Type
 
 ```ts
 import type { StylePresetName } from "@marcusok/excel-exporter";
@@ -33,4 +33,4 @@ import type { StylePresetName } from "@marcusok/excel-exporter";
 const name: StylePresetName = "currency"; // "header" | "currency" | "percent" | "date" | "datetime" | "dataRow" | "danger"
 ```
 
-> 注意：`style` 应用于数据单元格，不作用于表头。需要表头样式时，可直接用 `headerStyle` 字段（工作表级 `SheetConfig.headerStyle` 设默认，列级 `ColumnConfig.headerStyle` 覆盖），例如 `headerStyle: StylePresets.header`。
+> Column `style` applies to data cells, not headers. For header styling use the `headerStyle` field directly (sheet-level `SheetConfig.headerStyle` sets the default; column-level `ColumnConfig.headerStyle` overrides it), e.g. `headerStyle: StylePresets.header`.

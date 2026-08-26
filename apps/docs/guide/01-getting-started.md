@@ -1,29 +1,29 @@
-# 快速开始
+# Getting Started
 
-本文带你从零跑通第一个 Excel 导出。运行环境要求：Node `>= 22`。示例命令使用 pnpm，用 npm / yarn 安装等价（`pnpm >= 9` 只是本仓库自身的开发环境要求，与消费方无关）。
+Run your first Excel export in minutes. Requirement: Node `>= 22`. Example commands use pnpm; npm / yarn work the same (`pnpm >= 9` is only a dev requirement of this repository, not of consumers).
 
-## 1. 安装
+## 1. Install
 
 ```bash
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
-`modern-xlsx` 是必装 peerDependency，原因有三：
+`modern-xlsx` is a required peerDependency because:
 
-1. `modern-xlsx.wasm`（约 1.9MB）需要由消费方作为静态资源自行部署，隐式依赖会掩盖这一硬性要求；
-2. 本包是 modern-xlsx 的封装，版本控制权应交给消费方；
-3. 包管理器默认会自动安装 peerDependency（npm 7+ / pnpm 8+ 起），隐式装上的版本不受消费方掌控，显式声明才能锁定版本意图。
+1. `modern-xlsx.wasm` (~1.9MB) must be self-hosted by the consumer as a static asset — an implicit dependency would hide this hard requirement;
+2. this package wraps modern-xlsx; consumers should own version control;
+3. package managers do auto-install peerDependencies by default (npm 7+ / pnpm 8+), but the implicitly picked version is not under your control — declaring it explicitly pins your intent.
 
-`xlsx`（SheetJS）为**可选** peerDependency，仅在需要降级兜底时安装；不安装时兜底会从官方 CDN 加载。
+`xlsx` (SheetJS) is an **optional** peerDependency used only by the fallback path; without it the fallback loads from the official CDN.
 
-## 2. 配置浏览器静态资源（仅浏览器需要）
+## 2. Configure browser static assets (browser only)
 
-两份资源必须在站点可访问：
+Two assets must be reachable by your site:
 
-- `modern-xlsx.wasm`（WASM 核心）
-- `export.worker.js`（Worker 多线程路径）
+- `modern-xlsx.wasm` (WASM core)
+- `export.worker.js` (worker path)
 
-推荐在 Vite 插件 `buildStart` 中从 `require.resolve` 反推真实路径拷贝到 `public/assets/`，避免硬编码 `node_modules`（pnpm 符号链接不兼容）：
+The recommended approach is a Vite plugin that resolves the real paths from `require.resolve` and copies them into `public/assets/` (avoids hardcoding `node_modules`, which breaks under pnpm symlinks):
 
 ```ts
 // vite.config.ts
@@ -57,7 +57,7 @@ export default defineConfig({
 });
 ```
 
-然后在应用入口配置资源地址：
+Then configure the URLs at app entry:
 
 ```ts
 // main.ts
@@ -69,37 +69,37 @@ configureWasm({
 });
 ```
 
-Node / SSR 环境**无需**部署浏览器静态资源，但本地运行时需先 `initWasmSync` 初始化 WASM（见 [Node/SSR](/packages/excel-exporter/guide/09-node-ssr)），否则会降级到无样式的 SheetJS 兜底。
+Node / SSR environments need **no** browser static assets, but WASM must be initialized first when running locally (`initWasmSync`, see [Node/SSR](/packages/excel-exporter/guide/09-node-ssr)) — otherwise the export degrades to the style-less SheetJS fallback.
 
-## 3. 第一个导出
+## 3. First export
 
 ```ts
 import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
 
 await exportExcel({
-  filename: "销售明细-2026",
+  filename: "sales-report-2026",
   sheets: [
     {
-      name: "销售明细",
+      name: "Sales",
       freezeRows: 1,
       autoFilter: true,
       columns: [
-        { key: "orderId", header: "订单号", width: 18 },
-        { key: "date", header: "日期", width: 12, format: { type: "date" } },
+        { key: "orderId", header: "Order ID", width: 18 },
+        { key: "date", header: "Date", width: 12, format: { type: "date" } },
         {
           key: "amount",
-          header: "金额",
+          header: "Amount",
           width: 14,
           style: StylePresets.currency,
         },
         {
           key: "status",
-          header: "状态",
+          header: "Status",
           width: 10,
           format: {
             type: "enum",
-            map: { paid: "已支付", pending: "待支付" },
-            fallback: "未知",
+            map: { paid: "Paid", pending: "Pending" },
+            fallback: "Unknown",
           },
         },
       ],
@@ -116,9 +116,9 @@ await exportExcel({
 });
 ```
 
-浏览器中运行会自动触发下载，文件名缺省 `.xlsx` 后缀时自动补全。`download: false` 时只返回 Blob，便于自托管上传等场景。
+In the browser this triggers a download; `.xlsx` is appended when missing. Use `download: false` to receive the Blob only.
 
-## 4. 下一步
+## 4. Next steps
 
-- 了解 [自动模式路由](/packages/excel-exporter/guide/03-auto-mode) 是如何选择 main / worker / stream 的
-- 在 [在线演示](/play) 里直接体验不同数据量与模式
+- Learn how [auto mode routing](/packages/excel-exporter/guide/03-auto-mode) picks main / worker / stream
+- Try different modes and row counts in the [play](/play)

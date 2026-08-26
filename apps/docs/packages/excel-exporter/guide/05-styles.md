@@ -1,18 +1,18 @@
-# 样式
+# Styling
 
-列级 `style`（`CellStyle`）应用于该列的所有**数据单元格**（表头保持默认样式）。内置 7 种预设，也支持完全自定义。
+A column-level `style` (`CellStyle`) applies to all **data cells** of that column (headers keep the default look). Seven presets are built in, and full customization is supported.
 
-## 内置预设 StylePresets
+## Built-in presets
 
-| 预设                    | 视觉效果                                                                                                          | 说明                                       |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `StylePresets.header`   | <span style="display:inline-block;width:12px;height:12px;background:#1F4E79;border-radius:2px"></span> 深蓝底白字 | 加粗、12 号字、深蓝底 `1F4E79`、白字、居中 |
-| `StylePresets.currency` | `#,##0.00`                                                                                                        | 千分位 + 两位小数，右对齐                  |
-| `StylePresets.percent`  | `0.00%`                                                                                                           | 百分比格式，右对齐                         |
-| `StylePresets.date`     | `yyyy-MM-dd`                                                                                                      | 日期格式，居中                             |
-| `StylePresets.datetime` | `yyyy-MM-dd HH:mm`                                                                                                | 日期时间格式，居中                         |
-| `StylePresets.dataRow`  | 左对齐 + 底部细线                                                                                                 | 左对齐、垂直居中，底部浅灰细线 `D0D0D0`    |
-| `StylePresets.danger`   | <span style="display:inline-block;width:12px;height:12px;background:#C00000;border-radius:2px"></span> 红色加粗   | 红色加粗文字 `C00000`，居中                |
+| Preset                  | Visual                                                                                                                   | Description                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `StylePresets.header`   | <span style="display:inline-block;width:12px;height:12px;background:#1F4E79;border-radius:2px"></span> dark blue / white | Bold, size 12, `1F4E79` fill, white text, centered             |
+| `StylePresets.currency` | `#,##0.00`                                                                                                               | Thousands separator, 2 decimals, right-aligned                 |
+| `StylePresets.percent`  | `0.00%`                                                                                                                  | Percentage format, right-aligned                               |
+| `StylePresets.date`     | `yyyy-MM-dd`                                                                                                             | Date format, centered                                          |
+| `StylePresets.datetime` | `yyyy-MM-dd HH:mm`                                                                                                       | Date-time format, centered                                     |
+| `StylePresets.dataRow`  | left + thin bottom border                                                                                                | Left-aligned, vertically centered, thin `D0D0D0` bottom border |
+| `StylePresets.danger`   | <span style="display:inline-block;width:12px;height:12px;background:#C00000;border-radius:2px"></span> red bold          | Bold red text `C00000`, centered                               |
 
 ```ts
 import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
@@ -23,27 +23,27 @@ await exportExcel({
     {
       name: "Sheet1",
       columns: [
-        { key: "name", header: "名称", width: 16, style: StylePresets.dataRow },
+        { key: "name", header: "Name", width: 16, style: StylePresets.dataRow },
         {
           key: "amount",
-          header: "金额",
+          header: "Amount",
           width: 14,
           style: StylePresets.currency,
         },
-        { key: "date", header: "日期", width: 12, style: StylePresets.date },
+        { key: "date", header: "Date", width: 12, style: StylePresets.date },
         {
           key: "status",
-          header: "状态",
+          header: "Status",
           width: 10,
           style: StylePresets.danger,
         },
       ],
       data: [
         {
-          name: "机械键盘",
+          name: "Keyboard",
           amount: 1299.99,
           date: "2026-07-01",
-          status: "缺货",
+          status: "Out of stock",
         },
       ],
     },
@@ -51,13 +51,13 @@ await exportExcel({
 });
 ```
 
-## 自定义 CellStyle
+## Custom CellStyle
 
 ```ts
 import type { CellStyle } from "@marcusok/excel-exporter";
 
 const highlight: CellStyle = {
-  font: { bold: true, size: 11, color: "1F4E79" }, // 6 位 RGB hex
+  font: { bold: true, size: 11, color: "1F4E79" }, // 6-digit RGB hex
   fill: { pattern: "solid", fgColor: "DDEBF7" },
   alignment: { horizontal: "center", vertical: "center", wrapText: true },
   border: {
@@ -68,18 +68,18 @@ const highlight: CellStyle = {
 };
 ```
 
-字段约定：
+Field reference:
 
-| 字段        | 说明                                                                                                    |
-| ----------- | ------------------------------------------------------------------------------------------------------- |
-| `font`      | `bold` / `italic` / `size` / `color`（6 位 hex，如 `"FF0000"`）/ `name`                                 |
-| `fill`      | `pattern: "solid" \| "none"`、`fgColor`、`bgColor`（6 位 hex）                                          |
-| `alignment` | `horizontal`（left/center/right）、`vertical`（top/center/bottom）、`wrapText`、`textRotation`（0–180） |
-| `border`    | 四边 `{ style, color }`，`style` 取值见 modern-xlsx 的 `BorderStyle`                                    |
-| `numFormat` | Excel 数字格式码，如 `"#,##0.00"`、`"yyyy-mm-dd"`、`"0.00%"`                                            |
+| Field       | Description                                                                                          |
+| ----------- | ---------------------------------------------------------------------------------------------------- |
+| `font`      | `bold` / `italic` / `size` / `color` (6-digit hex, e.g. `"FF0000"`) / `name`                         |
+| `fill`      | `pattern: "solid" \| "none"`, `fgColor`, `bgColor` (6-digit hex)                                     |
+| `alignment` | `horizontal` (left/center/right), `vertical` (top/center/bottom), `wrapText`, `textRotation` (0–180) |
+| `border`    | per-side `{ style, color }`; `style` values come from modern-xlsx `BorderStyle`                      |
+| `numFormat` | Excel format codes such as `"#,##0.00"`, `"yyyy-mm-dd"`, `"0.00%"`                                   |
 
-> 颜色统一使用 6 位 RGB hex（不带 `#`），与 modern-xlsx 的类型约定一致。
+> Colors are 6-digit RGB hex **without** `#`, matching modern-xlsx's type contract.
 
-## 与 FormatSpec 的关系
+## Relationship to FormatSpec
 
-`style.numFormat` 与列级 `format`（FormatSpec）是两套机制：`style` 控制单元格外观，`format` 负责把业务值转换/格式化为可写入的值。对 `date` / `number` 等 FormatSpec，Workbook 路径会自动注入对应的 `numFormat`，通常不需要手动设置。详见 [值格式化](/packages/excel-exporter/guide/04-formatting)。
+`style.numFormat` and column `format` (FormatSpec) are separate mechanisms: `style` controls appearance, `format` converts/structures the stored value. For `date` / `number` FormatSpecs the Workbook path auto-injects the matching `numFormat`, so manual setup is usually unnecessary. See [Formatting](/packages/excel-exporter/guide/04-formatting).

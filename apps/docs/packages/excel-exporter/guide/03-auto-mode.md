@@ -1,37 +1,37 @@
-# 自动模式路由
+# Auto Mode Routing
 
-`exportExcel` 的 `mode` 参数默认是 `"auto"`：库根据**总行数**与运行环境自动选择最优路径，业务代码无需感知数据量变化。
+The `mode` option defaults to `"auto"`: the library picks the optimal path based on **total row count** and the runtime environment, so business code never needs to react to data size.
 
-## 路由规则
+## Routing rules
 
-### 浏览器
+### Browser
 
-| 数据量               | 路径                   | 说明                                                              |
-| -------------------- | ---------------------- | ----------------------------------------------------------------- |
-| `< 20,000` 行        | `main`                 | 主线程同步构建，10k×6 列浏览器实测约 120ms                        |
-| `20,000 – 49,999` 行 | `worker` + Workbook    | 主线程只做一次结构化克隆（10 万行约 94ms），WASM 在 Worker 内执行 |
-| `>= 50,000` 行       | `worker` + Fast stream | 自研 fflate 写入，避免 `toBuffer` 性能断崖                        |
+| Rows              | Path                   | Notes                                                                                    |
+| ----------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
+| `< 20,000`        | `main`                 | Synchronous main-thread build; ~120ms at 10k×6 columns                                   |
+| `20,000 – 49,999` | `worker` + Workbook    | Main thread only does one structured clone (~94ms at 100k rows); WASM runs in the Worker |
+| `>= 50,000`       | `worker` + Fast stream | Custom fflate writes avoid the `toBuffer` cliff                                          |
 
-### Node / SSR（无 Web Worker）
+### Node / SSR (no Web Worker)
 
-| 数据量         | 路径     | 说明                               |
-| -------------- | -------- | ---------------------------------- |
-| `< 50,000` 行  | `main`   | 主线程 Workbook 构建，保留完整样式 |
-| `>= 50,000` 行 | `stream` | Fast stream，10 万行约 0.8s        |
+| Rows        | Path     | Notes                                    |
+| ----------- | -------- | ---------------------------------------- |
+| `< 50,000`  | `main`   | Main-thread Workbook build, full styling |
+| `>= 50,000` | `stream` | Fast stream, ~0.8s at 100k rows          |
 
-## 手动指定
+## Explicit modes
 
 ```ts
-await exportExcel({ ..., mode: "stream" });  // 强制流式
-await exportExcel({ ..., mode: "worker" });  // 强制 Worker（浏览器）
-await exportExcel({ ..., mode: "main" });    // 强制主线程
+await exportExcel({ ..., mode: "stream" });  // force streaming
+await exportExcel({ ..., mode: "worker" });  // force Worker (browser)
+await exportExcel({ ..., mode: "main" });    // force main thread
 ```
 
-`mode: "worker"` 在 Node/SSR 环境不会报错：库会回退到主线程路径（≥ 5 万行用 stream），保证样式语义不丢失，而不是降级成无样式的 SheetJS。
+`mode: "worker"` does **not** error in Node/SSR: it falls back to the main-thread path (stream above 50k rows), preserving style semantics instead of silently degrading to style-less SheetJS.
 
-## 阈值为什么是 20,000 / 50,000
+## Why 20,000 / 50,000
 
-- **20,000 行**：主线程同步工作在此量级以下可接受，避免不必要的 Worker 启动开销；
-- **50,000 行**：实测 `Workbook.toBuffer()` 在 ~5.5 万行开始出现超线性性能断崖（10 万行 ~17.5s），而 Fast stream 约 0.8s。`STREAM_THRESHOLD = 50_000` 保留了安全余量。
+- **20,000 rows**: synchronous main-thread work is acceptable below this level; avoids unnecessary Worker startup;
+- **50,000 rows**: `Workbook.toBuffer()` shows a superlinear cliff beyond ~55k rows (~17.5s at 100k), while Fast stream stays at ~0.8s. `STREAM_THRESHOLD = 50_000` keeps a safety margin.
 
-> 代价说明：Stream 路径 v1 支持多行表头与单元格合并，但不支持单元格样式、表头样式与列宽/冻结/筛选等布局特性。需要完整样式的导出请控制在 5 万行以内，或拆分为多个工作表。
+> Trade-off: Stream v1 supports multi-row headers and cell merges, but not cell styles, header styles or layout features (width/freeze/filter). For fully-styled exports stay under 50k rows or split into multiple sheets.

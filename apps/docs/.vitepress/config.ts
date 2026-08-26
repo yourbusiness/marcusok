@@ -30,8 +30,9 @@ const docsRoot = join(configDir, "..");
 function validateDocsTree(): void {
   const errors: string[] = [];
   for (const p of packages) {
-    const zhDir = join(docsRoot, "packages", p.dir);
-    if (!existsSync(join(zhDir, "index.md"))) {
+    // The docs root holds the English (default-locale) pages.
+    const pkgDir = join(docsRoot, "packages", p.dir);
+    if (!existsSync(join(pkgDir, "index.md"))) {
       errors.push(
         `[docs] packages/${p.dir}/index.md is missing (registry intro link would 404)`,
       );
@@ -40,23 +41,23 @@ function validateDocsTree(): void {
     // a config mistake. Default guide/examples/api groups are optional (a new
     // package may only ship guide docs) and are filtered by existence below.
     for (const s of p.sections ?? []) {
-      if (!existsSync(join(zhDir, s.id))) {
+      if (!existsSync(join(pkgDir, s.id))) {
         errors.push(
           `[docs] packages/${p.dir}/${s.id}/ is declared in registry sections but does not exist`,
         );
       }
     }
-    const enDir = join(docsRoot, "en", "packages", p.dir);
-    const enExists = existsSync(enDir);
-    if (enExists !== p.en) {
+    const zhDir = join(docsRoot, "zh", "packages", p.dir);
+    const zhExists = existsSync(zhDir);
+    if (zhExists !== p.zh) {
       errors.push(
-        `[docs] ${p.npmName}: registry en=${p.en} but en/packages/${p.dir}/ ` +
-          `${enExists ? "exists" : "does not exist"} (set en to match the directory)`,
+        `[docs] ${p.npmName}: registry zh=${p.zh} but zh/packages/${p.dir}/ ` +
+          `${zhExists ? "exists" : "does not exist"} (set zh to match the directory)`,
       );
     }
-    if (enExists && !existsSync(join(enDir, "index.md"))) {
+    if (zhExists && !existsSync(join(zhDir, "index.md"))) {
       errors.push(
-        `[docs] en/packages/${p.dir}/ exists but its index.md is missing (en intro link would 404)`,
+        `[docs] zh/packages/${p.dir}/ exists but its index.md is missing (zh intro link would 404)`,
       );
     }
   }
@@ -244,12 +245,13 @@ const labels = {
   },
 };
 
-/** Packages to show in a given locale: zh shows all, en only packages
- *  whose registry entry declares `en: true`. This is the single source
- *  of truth (validated against the filesystem by validateDocsTree), so
- *  no themeConfig snapshot needs to be serialized to the client. */
+/** Packages to show in a given locale: en (root, the default) shows all,
+ *  zh only packages whose registry entry declares `zh: true`. This is the
+ *  single source of truth (validated against the filesystem by
+ *  validateDocsTree), so no themeConfig snapshot needs to be serialized
+ *  to the client. */
 function visiblePackages(lang: "zh" | "en"): PackageEntry[] {
-  return lang === "en" ? packages.filter((p) => p.en) : packages;
+  return lang === "zh" ? packages.filter((p) => p.zh) : packages;
 }
 
 function buildSidebar(
@@ -344,10 +346,10 @@ const stableAssetNames = new Set(
 );
 
 export default defineConfig({
-  lang: "zh-CN",
+  lang: "en-US",
   title: "MarcusOK Docs",
   description:
-    "MarcusOK 文档中心 —— marcus-monorepo 库包的公开技术文档（zh / en）",
+    "MarcusOK Docs — public technical documentation for marcus-monorepo packages (en / zh).",
   base,
   cleanUrls: true,
   lastUpdated: true,
@@ -366,38 +368,38 @@ export default defineConfig({
   ],
   locales: {
     root: {
-      label: "简体中文",
-      lang: "zh-CN",
-      title: "MarcusOK 文档中心",
-      description:
-        "MarcusOK 文档中心 —— marcus-monorepo 库包的公开技术文档，默认中文。",
-      themeConfig: {
-        nav: buildNav("zh", ""),
-        sidebar: buildSidebar(".", "", "zh"),
-        outline: { label: "本页目录" },
-        docFooter: { prev: "上一页", next: "下一页" },
-        lastUpdated: { text: "最后更新于" },
-        editLink: {
-          pattern: `${githubUrl}/edit/main/apps/docs/:path`,
-          text: "在 GitHub 上编辑此页",
-        },
-      },
-    },
-    en: {
       label: "English",
       lang: "en-US",
       title: "MarcusOK Docs",
       description:
         "MarcusOK Docs — public technical documentation for marcus-monorepo packages.",
       themeConfig: {
-        nav: buildNav("en", "/en"),
-        sidebar: buildSidebar("en", "/en", "en"),
+        nav: buildNav("en", ""),
+        sidebar: buildSidebar(".", "", "en"),
         outline: { label: "On this page" },
         docFooter: { prev: "Previous", next: "Next" },
         lastUpdated: { text: "Last updated" },
         editLink: {
           pattern: `${githubUrl}/edit/main/apps/docs/:path`,
           text: "Edit this page on GitHub",
+        },
+      },
+    },
+    zh: {
+      label: "简体中文",
+      lang: "zh-CN",
+      title: "MarcusOK 文档中心",
+      description:
+        "MarcusOK 文档中心 —— marcus-monorepo 库包的公开技术文档，默认英文。",
+      themeConfig: {
+        nav: buildNav("zh", "/zh"),
+        sidebar: buildSidebar("zh", "/zh", "zh"),
+        outline: { label: "本页目录" },
+        docFooter: { prev: "上一页", next: "下一页" },
+        lastUpdated: { text: "最后更新于" },
+        editLink: {
+          pattern: `${githubUrl}/edit/main/apps/docs/:path`,
+          text: "在 GitHub 上编辑此页",
         },
       },
     },
@@ -409,7 +411,7 @@ export default defineConfig({
       provider: "local",
       options: {
         locales: {
-          root: { translations: zhSearchTranslations },
+          zh: { translations: zhSearchTranslations },
         },
       },
     },

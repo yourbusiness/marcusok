@@ -1,17 +1,17 @@
-# Node / SSR 使用
+# Node / SSR Usage
 
-Node 服务端（含 SSR）无需部署浏览器静态资源，但本地文件系统运行时需要先初始化 WASM；否则会降级到 SheetJS。
+In Node servers (including SSR) you don't need browser assets, but local filesystem runtimes must initialize WASM first; otherwise the library falls back to SheetJS.
 
-## 环境差异
+## Environment differences
 
-| 维度            | 浏览器               | Node / SSR                           |
-| --------------- | -------------------- | ------------------------------------ |
-| Worker 路径     | 可用                 | 无 Web Worker，自动回退 main/stream  |
-| 自动下载        | 触发浏览器下载       | `triggerDownload` 为 no-op           |
-| `download` 参数 | 默认 true            | 建议显式 `false`，自行处理 Blob      |
-| 大数据量        | worker + Fast stream | main → ≥ 5 万行 stream（主线程执行） |
+| Dimension         | Browser              | Node / SSR                                 |
+| ----------------- | -------------------- | ------------------------------------------ |
+| Worker path       | available            | no Web Worker; falls back to main/stream   |
+| Auto download     | triggers download    | `triggerDownload` is a no-op               |
+| `download` option | defaults to true     | set `false` explicitly and handle the Blob |
+| Large data        | worker + Fast stream | main → stream at ≥ 50k rows (main thread)  |
 
-## 服务端导出并落盘
+## Export and write to disk
 
 ```ts
 import { exportExcel } from "@marcusok/excel-exporter";
@@ -29,7 +29,7 @@ initWasmSync(
 
 const result = await exportExcel({
   filename: "server-report",
-  download: false, // 服务端不要触发浏览器下载
+  download: false, // never trigger a browser download server-side
   sheets: [{ name: "Sheet1", columns: [...], data: [...] }],
 });
 
@@ -39,7 +39,7 @@ if (result.success && result.blob) {
 }
 ```
 
-## 配合框架（如 Next.js Route Handler）
+## With a framework (Next.js Route Handler)
 
 ```ts
 // app/api/export/route.ts
@@ -48,8 +48,9 @@ import { initWasmSync } from "modern-xlsx";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
-// 与上面「落盘」示例相同：Node 下必须先初始化 WASM（模块加载时执行一次），
-// 否则 exportExcel 会降级到无样式的 SheetJS 兜底。
+// Same bootstrap as the "write to disk" example above: Node must initialize
+// WASM first (once, at module load) — otherwise exportExcel degrades to the
+// style-less SheetJS fallback.
 const require = createRequire(import.meta.url);
 initWasmSync(
   readFileSync(
@@ -76,6 +77,6 @@ export async function GET() {
 }
 ```
 
-## 性能提示
+## Performance tip
 
-服务端大文件（≥ 5 万行）会自动走 stream 路径；由于没有 Worker，Fast stream 占用当前线程约 0.8s，适合放在异步任务/队列中，避免阻塞请求线程。
+Large server-side exports (≥ 50k rows) automatically take the stream path; without a Worker, Fast stream occupies the current thread for ~0.8s. Run it in an async task or queue so request threads stay responsive.

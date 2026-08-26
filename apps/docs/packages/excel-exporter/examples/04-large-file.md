@@ -1,46 +1,46 @@
-# 案例：10 万行大文件导出
+# Example: 100k-Row Export
 
-大数据量导出是 Fast stream 路径的目标场景：10 万行在浏览器 Worker 中执行，主线程仅做一次结构化克隆，Fast stream 约 0.8s 完成。
+Large exports are what the Fast stream path is built for: 100k rows run in a Worker in the browser (the main thread only does one structured clone), with Fast stream finishing in ~0.8s.
 
-## Mock 数据预览
+## Mock data preview
 
 <MockPreview dataset="sales" :rows="3" />
 
-## 实现代码
+## Implementation
 
 ```ts
 import { exportExcel } from "@marcusok/excel-exporter";
 
-// rows：业务侧的销售明细数据，字段与下方 columns 一一对应
-//（由你的业务代码提供，此处省略取数过程；示例场景为 10 万行，
-//  在线演示用的是同形状的 mock 数据）
+// rows: sales data from your business layer, fields matching the columns
+// below (fetching is omitted here; the scenario uses 100k rows — the live
+// demo generates same-shaped mock data)
 
 const result = await exportExcel({
-  filename: "大文件导出-10w",
+  filename: "large-export-100k",
   sheets: [
     {
-      name: "销售明细",
+      name: "Sales",
       columns: [
-        { key: "orderId", header: "订单号", width: 18 },
-        { key: "date", header: "日期", width: 12 },
-        { key: "amount", header: "金额", width: 14 },
-        { key: "status", header: "状态", width: 10 },
+        { key: "orderId", header: "Order ID", width: 18 },
+        { key: "date", header: "Date", width: 12 },
+        { key: "amount", header: "Amount", width: 14 },
+        { key: "status", header: "Status", width: 10 },
       ],
       data: rows,
     },
   ],
-  mode: "auto", // ≥ 5 万行自动走 worker + stream
+  mode: "auto", // ≥ 50k rows -> worker + stream
   onProgress: (p) => setProgress(p),
 });
 
 console.log(result); // engine: "modern-xlsx", mode: "stream", rowCount: 100000
 ```
 
-## 要点
+## Notes
 
-- 10 万行下 `auto` 选择 `worker + Fast stream`，实测约 0.8s（Workbook 路径同数据量 17.5s）；
-- stream 路径 v1 **支持多行表头与合并**，但**不支持样式/列宽/冻结/筛选**，会打印 console 警告，属预期行为；
-- `onProgress` 每 1000 行上报一次，适合展示进度；
-- 数字列建议显式声明 `decimals`，保证存储值与 Workbook 路径一致。
+- At 100k rows `auto` picks `worker + Fast stream`: ~0.8s measured (vs 17.5s on the Workbook path);
+- Stream v1 **supports multi-row headers and merges**, but does **not** support styles/width/freeze/filter; a console warning is expected;
+- `onProgress` reports every 1000 rows;
+- Set `decimals` explicitly on numeric columns for value consistency with the Workbook path.
 
-到 [在线演示](/play) 选择 100,000 行，切换 `auto` 与 `main` 对比体验差异。
+Compare `auto` vs `main` at 100,000 rows in the [play](/play).

@@ -14,7 +14,7 @@ const statusText = computed<Record<string, string>>(() => ({
 }));
 
 function cardHref(dir: string): string {
-  return withBase(`/${isEn.value ? "en/" : ""}packages/${dir}/`);
+  return withBase(`/${isEn.value ? "" : "zh/"}packages/${dir}/`);
 }
 </script>
 

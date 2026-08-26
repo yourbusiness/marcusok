@@ -1,12 +1,12 @@
-# 常见问题
+# FAQ
 
-### 浏览器报 WASM 404
+### WASM 404 in the browser
 
-`modern-xlsx.wasm` 没有部署到站点可访问路径。按 [快速开始](/guide/01-getting-started) 中的 Vite 插件把 wasm 拷贝到 `public/assets/`，并确保 `configureWasm({ wasmUrl })` 指向正确地址。
+`modern-xlsx.wasm` is not reachable by your site. Copy it into `public/assets/` with the Vite plugin from [Getting Started](/guide/01-getting-started) and point `configureWasm({ wasmUrl })` at the right URL.
 
-### Worker 模式报 "workerUrl not configured"
+### Worker mode throws "workerUrl not configured"
 
-`export.worker.js` 需要显式配置并部署：
+`export.worker.js` must be deployed and configured explicitly:
 
 ```ts
 configureWasm({
@@ -14,24 +14,24 @@ configureWasm({
 });
 ```
 
-只有浏览器中会进入 Worker 的路径需要它：`auto`（数据量 ≥ 20,000 行）、显式 `mode: "worker"`，以及浏览器中的显式 `mode: "stream"`（浏览器下 stream 同样在 Worker 内执行）。未配置时这些路径会抛错并降级到 SheetJS。
+It is needed by every browser path that enters a Worker: `auto` (≥ 20,000 rows), explicit `mode: "worker"`, and explicit `mode: "stream"` in the browser (stream also runs inside a Worker there). Without it, those paths throw and degrade to the SheetJS fallback.
 
-### 导出结果里 engine 是 "sheetjs"
+### `result.engine` is "sheetjs"
 
-说明 WASM 路径加载失败或环境不支持，已自动降级到 SheetJS 兜底（样式会被剥离）。查看浏览器 console 中的 `[excel-exporter]` 前缀警告可定位原因，常见是 wasm URL 404 或 CDN/网络受限。详见 [兜底机制](/packages/excel-exporter/guide/08-fallback)。
+The WASM path failed or is unsupported, so the library degraded to the SheetJS fallback (styles stripped). Look for `[excel-exporter]` warnings in the console to find the reason — usually a 404 wasm URL or blocked CDN. See [fallback](/packages/excel-exporter/guide/08-fallback).
 
-### 10 万行数据导出非常慢（>15s）
+### Exporting 100k rows is very slow (>15s)
 
-大概率走了 `main` + `Workbook.toBuffer()` 路径——该路径在 ~5.5 万行后出现性能断崖。把 `mode` 保持为 `auto`（10 万行约 0.8s），或显式指定 `mode: "stream"` / `mode: "worker"`。详见 [自动模式路由](/packages/excel-exporter/guide/03-auto-mode)。
+You are most likely on the `main` + `Workbook.toBuffer()` path, which has a cliff beyond ~55k rows. Keep `mode: "auto"` (~0.8s at 100k rows), or set `mode: "stream"` / `mode: "worker"` explicitly. See [auto mode](/packages/excel-exporter/guide/03-auto-mode).
 
-### Stream 模式下样式不生效
+### Styles do not apply in stream mode
 
-Stream 路径 v1 支持多行表头（`children`）与数据区合并（`merges`），但不支持单元格样式、表头样式与列宽/冻结/筛选等布局特性（会在 console 打印警告）。需要完整样式时，控制在 5 万行以内走 Workbook 路径。详见 [Worker 与流式](/packages/excel-exporter/guide/06-worker-stream)。
+Stream (v1) supports multi-row headers (`children`) and data-area merges (`merges`), but not cell styles, header styles or layout features such as width, freeze and filter (a console warning is printed). Keep exports under 50k rows when you need full styling. See [Worker & streaming](/packages/excel-exporter/guide/06-worker-stream).
 
-### 导出是本地完成的吗？
+### Is my data uploaded anywhere?
 
-是。所有处理都在浏览器/Node 进程内完成，不上传任何业务数据。
+No. All processing happens in the browser or the Node process; business data never leaves the machine.
 
-### 日期列显示为长文本，Excel 不识别为日期
+### Date columns render as long text, not dates
 
-不声明 `format` 时，`Date` 值会按普通文本写入单元格，Excel 不会识别为日期：Workbook 路径写入本地化长文本（如 `Wed Jul 01 2026 00:00:00 GMT+0800 (China Standard Time)`），stream / SheetJS 兜底路径写入 ISO 字符串（如 `2026-07-01T00:00:00.000Z`）。日期列需要声明 `format: { type: "date" }`（或 `datetime`）：Workbook 路径会写入 Excel 日期序列并自动注入对应 `numFormat`，单元格才会被 Excel 识别为真正的日期。
+Without a `format`, `Date` values are written as plain text Excel does not recognize as a date: the Workbook path writes the localized long form (e.g. `Wed Jul 01 2026 00:00:00 GMT+0800 (China Standard Time)`), while the stream / SheetJS fallback paths write an ISO string (e.g. `2026-07-01T00:00:00.000Z`). Declare `format: { type: "date" }` (or `datetime`) on date columns: the Workbook path then stores the Excel date serial and auto-injects the matching `numFormat`, so the cell becomes a real date.

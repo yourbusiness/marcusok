@@ -1,70 +1,65 @@
-# 案例：销售月报导出
+# Example: Sales Report Export
 
-月度销售报表是后台系统最高频的导出场景。本案例用 mock 生成 1 万行销售明细，演示：日期/金额/枚举格式化、货币样式、冻结表头、自动筛选与进度回调。
+Monthly sales reports are the most common admin export. This example generates 10,000 mock sales rows and demonstrates date/currency/enum formatting, currency styling, frozen header, auto filter and progress callbacks.
 
-## Mock 数据预览
+## Mock data preview
 
 <MockPreview dataset="sales" :rows="5" />
 
-## 实现代码
+## Implementation
 
 ```ts
 import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
 
-// rows：业务侧的销售明细数据，字段与下方 columns 一一对应
-//（由你的业务代码提供，此处省略取数过程；示例场景为 1 万行，
-//  在线演示用的是同形状的 mock 数据）
+// rows: sales data from your business layer, fields matching the columns
+// below (fetching is omitted here; the scenario uses 10k rows — the live
+// demo generates same-shaped mock data)
 
 const result = await exportExcel({
-  filename: "销售月报-2026-07",
+  filename: "sales-report-2026-07",
   sheets: [
     {
-      name: "销售明细",
+      name: "Sales",
       freezeRows: 1,
       autoFilter: true,
       columns: [
-        { key: "orderId", header: "订单号", width: 18 },
-        {
-          key: "date",
-          header: "日期",
-          width: 12,
-          format: { type: "date" },
-        },
-        { key: "region", header: "区域", width: 10 },
-        { key: "product", header: "商品", width: 18 },
-        { key: "channel", header: "渠道", width: 10 },
-        { key: "quantity", header: "数量", width: 8 },
+        { key: "orderId", header: "Order ID", width: 18 },
+        { key: "date", header: "Date", width: 12, format: { type: "date" } },
+        { key: "region", header: "Region", width: 10 },
+        { key: "product", header: "Product", width: 18 },
+        { key: "channel", header: "Channel", width: 10 },
+        { key: "quantity", header: "Qty", width: 8 },
         {
           key: "amount",
-          header: "金额",
+          header: "Amount",
           width: 14,
           style: StylePresets.currency,
         },
         {
           key: "status",
-          header: "状态",
+          header: "Status",
           width: 10,
           format: {
             type: "enum",
-            map: { paid: "已支付", pending: "待支付", refunded: "已退款" },
-            fallback: "未知",
+            map: { paid: "Paid", pending: "Pending", refunded: "Refunded" },
+            fallback: "Unknown",
           },
         },
       ],
       data: rows,
     },
   ],
-  onProgress: (p) => setProgress(p), // 展示进度条
-  onPhase: (phase, ms) => trackPhase(phase, ms), // 埋点
+  onProgress: (p) => setProgress(p),
+  onPhase: (phase, ms) => trackPhase(phase, ms),
 });
 ```
 
-## 要点
+## Notes
 
-- 1 万行低于 20,000 行阈值，浏览器下走 `main` 路径（主线程 Workbook，样式完整保留）；数据量 ≥ 20,000 行时自动切换到 `worker + Workbook`，主线程不阻塞；
-- `onProgress` 在 `main` 路径只回调首尾（0 与 1），1 万行下进度条会直接跳满；需要分段进度必须走 stream 路径（≥ 50,000 行，每 1000 行上报一次；worker + Workbook 路径同样只有首尾两次回调）；
-- 金额列用 `StylePresets.currency`（千分位 + 两位小数，右对齐）；
-- 状态列用 `enum` 把内部码映射为中文，兜底 `"未知"`；
-- `freezeRows + autoFilter` 让管理层在 Excel 里直接筛选。
+- 10k rows is below the 20,000-row threshold, so the browser takes the `main` path (main-thread Workbook, full styling); at ≥ 20,000 rows auto mode switches to `worker + Workbook` and keeps the main thread responsive;
+- `onProgress` only fires at the endpoints (0 and 1) on the `main` path, so the progress bar jumps straight to full at 10k rows; incremental progress requires the stream path (≥ 50,000 rows, reported every 1,000 rows — the worker + Workbook path also fires just the two endpoints);
+- `StylePresets.currency` formats the amount column (thousands, 2 decimals, right-aligned);
+- The `enum` spec maps internal status codes to readable labels with a `"Unknown"` fallback;
+- `freezeRows + autoFilter` lets reviewers filter directly in Excel.
 
-可以到 [在线演示](/play) 选择 sales 数据集直接导出体验。
+Try it live in the [play](/play) with the sales dataset.
