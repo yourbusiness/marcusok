@@ -1,7 +1,7 @@
 # @marcusok/docs
 
-面向 `marcus-monorepo` 所有库包的公开技术文档站（VitePress），部署于 GitHub Pages：
-`https://yourbusiness.github.io/marcus-monorepo/`。默认英文，提供中文版（`/zh/`）。
+面向 `marcusok` 所有库包的公开技术文档站（VitePress），部署于 GitHub Pages：
+`https://yourbusiness.github.io/marcusok/`。默认英文，提供中文版（`/zh/`）。
 
 ## 常用命令
 

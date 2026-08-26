@@ -1,6 +1,6 @@
 # 生态介绍
 
-`marcus-monorepo` 是一个 pnpm + Turborepo 组织的前端基础 monorepo，为多个后台应用提供统一的公共能力包。每个包独立版本、独立发布（Changesets），通过 `workspace:*` 在仓库内互引。
+`marcusok` 是一个 pnpm + Turborepo 组织的前端基础 monorepo，为多个后台应用提供统一的公共能力包。每个包独立版本、独立发布（Changesets），通过 `workspace:*` 在仓库内互引。
 
 ## 当前包
 

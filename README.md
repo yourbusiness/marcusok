@@ -1,4 +1,4 @@
-# marcus-monorepo
+# marcusok
 
 A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. The first shared package is an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM); PDF export, file upload, virtual table rendering and more will follow.
 
@@ -37,7 +37,7 @@ Environment: Node >= 22, pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0
 ## Directory Layout
 
 ```
-marcus-monorepo/
+marcusok/
 ├── apps/                       # Applications (scales horizontally)
 │   └── docs/                   # VitePress public docs site (English default + Chinese, GitHub Pages)
 ├── packages/                   # Shared packages (scales horizontally)

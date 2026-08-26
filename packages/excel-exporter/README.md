@@ -2,7 +2,7 @@
 
 An Excel export library built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (WASM) plus a custom Fast stream writer. It offers a declarative API, automatic mode routing, full cell styling, Web Worker multithreading, fast writes, and a SheetJS fallback.
 
-> 📖 **Online docs**: https://yourbusiness.github.io/marcus-monorepo/packages/excel-exporter/
+> 📖 **Online docs**: https://yourbusiness.github.io/marcusok/packages/excel-exporter/
 
 ## Performance Baseline
 
@@ -30,7 +30,7 @@ Environment: Node >= 22 (any package manager works — the examples here use pnp
 
 Two static assets must be reachable from the consuming site: `modern-xlsx.wasm` (1.9MB) and `export.worker.js`.
 
-The recommended approach is a Vite plugin that resolves the real paths via `require.resolve` in `buildStart` and copies them into `public/assets/`, avoiding hardcoded `node_modules` paths (incompatible with pnpm symlinks). See [design doc 6.2](https://github.com/yourbusiness/marcus-monorepo/blob/main/docs/excel-export-design.md) for details.
+The recommended approach is a Vite plugin that resolves the real paths via `require.resolve` in `buildStart` and copies them into `public/assets/`, avoiding hardcoded `node_modules` paths (incompatible with pnpm symlinks). See [design doc 6.2](https://github.com/yourbusiness/marcusok/blob/main/docs/excel-export-design.md) for details.
 
 ```ts
 // vite.config.ts

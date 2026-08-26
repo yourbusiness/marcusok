@@ -150,7 +150,7 @@ pnpm install
 
 登录 npm → 头像 → **Access Tokens** → **Generate New Token** → 选 **Granular Access Token**：
 
-- **Token name**：随便，比如 `marcus-monorepo CI publish`
+- **Token name**：随便，比如 `marcusok CI publish`
 - **Expiration**：设 1 年（到期前回来换）
 - **Packages and scopes**：权限选 **Read and write**，把 scope 加进来（`@marcusok`，或具体到 `@marcusok/excel-exporter`）
 - 账号开了 2FA 的话：**勾上** "Allow bypass 2FA for this token"——不勾，CI 里没人工输验证码，`npm publish` 会被 2FA 拦
@@ -196,7 +196,7 @@ GitHub Actions 跑在云端，要发版就得知道你的 npm token。但 token 
 
 npm 页面会渲染包里打进来的 README，并显示 package.json 里的 `repository` / `bugs` 链接。第一次发版前确认这几样：
 
-- **`repository.url` / `bugs.url`**：[packages/excel-exporter/package.json](/packages/excel-exporter/package.json) 里指向真实的 GitHub 仓库。当前填的是 `github.com/yourbusiness/marcus-monorepo`——`yourbusiness` 已确认是本仓库真实的 GitHub owner（remote 与文档站均使用它），此项无需再动。填错的话，npm 页面的 Repository 链接会指向死链，provenance 记录的来源仓库也对不上。
+- **`repository.url` / `bugs.url`**：[packages/excel-exporter/package.json](/packages/excel-exporter/package.json) 里指向真实的 GitHub 仓库。当前填的是 `github.com/yourbusiness/marcusok`——`yourbusiness` 已确认是本仓库真实的 GitHub owner（remote 与文档站均使用它），此项无需再动。填错的话，npm 页面的 Repository 链接会指向死链，provenance 记录的来源仓库也对不上。
 - **README 编码**：打进包里的 README 要是 UTF-8 无 BOM、没有乱码。PowerShell 的 `Get-Content`/`Set-Content` 默认按 GBK 处理，会把 UTF-8 的破折号（—）、`≥`、`⚠️` 等字符搞坏（本项目早期踩过，见 [debug.md](./debug.md) 第 9 节）。发版前扫一眼 README，或发完去 npm 页面看渲染对不对。
 
 ---
@@ -377,7 +377,7 @@ turbo run lint typecheck test build && changeset publish
 
 ## 3.5 文档站部署（`deploy.yml`）
 
-push 到 main 且改动命中 `apps/docs/**`、`packages/**` 等路径（或手动 workflow_dispatch）时，`deploy.yml` 会构建 VitePress 文档站并发布到 GitHub Pages（https://yourbusiness.github.io/marcus-monorepo/ ）。它与发版无关，失败不影响 npm 包。
+push 到 main 且改动命中 `apps/docs/**`、`packages/**` 等路径（或手动 workflow_dispatch）时，`deploy.yml` 会构建 VitePress 文档站并发布到 GitHub Pages（https://yourbusiness.github.io/marcusok/ ）。它与发版无关，失败不影响 npm 包。
 
 ---
 

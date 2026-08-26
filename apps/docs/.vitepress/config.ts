@@ -92,7 +92,7 @@ function resolveGithubRepo(): { owner: string; repo: string } {
   } catch {
     // No git metadata (e.g. archive build) — fall through to the fallback below.
   }
-  return { owner: "yourbusiness", repo: "marcus-monorepo" };
+  return { owner: "yourbusiness", repo: "marcusok" };
 }
 
 const github = resolveGithubRepo();
@@ -104,7 +104,7 @@ const isDev = process.argv.slice(2).includes("dev");
 const base = isDev ? "/" : (process.env.DOCS_BASE ?? `/${github.repo}/`);
 
 // NOTE: "yourbusiness" is the REAL GitHub owner/org for this monorepo
-// (origin is git@github.com:yourbusiness/marcus-monorepo.git), NOT a
+// (origin is git@github.com:yourbusiness/marcusok.git), NOT a
 // placeholder. base/edit links/social links resolve correctly. If you
 // fork this repo, update the origin remote and the fallback in
 // resolveGithubRepo() accordingly.
@@ -349,7 +349,7 @@ export default defineConfig({
   lang: "en-US",
   title: "MarcusOK Docs",
   description:
-    "MarcusOK Docs — public technical documentation for marcus-monorepo packages (en / zh).",
+    "MarcusOK Docs — public technical documentation for marcusok packages (en / zh).",
   base,
   cleanUrls: true,
   lastUpdated: true,
@@ -362,7 +362,7 @@ export default defineConfig({
       "meta",
       {
         property: "og:description",
-        content: "Public documentation for marcus-monorepo packages.",
+        content: "Public documentation for marcusok packages.",
       },
     ],
   ],
@@ -372,7 +372,7 @@ export default defineConfig({
       lang: "en-US",
       title: "MarcusOK Docs",
       description:
-        "MarcusOK Docs — public technical documentation for marcus-monorepo packages.",
+        "MarcusOK Docs — public technical documentation for marcusok packages.",
       themeConfig: {
         nav: buildNav("en", ""),
         sidebar: buildSidebar(".", "", "en"),
@@ -390,7 +390,7 @@ export default defineConfig({
       lang: "zh-CN",
       title: "MarcusOK 文档中心",
       description:
-        "MarcusOK 文档中心 —— marcus-monorepo 库包的公开技术文档，默认英文。",
+        "MarcusOK 文档中心 —— marcusok 库包的公开技术文档，默认英文。",
       themeConfig: {
         nav: buildNav("zh", "/zh"),
         sidebar: buildSidebar("zh", "/zh", "zh"),

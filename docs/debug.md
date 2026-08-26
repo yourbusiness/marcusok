@@ -10,10 +10,10 @@
 | ---------- | ------------------------------------------------------------------------- |
 | 文档创建   | 2026-07-29 15:39 (GMT+08:00)                                              |
 | 文档更新   | 2026-07-29 16:40 (GMT+08:00)（补全完整排障过程与最终改动）                |
-| 远程仓库   | `git@github.com:yourbusiness/marcus-monorepo.git`                         |
+| 远程仓库   | `git@github.com:yourbusiness/marcusok.git`                                |
 | 包名（原） | `@marcus/excel-exporter`                                                  |
 | 包名（现） | `@marcusok/excel-exporter` @ `0.1.1`                                      |
-| 根工程版本 | `marcus-monorepo` @ `0.0.0`                                               |
+| 根工程版本 | `marcusok` @ `0.0.0`                                                      |
 | Node       | 22.22.2（CI 固定 22，来源 `.nvmrc`）                                      |
 | pnpm       | 9.12.0（来源 `package.json` `packageManager`）                            |
 | 构建编排   | Turborepo 2.10.7                                                          |

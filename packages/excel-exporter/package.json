@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourbusiness/marcus-monorepo.git",
+    "url": "git+https://github.com/yourbusiness/marcusok.git",
     "directory": "packages/excel-exporter"
   },
   "bugs": {
-    "url": "https://github.com/yourbusiness/marcus-monorepo/issues"
+    "url": "https://github.com/yourbusiness/marcusok/issues"
   },
   "types": "./dist/index.d.ts",
   "exports": {

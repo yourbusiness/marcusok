@@ -177,7 +177,7 @@ Changesets 不是无脑发所有包，有两道筛选：
 1. **`package.json` 的 `private` 字段**：根 [package.json](../package.json) 是 `"private": true`，永远不会被发布（它是工作区根，只是个壳）。`packages/excel-exporter/package.json` 没设 `private`（默认 false），才会被发布。
 2. **`config.json` 的 `ignore`**：即使包不是 private，也可以列进 `ignore` 让它「只 bump 不发」。当前列了 `@marcusok/play` 与 `@marcusok/docs`（本地沙箱与文档站，只参与工作区内部引用，不发 npm）。
 
-所以本项目只有 `@marcusok/excel-exporter` 一个包会真正发到 npm。根包 `marcus-monorepo`（version 0.0.0，private）只在工作区内部存在，changeset 会自动忽略它。
+所以本项目只有 `@marcusok/excel-exporter` 一个包会真正发到 npm。根包 `marcusok`（version 0.0.0，private）只在工作区内部存在，changeset 会自动忽略它。
 
 ### 包发布时打进哪些文件
 

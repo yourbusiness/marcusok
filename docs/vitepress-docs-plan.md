@@ -41,7 +41,7 @@
 
 ### 2.3 需要提前说明的现状问题
 
-1. **git 远程地址已确认**：remote 为 `git@github.com:yourbusiness/marcus-monorepo.git`，`yourbusiness` 是真实的 GitHub owner（非占位符），站点已按 `https://yourbusiness.github.io/marcus-monorepo/` 部署上线。（规划时曾把它当作占位地址，后来确认即为真实仓库。）
+1. **git 远程地址已确认**：remote 为 `git@github.com:yourbusiness/marcusok.git`，`yourbusiness` 是真实的 GitHub owner（非占位符），站点已按 `https://yourbusiness.github.io/marcusok/` 部署上线。（规划时曾把它当作占位地址，后来确认即为真实仓库。）
 2. **根 README 存在编码问题**（GBK 内容被当作 UTF-8 显示为乱码）。公开文档站内容将全部新写（UTF-8），不直接复用 README 文本；README 修复可作为独立事项另行处理。
 3. GitHub Pages 需要仓库所有者先在仓库 Settings → Pages 中把 Source 设为 **GitHub Actions**；私有仓库的 Pages 服务需要付费计划（Pro/Team/Enterprise）。
 
@@ -71,7 +71,7 @@ configure-pages@v4 / upload-pages-artifact@v3 / deploy-pages@v4（实测各 Acti
 
 关键配置：
 
-- `base: '/marcus-monorepo/'`（项目站点子路径部署必配，否则资源 404；真实仓库名确定后校准，支持用环境变量覆盖以便将来接自定义域名）；
+- `base: '/marcusok/'`（项目站点子路径部署必配，否则资源 404；真实仓库名确定后校准，支持用环境变量覆盖以便将来接自定义域名）；
 - 触发：`push` 到 `main` + `workflow_dispatch` 手动触发；
 - 构建：`pnpm install --frozen-lockfile` + `pnpm turbo run build --filter=@marcusok/docs`（turbo 会自动先构建上游依赖 excel-exporter）；
 - 缓存：`actions/cache` 缓存 `apps/docs/.vitepress/cache`，加速构建；
@@ -186,7 +186,7 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 
 ### 8.2 一次性前置条件（实施前清单，落地时均已处理）
 
-1. GitHub 仓库地址已确认：remote 即 `yourbusiness/marcus-monorepo`（`yourbusiness` 为真实 owner），`base` 已据此配置；
+1. GitHub 仓库地址已确认：remote 即 `yourbusiness/marcusok`（`yourbusiness` 为真实 owner），`base` 已据此配置；
 2. 仓库 Settings → Pages → Build and deployment → Source = **GitHub Actions**；
 3. 如为私有仓库，确认 GitHub 计划支持 Pages；
 4. 确认文档语言：建议**中文优先**（与现有 README 语言一致），VitePress 天然支持 i18n，后续可加英文；

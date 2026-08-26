@@ -236,7 +236,7 @@ await initWasm(res);
 ### 3.2 目录结构（为未来扩展预留）
 
 ```
-marcus-monorepo/
+marcusok/
 ├── .changeset/                    # Changesets 配置与待发布记录
 │   └── config.json
 ├── .github/
@@ -268,7 +268,7 @@ marcus-monorepo/
 
 ```json
 {
-  "name": "marcus-monorepo",
+  "name": "marcusok",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -674,11 +674,11 @@ packages/excel-exporter/
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourbusiness/marcus-monorepo.git",
+    "url": "git+https://github.com/yourbusiness/marcusok.git",
     "directory": "packages/excel-exporter"
   },
   "bugs": {
-    "url": "https://github.com/yourbusiness/marcus-monorepo/issues"
+    "url": "https://github.com/yourbusiness/marcusok/issues"
   },
   "types": "./dist/index.d.ts",
   "exports": {
