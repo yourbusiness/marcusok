@@ -1,5 +1,9 @@
 import type { ExportOptions, ExportResult } from "./types";
-import { displayValue, validateSheetName } from "./format-utils";
+import {
+  displayValue,
+  validateSheetName,
+  validateMerges,
+} from "./format-utils";
 import { triggerDownload } from "./download";
 import { flattenColumnTree } from "./column-tree";
 
@@ -59,10 +63,19 @@ export async function exportWithSheetJS(
     const buildStart = performance.now();
     const XLSX = await loadSheetJS();
     const wb = XLSX.utils.book_new();
+    // Keep validation identical to the primary paths (types.ts documents the
+    // fallback as re-validating input): duplicate names previously let SheetJS
+    // silently rename sheets; invalid merges previously wrote corrupt ranges.
+    const seenSheetNames = new Set<string>();
     for (const s of options.sheets) {
       validateSheetName(s.name);
+      if (seenSheetNames.has(s.name)) {
+        throw new Error(`[excel-exporter] duplicate sheet name "${s.name}"`);
+      }
+      seenSheetNames.add(s.name);
       const { leaves, headerGrid, headerMerges, headerRowCount } =
         flattenColumnTree(s.columns);
+      validateMerges(s, leaves.length);
       const aoa = [
         // null cells (covered by header merges) become blank strings.
         ...headerGrid.map((row) => row.map((v) => (v == null ? "" : v))),

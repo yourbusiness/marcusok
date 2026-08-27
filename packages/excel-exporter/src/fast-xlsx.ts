@@ -1,7 +1,11 @@
 import { strToU8, zipSync } from "fflate";
 import type { SheetConfig } from "./types";
-import { displayValue, validateSheetName } from "./format-utils";
-import { flattenColumnTree, a1Range } from "./column-tree";
+import {
+  displayValue,
+  validateSheetName,
+  validateMerges,
+} from "./format-utils";
+import { flattenColumnTree, a1Range, someColumn } from "./column-tree";
 
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 const MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -118,6 +122,9 @@ function buildWorksheetXml(
   validateSheetName(config.name);
   const { leaves, headerGrid, headerMerges, headerRowCount } =
     flattenColumnTree(config.columns);
+  // Reject invalid user merges before any XML is built: a reversed or
+  // out-of-bounds range would otherwise zip a workbook Excel flags as corrupt.
+  validateMerges(config, leaves.length);
   const letters = leaves.map((_, i) => columnName(i));
   const out: string[] = [];
 
@@ -204,19 +211,29 @@ export function exportFastXlsx(
   const contentOverrides: string[] = [];
   const stringTable = createSharedStringTable();
 
+  // Duplicate sheet names violate ECMA-376 uniqueness and yield a workbook
+  // Excel flags as corrupt; reject before building anything.
+  const seenSheetNames = new Set<string>();
+
   sheets.forEach((config, index) => {
     const sheetNumber = index + 1;
+    if (seenSheetNames.has(config.name)) {
+      throw new Error(`[excel-exporter] duplicate sheet name "${config.name}"`);
+    }
+    seenSheetNames.add(config.name);
     const skipped: string[] = [];
-    if (config.columns.some((c) => c.width !== undefined))
+    // someColumn walks the whole tree: width/style/headerStyle may sit on
+    // nested nodes, and a top-level-only scan would drop them silently.
+    if (someColumn(config.columns, (c) => c.width !== undefined))
       skipped.push("width");
     if (
       config.headerStyle !== undefined ||
-      config.columns.some((c) => c.headerStyle !== undefined)
+      someColumn(config.columns, (c) => c.headerStyle !== undefined)
     )
       skipped.push("headerStyle");
     // Data-cell styles are dropped just like layout features; warn so the
     // degradation is visible instead of silent (headerStyle above already did).
-    if (config.columns.some((c) => c.style !== undefined))
+    if (someColumn(config.columns, (c) => c.style !== undefined))
       skipped.push("style");
     if (config.freezeRows) skipped.push("freezeRows");
     if (config.autoFilter) skipped.push("autoFilter");

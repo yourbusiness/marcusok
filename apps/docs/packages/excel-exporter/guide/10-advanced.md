@@ -14,7 +14,7 @@ await exportExcel({
 });
 ```
 
-Sheet names must satisfy ECMA-376 constraints: non-empty, ≤ 31 characters, and must not contain `: \ / ? * [ ]`. A violation never produces a corrupt file and never throws to the caller — the validation error is caught and routed through the fallback, which re-validates the same name, so the export finally resolves with `{ success: false, error }` (with a clear error message).
+Sheet names must satisfy ECMA-376 constraints: non-empty, ≤ 31 characters, and must not contain `: \ / ? * [ ]`. They must also be unique across `sheets` — a duplicate name fails the same way instead of producing a corrupt file or a silently renamed sheet. A violation never produces a corrupt file and never throws to the caller — the validation error is caught and routed through the fallback, which re-validates the same name, so the export finally resolves with `{ success: false, error }` (with a clear error message).
 
 ## Frozen rows
 
@@ -84,6 +84,8 @@ Try it live: below is a mock preview of the `sales-grouped` dataset (two-level g
 ```
 
 `MergeRange` is relative to the data area: `row` / `col` start at 0 (`row 0` = first data row); `rowspan` / `colspan` are the spans.
+
+Merges are validated identically on every path: values must be integers, `row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1, the range must stay inside the data area (leaf column count / data row count), and ranges must not overlap each other. Invalid input resolves with `{ success: false, error }` naming the offending merge — never a workbook Excel flags as corrupt.
 
 ## Auto filter
 

@@ -179,8 +179,11 @@ export async function exportExcel(
   // Browser worker mode: offload to worker (main thread does one structured clone).
   try {
     const result = await exportInWorker(options, picked.workerMode!);
-    options.onProgress?.(1);
     if (result.success) {
+      // Terminal 1 on success only: the failure route hands the sequence to
+      // finishWithSheetJS, whose finally emits it exactly once (the types.ts
+      // contract) -- emitting it here too duplicated the trailing 1.
+      options.onProgress?.(1);
       if (options.download !== false) {
         const downloadStart = performance.now();
         triggerDownload(result.blob!, options.filename);

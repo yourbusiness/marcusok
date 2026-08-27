@@ -26,6 +26,19 @@ jobs:
       - name: Lint commit messages
         if: github.event_name == 'pull_request'
         run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD
+      - name: Lint pushed commit messages (main)
+        # This repo develops directly on main: the PR-only lint above never saw
+        # direct pushes, so commit-message hygiene rested entirely on the local
+        # husky hook (--no-verify bypasses it). Lint every commit the push adds.
+        if: github.event_name == 'push'
+        run: |
+          FROM="${{ github.event.before }}"
+          if git cat-file -e "$FROM" 2>/dev/null; then
+            pnpm exec commitlint --from "$FROM" --to HEAD
+          else
+            # before-sha unavailable (force push / rewritten ref): lint the tip.
+            pnpm exec commitlint --from HEAD~1 --to HEAD
+          fi
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

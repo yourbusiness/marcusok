@@ -12,6 +12,7 @@ import {
   resolveCellFormat,
   numFormatForSpec,
   validateSheetName,
+  validateMerges,
 } from "./format-utils";
 import { toBlobPart } from "./download";
 
@@ -38,6 +39,9 @@ export class WorkbookBuilder {
   addSheet(config: SheetConfig): this {
     const { leaves, headerGrid, headerCells, headerMerges, headerRowCount } =
       flattenColumnTree(config.columns);
+    // Same validation as the stream/SheetJS paths: invalid merge input must
+    // fail with a clear error, not zip a corrupt workbook.
+    validateMerges(config, leaves.length);
 
     // Auto-inject an Excel numFormat for typed FormatSpecs (date/datetime/number)
     // so the cell renders correctly without forcing the caller to also set

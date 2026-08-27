@@ -1,4 +1,4 @@
-import type { ColumnConfig, FormatSpec } from "./types";
+import type { ColumnConfig, FormatSpec, SheetConfig } from "./types";
 import { dateToSerial } from "modern-xlsx";
 
 /** Default display patterns (Excel format codes) when FormatSpec omits `pattern`. */
@@ -158,7 +158,12 @@ export function displayValue(
     }
   }
   const v = resolveCellFormat(col, row);
-  if (typeof v === "number" || typeof v === "boolean") return v;
+  // NaN/Infinity are not valid xsd:double values: writing <v>NaN</v> produces a
+  // workbook Excel flags as corrupt (the same applies inside SheetJS's
+  // aoa_to_sheet). Emit the visible string form instead, matching the
+  // number-spec branch above.
+  if (typeof v === "number") return Number.isFinite(v) ? v : toStr(v);
+  if (typeof v === "boolean") return v;
   return toStr(v);
 }
 
@@ -208,5 +213,69 @@ export function validateSheetName(name: string): void {
     throw new Error(
       `[excel-exporter] sheet name "${name}" contains forbidden characters (: \\ / ? * [ ])`,
     );
+  }
+}
+
+/**
+ * Validate user-supplied merge ranges against the sheet's data area. A merge
+ * with a zero/negative span or an out-of-bounds endpoint would produce a
+ * reversed or dangling range that Excel treats as a corrupt workbook, so
+ * reject it here -- identically on the Workbook, stream and SheetJS paths --
+ * with a message naming the offending merge.
+ *
+ * `MergeRange` is data-relative (row 0 = first data row): bounds are the leaf
+ * column count and the data row count. Overlap is checked across the user
+ * ranges themselves; they cannot collide with header merges because they sit
+ * entirely below the header block.
+ */
+export function validateMerges(sheet: SheetConfig, leafCount: number): void {
+  const merges = sheet.merges;
+  if (!merges?.length) return;
+  for (let i = 0; i < merges.length; i++) {
+    const m = merges[i];
+    const at = `merge #${i} {row: ${m.row}, col: ${m.col}, rowspan: ${m.rowspan}, colspan: ${m.colspan}}`;
+    if (
+      !Number.isInteger(m.row) ||
+      !Number.isInteger(m.col) ||
+      !Number.isInteger(m.rowspan) ||
+      !Number.isInteger(m.colspan)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" ${at}: values must be integers`,
+      );
+    }
+    if (m.row < 0 || m.col < 0) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" ${at}: row/col must be >= 0 (0-based, relative to the data area)`,
+      );
+    }
+    if (m.rowspan < 1 || m.colspan < 1) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" ${at}: rowspan/colspan must be >= 1`,
+      );
+    }
+    if (m.col + m.colspan > leafCount) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" ${at}: col ${m.col} + colspan ${m.colspan} exceeds the ${leafCount} leaf columns`,
+      );
+    }
+    if (m.row + m.rowspan > sheet.data.length) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" ${at}: row ${m.row} + rowspan ${m.rowspan} exceeds the ${sheet.data.length} data rows`,
+      );
+    }
+    for (let j = 0; j < i; j++) {
+      const o = merges[j];
+      const overlaps =
+        m.row < o.row + o.rowspan &&
+        o.row < m.row + m.rowspan &&
+        m.col < o.col + o.colspan &&
+        o.col < m.col + m.colspan;
+      if (overlaps) {
+        throw new Error(
+          `[excel-exporter] sheet "${sheet.name}" ${at} overlaps merge #${j}; merged ranges must be disjoint`,
+        );
+      }
+    }
   }
 }

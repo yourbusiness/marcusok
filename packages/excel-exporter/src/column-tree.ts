@@ -132,6 +132,22 @@ export function flattenColumnTree(
 }
 
 /**
+ * Recursive `some` over every node of the column tree, groups included.
+ * Stream-mode feature checks must use this: width/style/headerStyle can sit
+ * on deeply nested nodes, and a top-level-only scan would silently skip them
+ * (dropping the feature without the documented warning).
+ */
+export function someColumn(
+  columns: ColumnConfig[],
+  pred: (c: ColumnConfig) => boolean,
+): boolean {
+  return columns.some(
+    (c) =>
+      pred(c) || (c.children?.length ? someColumn(c.children, pred) : false),
+  );
+}
+
+/**
  * Render a 0-based sheet-relative range as an A1 ref (e.g. row 0/col 0 with
  * rowSpan 2/colSpan 1 -> "A1:A2"). Dependency-free so the stream writer can
  * use it without importing modern-xlsx.
