@@ -39,6 +39,7 @@ jobs:
             # before-sha unavailable (force push / rewritten ref): lint the tip.
             pnpm exec commitlint --from HEAD~1 --to HEAD
           fi
+      - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

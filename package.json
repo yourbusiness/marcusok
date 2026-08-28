@@ -19,6 +19,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,vue}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,vue}\"",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "turbo run lint typecheck test build && changeset publish",

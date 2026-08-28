@@ -1,6 +1,6 @@
-import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
-import { initWasmSync, readBuffer } from 'modern-xlsx';
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { initWasmSync, readBuffer } from "modern-xlsx";
 
 /**
  * Shared WASM bootstrap for Node test environment.
@@ -10,7 +10,7 @@ import { initWasmSync, readBuffer } from 'modern-xlsx';
  */
 const require = createRequire(import.meta.url);
 const wasmPath =
-  require('path').dirname(require.resolve('modern-xlsx')) + '/modern-xlsx.wasm';
+  require("path").dirname(require.resolve("modern-xlsx")) + "/modern-xlsx.wasm";
 initWasmSync(readFileSync(wasmPath));
 
 export { readBuffer };
@@ -20,12 +20,12 @@ export function makeData(n: number) {
     name: `user_${i}`,
     amount: Number((i * 7.13).toFixed(2)),
     createdAt: new Date(2025, 0, 1 + (i % 28)),
-    status: i % 2 === 0 ? 'paid' : 'pending',
+    status: i % 2 === 0 ? "paid" : "pending",
   }));
 }
 export const fourCols = [
-  { key: 'id', header: 'ID' },
-  { key: 'name', header: 'Name' },
-  { key: 'amount', header: 'Amount' },
-  { key: 'createdAt', header: 'Date' },
+  { key: "id", header: "ID" },
+  { key: "name", header: "Name" },
+  { key: "amount", header: "Amount" },
+  { key: "createdAt", header: "Date" },
 ];

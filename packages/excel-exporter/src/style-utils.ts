@@ -1,5 +1,5 @@
-import type { Workbook } from 'modern-xlsx';
-import type { CellStyle } from './types';
+import type { Workbook } from "modern-xlsx";
+import type { CellStyle } from "./types";
 
 /**
  * Compile a business CellStyle into a modern-xlsx styleIndex (0-based index into
@@ -22,7 +22,7 @@ export function buildStyleIndex(wb: Workbook, style: CellStyle): number {
 
   if (style.fill && (style.fill.fgColor || style.fill.bgColor)) {
     builder.fill({
-      pattern: style.fill.pattern ?? 'solid',
+      pattern: style.fill.pattern ?? "solid",
       fgColor: style.fill.fgColor ?? null,
       bgColor: style.fill.bgColor ?? null,
     });

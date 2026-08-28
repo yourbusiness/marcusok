@@ -1,10 +1,10 @@
 /** Trigger a browser download from a Blob. No-op in Node (document undefined). */
 export function triggerDownload(blob: Blob, filename: string): void {
-  if (typeof document === 'undefined') return;
+  if (typeof document === "undefined") return;
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
-  a.download = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+  a.download = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();
