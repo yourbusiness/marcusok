@@ -10,6 +10,8 @@ import {
   echartsExportToOptions,
   type EChartsExportOptions,
 } from "./echarts-export";
+import { validateSheetName, validateMerges } from "./format-utils";
+import { flattenColumnTree } from "./column-tree";
 
 export * from "./types";
 export * from "./style-presets";
@@ -17,6 +19,7 @@ export * from "./format-utils";
 export * from "./table-export";
 export * from "./echarts-export";
 export { configureWasm, getWasmLoader } from "./wasm-loader";
+export type { LoaderOptions, LoadState } from "./wasm-loader";
 export { WorkbookBuilder } from "./workbook-builder";
 export { exportAsStream } from "./streaming-builder";
 
@@ -69,6 +72,27 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
 }
 
 /**
+ * Pre-flight validation of user input. Runs the same checks as the
+ * Workbook/stream/SheetJS build paths (same functions, same messages), hoisted
+ * to the entry so a configuration error fails immediately with `{ success:
+ * false, error }` instead of first degrading to a SheetJS fallback attempt
+ * that re-runs the identical checks and fails identically. Engine failures
+ * (WASM unavailable, build errors) still degrade to SheetJS as before.
+ */
+function validateInput(options: ExportOptions): void {
+  const seen = new Set<string>();
+  for (const sheet of options.sheets) {
+    validateSheetName(sheet.name);
+    if (seen.has(sheet.name)) {
+      throw new Error(`[excel-exporter] duplicate sheet name "${sheet.name}"`);
+    }
+    seen.add(sheet.name);
+    const { leaves } = flattenColumnTree(sheet.columns);
+    validateMerges(sheet, leaves.length);
+  }
+}
+
+/**
  * Export to Excel (main entry).
  *
  * @example
@@ -97,6 +121,20 @@ export async function exportExcel(
   // Leading 0 fires exactly once here, on every route (the SheetJS fallback
   // included), so consumers always see the documented 0 -> ... -> 1 pair.
   options.onProgress?.(0);
+
+  // Invalid input fails here on every route (same messages as before; the
+  // build paths keep their own checks for direct callers). The trailing 1 is
+  // still emitted so the 0 -> 1 progress contract holds for failed exports.
+  try {
+    validateInput(options);
+  } catch (e) {
+    options.onProgress?.(1);
+    return {
+      success: false,
+      error: e as Error,
+      duration: performance.now() - start,
+    };
+  }
 
   // The SheetJS fallback never reports progress itself; closing the sequence
   // here keeps the terminal-1 contract true on degraded routes too, including

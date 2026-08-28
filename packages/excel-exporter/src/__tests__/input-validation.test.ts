@@ -44,6 +44,26 @@ describe("non-finite numbers (NaN/Infinity)", () => {
     expect(ws.cell("B2").value).toBe("Infinity");
   });
 
+  it("workbook path (main mode) writes the same visible strings", async () => {
+    const r = await exportExcel({
+      filename: "nan-main",
+      download: false,
+      mode: "main",
+      sheets: [baseSheet({ data: [{ a: NaN, b: Infinity }] })],
+    });
+    expect(r.success).toBe(true);
+    expect(r.engine).toBe("modern-xlsx");
+    // Same raw-XML guard as the stream case: no illegal <v>NaN</v> number cell.
+    const bytes = new Uint8Array(await r.blob!.arrayBuffer());
+    const sheetXml = strFromU8(unzipSync(bytes)["xl/worksheets/sheet1.xml"]);
+    expect(sheetXml).not.toContain("<v>NaN</v>");
+    expect(sheetXml).not.toContain("<v>Infinity</v>");
+    const wb = await readBuffer(bytes);
+    const ws = wb.getSheet("S")!;
+    expect(ws.cell("A2").value).toBe("NaN");
+    expect(ws.cell("B2").value).toBe("Infinity");
+  });
+
   it("SheetJS fallback writes the same visible strings", async () => {
     vi.stubGlobal("WebAssembly", undefined);
     try {
@@ -110,10 +130,36 @@ describe("merge range validation", () => {
         baseSheet({ merges: [{ row: 0, col: 0, rowspan: 0, colspan: 1 }] }),
       ],
     });
-    // The workbook build throws -> SheetJS fallback re-validates -> fails too,
-    // surfacing the validation error instead of a corrupt file.
+    // The pre-flight check in exportExcel fails the call directly (previously:
+    // workbook build threw -> SheetJS fallback re-validated -> failed too,
+    // after one wasted fallback attempt and a misleading warn).
     expect(r.success).toBe(false);
     expect(r.error?.message).toMatch(/rowspan\/colspan must be >= 1/);
+  });
+
+  it("invalid input fails immediately without the SheetJS fallback", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const r = await exportExcel({
+        filename: "preflight-no-fallback",
+        download: false,
+        mode: "main",
+        sheets: [
+          baseSheet({
+            merges: [{ row: 0, col: 0, rowspan: 0, colspan: 1 }],
+          }),
+        ],
+      });
+      expect(r.success).toBe(false);
+      // No engine ran: the failure came from the entry-point pre-flight, not
+      // from a degraded (style-less) SheetJS attempt.
+      expect(r.engine).toBeUndefined();
+      expect(r.error?.message).toMatch(/rowspan\/colspan must be >= 1/);
+      // And no "Falling back to SheetJS" warn may be printed for input errors.
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("SheetJS fallback reports the same failure", async () => {
@@ -159,7 +205,8 @@ describe("duplicate sheet names", () => {
       sheets: [baseSheet({ name: "S" }), baseSheet({ name: "S" })],
     });
     // Previously: modern-xlsx threw "already exists" -> fallback let SheetJS
-    // silently rename to S_1. Now both paths fail with a clear duplicate error.
+    // silently rename to S_1. Now the pre-flight check (and, for direct
+    // builders, every path) fails with a clear duplicate error.
     expect(r.success).toBe(false);
     expect(r.error?.message).toMatch(/duplicate sheet name "S"/);
   });

@@ -13,6 +13,7 @@ import {
   numFormatForSpec,
   validateSheetName,
   validateMerges,
+  toStr,
 } from "./format-utils";
 import { toBlobPart } from "./download";
 
@@ -48,7 +49,14 @@ export class WorkbookBuilder {
     // style.numFormat (otherwise dates show as raw serials, numbers as text).
     const columns = leaves.map(withAutoNumFormat);
     const rows = config.data.map((item) =>
-      columns.map((col) => resolveCellFormat(col, item)),
+      columns.map((col) => {
+        const v = resolveCellFormat(col, item);
+        // NaN/Infinity are not valid xsd:double values: <v>NaN</v> produces a
+        // workbook Excel flags as corrupt. Emit the visible string form,
+        // matching displayValue on the stream/SheetJS paths (README: non-finite
+        // numbers are written as visible strings on every path).
+        return typeof v === "number" && !Number.isFinite(v) ? toStr(v) : v;
+      }),
     );
     const aoa = [...headerGrid, ...rows];
 

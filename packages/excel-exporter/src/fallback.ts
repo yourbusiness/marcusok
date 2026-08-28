@@ -121,8 +121,10 @@ export async function exportWithSheetJS(
       mode: "main",
       duration: performance.now() - start,
       rowCount: totalRows,
+      // Surface the degradation cause programmatically (the console.warn is
+      // lossy for callers): e.g. "workerUrl not configured" is actionable.
       error: new Error(
-        "Fallback: styles stripped (SheetJS CE has no style-write support)",
+        `Fallback: styles stripped (SheetJS CE has no style-write support). Reason: ${reason}`,
       ),
     };
   } catch (e) {

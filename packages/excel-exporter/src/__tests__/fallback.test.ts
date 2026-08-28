@@ -40,9 +40,11 @@ describe("SheetJS fallback (exportWithSheetJS)", () => {
     expect(result.rowCount).toBe(2);
     expect(result.blob).toBeInstanceOf(Blob);
     expect(result.blob!.size).toBeGreaterThan(0);
-    // Styles are stripped in the fallback; the soft error signals that.
+    // Styles are stripped in the fallback; the soft error signals that and
+    // carries the degradation reason through programmatically.
     expect(result.error).toBeInstanceOf(Error);
     expect(result.error!.message).toMatch(/styles stripped/i);
+    expect(result.error!.message).toContain("Reason: test: direct invocation");
   });
 
   it('still succeeds when the fallback reason is "WebAssembly not supported"', async () => {
