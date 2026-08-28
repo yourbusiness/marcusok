@@ -25,6 +25,8 @@ pnpm add @marcusok/excel-exporter modern-xlsx
 Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package passes all tests on Node 22 (84 cases in total; CI defaults to `RUN_PERF=0`, skipping 4 performance benchmarks and running 80). This package was developed and tested against 1.2.0 — consumers are advised to pin that version (the peerDep range `^1.2.0` is allowed, but higher versions are unverified).
 
 > modern-xlsx is declared as a `peerDependency`, so consumers must install it explicitly. Reasons: (1) `modern-xlsx.wasm` (1.9MB) must be deployed by the consumer as a static asset — an implicit dependency would hide this hard requirement; (2) peerDep is semantically correct — this package wraps modern-xlsx and version control belongs to the consumer; (3) package managers auto-install peerDependencies by default (npm 7+ / pnpm 8+), and an implicitly installed version is outside the consumer's control — an explicit declaration is what pins the version intent. `xlsx` (SheetJS) is an optional peerDep, needed only for the fallback path.
+>
+> Security note on the optional `xlsx` peer: the last npm release (`0.18.5`) is unmaintained and carries known CVEs (CVE-2023-30533 ReDoS, CVE-2024-22363 prototype pollution). If you provide `xlsx` yourself, install the maintained build from the official CDN instead of npm: `pnpm add https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`. The peer range stays `>=0.18.5` for compatibility, and when no local `xlsx` is present the fallback loads `0.20.3` from the SheetJS CDN at runtime.
 
 ## Setup (Browser)
 

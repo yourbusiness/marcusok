@@ -12,10 +12,10 @@
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
-需要兜底时额外安装 SheetJS：
+需要兜底时额外安装 SheetJS。请使用官方 CDN 的 tarball 而非 npm 版本：npm 上的最后一个版本（`0.18.5`）已停止维护且存在已知 CVE（CVE-2023-30533、CVE-2024-22363），修复版只在 SheetJS 官方 CDN 发布。
 
 ```bash
-pnpm add xlsx
+pnpm add https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
 ```
 
 不安装时，兜底路径会自动从 SheetJS 官方 CDN 加载 `xlsx.mjs`（0.20.3），但生产环境更推荐自托管。

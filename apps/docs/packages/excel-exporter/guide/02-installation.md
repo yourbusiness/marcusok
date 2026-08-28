@@ -12,10 +12,10 @@
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
-Install SheetJS only if you want a local fallback:
+Install SheetJS only if you want a local fallback. Use the official CDN tarball, not npm: the last npm release (`0.18.5`) is unmaintained and carries known CVEs (CVE-2023-30533, CVE-2024-22363), while fixes are only published on the SheetJS CDN.
 
 ```bash
-pnpm add xlsx
+pnpm add https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
 ```
 
 Without it, the fallback dynamically loads `xlsx.mjs` (0.20.3) from the official SheetJS CDN — self-hosting is recommended for production.
