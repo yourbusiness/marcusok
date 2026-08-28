@@ -70,6 +70,9 @@ function cjkRatio(content) {
 
 const contentErrors = [];
 for (const f of required) {
+  // Skip pages with no zh mirror: the file-level report below already lists
+  // them, and readFileSync here would throw ENOENT before any report prints.
+  if (missingInZh.includes(f)) continue;
   const enContent = readFileSync(join(root, f), "utf8");
   const zhContent = readFileSync(join(zhRoot, f), "utf8");
   if (zhContent === enContent) {
