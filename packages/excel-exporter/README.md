@@ -22,7 +22,7 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
-Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package passes all tests on Node 22 (84 cases in total; CI defaults to `RUN_PERF=0`, skipping 4 performance benchmarks and running 80). This package was developed and tested against 1.2.0 — consumers are advised to pin that version (the peerDep range `^1.2.0` is allowed, but higher versions are unverified).
+Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package passes all tests on Node 22 (91 cases in total; CI defaults to `RUN_PERF=0`, skipping 4 performance benchmarks and running 87). This package was developed and tested against 1.2.0 — consumers are advised to pin that version (the peerDep range `^1.2.0` is allowed, but higher versions are unverified).
 
 > modern-xlsx is declared as a `peerDependency`, so consumers must install it explicitly. Reasons: (1) `modern-xlsx.wasm` (1.9MB) must be deployed by the consumer as a static asset — an implicit dependency would hide this hard requirement; (2) peerDep is semantically correct — this package wraps modern-xlsx and version control belongs to the consumer; (3) package managers auto-install peerDependencies by default (npm 7+ / pnpm 8+), and an implicitly installed version is outside the consumer's control — an explicit declaration is what pins the version intent. `xlsx` (SheetJS) is an optional peerDep, needed only for the fallback path.
 >
@@ -187,7 +187,7 @@ When WASM is unsupported or fails to load, the library automatically falls back 
 - `WorkbookBuilder` — batch builder (<50k rows, full styling).
 - `exportAsStream(sheets)` — large-file export (>=50k rows).
 - `exportTable(options)` — convenience export for common table data, supporting both AntD `title`/`dataIndex` and Element Plus `label`/`prop` column naming.
-- `exportEcharts(options)` — convenience export for common ECharts data, supporting category-axis multi-series, pie `name/value`, and scatter `[x,y]`.
+- `exportEcharts(options)` — convenience export for common ECharts data, supporting category-axis multi-series, pie `name/value`, and scatter `[x,y]`. The default sheet name and column headers are Chinese (`图表数据` / `系列` / `类目` / `名称` / `数值`); override them via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`. In long/item layouts the header texts double as row keys, so duplicated headers are rejected with a clear error.
 - `StylePresets` — the seven preset styles.
 - `headerStyle` — supported on both `SheetConfig` and `ColumnConfig` for styling header cells.
 - `exportInWorker` / `terminateWorker` (`@marcusok/excel-exporter/worker-utils`, source entry `src/worker-exporter.ts`) — manual Worker lifecycle control.

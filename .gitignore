@@ -14,4 +14,3 @@ apps/docs/.vitepress/config.ts.timestamp-*.mjs
 apps/docs/public/assets/modern_xlsx_wasm_bg.wasm
 apps/docs/public/assets/export.worker.js
 
-CLAUDE.md

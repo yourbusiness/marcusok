@@ -49,7 +49,7 @@ configureWasm(options: LoaderOptions): void
 - `WorkbookBuilder.create()` + `addSheet(config)` + `toBuffer()` / `toBlob()`：批量化构建，完整样式；
 - `exportAsStream(sheets, onProgress?)`：底层流式导出，返回 `Promise<{ bytes, rowCount }>`；
 - `exportTable(options)`：常见表格数据便捷导出，支持 AntD `title`/`dataIndex` 与 Element Plus `label`/`prop`；
-- `exportEcharts(options)`：常见 ECharts 数据便捷导出，支持类目轴多系列、饼图 `name/value`、散点 `[x,y]`；
+- `exportEcharts(options)`：常见 ECharts 数据便捷导出，支持类目轴多系列、饼图 `name/value`、散点 `[x,y]`。默认 sheet 名与表头为中文，可通过 `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader` 覆盖；long/item 布局下表头兼作行键，重复表头会被明确拒绝；
 - `getWasmLoader()`：访问全局 WASM 加载器（状态：idle / loading / ready / error）。
 
 ```ts

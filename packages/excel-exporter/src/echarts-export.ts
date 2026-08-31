@@ -74,6 +74,24 @@ function isCoordinatePair(value: EChartsDatum): value is [number, number] {
   );
 }
 
+/**
+ * Long/item layouts use the header texts themselves as row keys
+ * (`{ [seriesHeader]: name, [valueHeader]: item }`), so two identical headers
+ * would silently overwrite each other's column. Reject duplicates up front,
+ * matching the library's fail-fast input validation.
+ */
+function assertDistinctHeaders(headers: string[], context: string): void {
+  const seen = new Set<string>();
+  for (const h of headers) {
+    if (seen.has(h)) {
+      throw new Error(
+        `[excel-exporter] duplicate header "${h}" in ${context}: header texts double as row keys in long/item layouts, so they must be distinct (rename via the *Header options).`,
+      );
+    }
+    seen.add(h);
+  }
+}
+
 function assertCategoryValue(value: EChartsDatum, context: string): void {
   if (
     isCoordinatePair(value) ||
@@ -106,6 +124,10 @@ function buildCategorySheet(
   }
 
   if (layout === "long") {
+    assertDistinctHeaders(
+      [seriesHeader, categoryHeader, valueHeader],
+      "category long layout",
+    );
     const data: Record<string, unknown>[] = [];
     for (let i = 0; i < series.length; i++) {
       const name = seriesName(series[i], i);
@@ -174,6 +196,7 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
     const data: Record<string, unknown>[] = [];
     const xKey = "X";
     const yKey = "Y";
+    assertDistinctHeaders([seriesHeader, xKey, yKey], "scatter layout");
     for (let i = 0; i < series.length; i++) {
       const name = seriesName(series[i], i);
       for (const item of series[i].data ?? []) {
@@ -192,6 +215,10 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
     };
   }
 
+  assertDistinctHeaders(
+    [seriesHeader, nameHeader, valueHeader],
+    "name/value layout",
+  );
   const data: Record<string, unknown>[] = [];
   for (let i = 0; i < series.length; i++) {
     const name = seriesName(series[i], i);

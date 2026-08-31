@@ -272,3 +272,32 @@ describe("stream feature warnings on nested columns", () => {
     }
   });
 });
+
+describe("empty columns", () => {
+  it("exportExcel fails fast with a clear error (no SheetJS fallback)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const r = await exportExcel({
+        filename: "empty-columns",
+        download: false,
+        mode: "main",
+        // Pre-fix this crashed the Workbook autoFilter layout with a cryptic
+        // TypeError (encodeCellRef(0, -1) -> "@1"), then silently degraded to
+        // SheetJS. The pre-flight check must fail it directly instead.
+        sheets: [baseSheet({ columns: [], autoFilter: true })],
+      });
+      expect(r.success).toBe(false);
+      expect(r.engine).toBeUndefined();
+      expect(r.error?.message).toMatch(/at least one column/);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("stream path rejects empty columns with the same error", async () => {
+    await expect(exportAsStream([baseSheet({ columns: [] })])).rejects.toThrow(
+      /at least one column/,
+    );
+  });
+});

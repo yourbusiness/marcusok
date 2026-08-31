@@ -246,3 +246,38 @@ describe("headerStyle", () => {
     expect(ws.cell("B2").styleIndex).not.toBeNull();
   });
 });
+
+describe("echartsToSheet header collisions", () => {
+  // Long/item layouts key data rows by the header text itself, so duplicated
+  // headers would silently overwrite each other's column.
+  it("rejects duplicate headers in category long layout", () => {
+    expect(() =>
+      echartsToSheet({
+        layout: "long",
+        categoryHeader: "数值",
+        option: {
+          xAxis: { data: ["A"] },
+          series: [{ name: "S1", data: [1] }],
+        },
+      }),
+    ).toThrow(/duplicate header "数值"/);
+  });
+
+  it("rejects a seriesHeader colliding with X/Y in scatter layout", () => {
+    expect(() =>
+      echartsToSheet({
+        seriesHeader: "X",
+        option: { series: [{ data: [[1, 2]] }] },
+      }),
+    ).toThrow(/duplicate header "X"/);
+  });
+
+  it("rejects duplicate headers in name/value layout", () => {
+    expect(() =>
+      echartsToSheet({
+        nameHeader: "数值",
+        option: { series: [{ data: [{ name: "A", value: 1 }] }] },
+      }),
+    ).toThrow(/duplicate header "数值"/);
+  });
+});

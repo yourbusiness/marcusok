@@ -18,7 +18,7 @@ pnpm lint        # ESLint
 pnpm typecheck   # TypeScript type checking
 ```
 
-Environment: Node >= 22, pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 dependency declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this.
+Environment: Node >= 22.12 (the floor Vite 8 requires; the published `@marcusok/excel-exporter` package itself only needs Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 dependency declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this.
 
 ## Tooling
 

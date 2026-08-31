@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@9.12.0",
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=22.12.0",
     "pnpm": ">=9"
   },
   "scripts": {
@@ -18,8 +18,8 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,vue}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,vue}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,mjs,js,json,md,yaml,yml,vue}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,mjs,js,json,md,yaml,yml,vue}\"",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "turbo run lint typecheck test build && changeset publish",

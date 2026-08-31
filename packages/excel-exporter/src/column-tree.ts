@@ -51,6 +51,17 @@ export interface FlattenedColumnTree {
 export function flattenColumnTree(
   columns: ColumnConfig[],
 ): FlattenedColumnTree {
+  // An empty column list produces a degenerate sheet (no cells at all) and
+  // previously crashed the Workbook path's autoFilter layout with a cryptic
+  // TypeError (encodeCellRef(0, -1) -> "@1" has no column letters), which
+  // exportExcel then masked by degrading to the SheetJS fallback. Reject it
+  // here so all paths (Workbook / stream / SheetJS / pre-flight) fail with
+  // the same clear error.
+  if (columns.length === 0) {
+    throw new Error(
+      "[excel-exporter] sheet has no columns (at least one column is required)",
+    );
+  }
   assertAcyclic(columns);
 
   // Depth of every node; H = 1 + max depth over all nodes.
