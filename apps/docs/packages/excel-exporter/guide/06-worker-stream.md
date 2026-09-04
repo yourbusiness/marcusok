@@ -10,7 +10,7 @@ configureWasm({ workerUrl: "/assets/export.worker.js" });
 
 Worker path behavior:
 
-- **`workerUrl` is required** — without it the path throws internally and degrades to the style-less SheetJS fallback (`engine: "sheetjs"`; the caller's promise still resolves rather than rejects, with an `[excel-exporter]` console warning);
+- **`workerUrl` is required** — without it the Worker route fails and **retries on the main thread** (modern-xlsx keeps styles; the ≥ 50,000-row fast stream needs no WASM at all). Only if that retry also fails does the export degrade to the style-less SheetJS fallback (`engine: "sheetjs"`). The caller's promise resolves rather than rejects, with an `[excel-exporter]` console warning at each degradation step;
 - The Worker instance is reused and requests are dispatched by `requestId`, so concurrent exports never interfere;
 - **Function-form formats are stripped** (functions cannot be structured-cloned) — use FormatSpec on worker paths;
 - `onProgress` / `onPhase` (`init` / `build`) are forwarded from the Worker.

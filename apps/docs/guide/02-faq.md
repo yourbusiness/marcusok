@@ -14,7 +14,7 @@ configureWasm({
 });
 ```
 
-It is needed by every browser path that enters a Worker: `auto` (≥ 20,000 rows), explicit `mode: "worker"`, and explicit `mode: "stream"` in the browser (stream also runs inside a Worker there). Without it, those paths throw and degrade to the SheetJS fallback.
+It is needed by every browser path that enters a Worker: `auto` (≥ 20,000 rows), explicit `mode: "worker"`, and explicit `mode: "stream"` in the browser (stream also runs inside a Worker there). Without it those paths fail inside the Worker route and **retry on the main thread** (modern-xlsx keeps styles; the fast stream needs no WASM at all) — the style-less SheetJS fallback is only the last resort when the main-thread retry also fails.
 
 ### `result.engine` is "sheetjs"
 
@@ -34,4 +34,4 @@ No. All processing happens in the browser or the Node process; business data nev
 
 ### Date columns render as long text, not dates
 
-Without a `format`, `Date` values are written as plain text Excel does not recognize as a date: the Workbook path writes the localized long form (e.g. `Wed Jul 01 2026 00:00:00 GMT+0800 (China Standard Time)`), while the stream / SheetJS fallback paths write an ISO string (e.g. `2026-07-01T00:00:00.000Z`). Declare `format: { type: "date" }` (or `datetime`) on date columns: the Workbook path then stores the Excel date serial and auto-injects the matching `numFormat`, so the cell becomes a real date.
+Without a `format`, `Date` values are written as plain text Excel does not recognize as a date — an ISO string (e.g. `2026-07-01T00:00:00.000Z`) on every path (main / worker / stream / SheetJS fallback). Declare `format: { type: "date" }` (or `datetime`) on date columns: the Workbook path then stores the Excel date serial and auto-injects the matching `numFormat`, so the cell becomes a real date.

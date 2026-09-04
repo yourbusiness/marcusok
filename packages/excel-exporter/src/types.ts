@@ -108,6 +108,14 @@ export interface MergeRange {
 export interface SheetConfig {
   name: string; // 1-31 chars, ECMA-376 validation
   columns: ColumnConfig[];
+  /**
+   * Data rows keyed by column `key`. Cell values are normalized identically on
+   * every export path (main / worker / stream / SheetJS fallback): non-finite
+   * numbers (NaN/Infinity), plain objects, `Date`s and bigints without a
+   * `format` are written as their visible string form (JSON for objects, ISO
+   * for Dates), so a dataset crossing the 50k-row threshold keeps the same
+   * content.
+   */
   data: Record<string, unknown>[];
   /** Style applied to every header cell, unless overridden by ColumnConfig.headerStyle. */
   headerStyle?: CellStyle;
@@ -131,9 +139,10 @@ export type ExportMode = "auto" | "main" | "worker" | "stream";
  *   (only reported when the worker actually re-initializes, not when its WASM
  *   instance is already cached). Not reported by the SheetJS fallback (no WASM).
  * - `"build"`: workbook construction. Covers the Workbook/stream builder, or
- *   SheetJS's sheet building + write in the fallback path. A failed modern-xlsx
- *   build followed by a SheetJS fallback reports two `"build"` phases, one per
- *   actual build attempt.
+ *   SheetJS's sheet building + write in the fallback path. Each real build
+ *   attempt reports its own `"build"` phase, so a degradation chain (e.g.
+ *   failed worker build -> main-thread retry -> SheetJS fallback) reports one
+ *   phase per attempt.
  * - `"download"`: the synchronous browser download trigger
  *   (`triggerDownload`); only reported when `download !== false`. Not reported
  *   in Node (no `document`).

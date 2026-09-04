@@ -151,64 +151,94 @@ export async function exportExcel(
     return finishWithSheetJS("WebAssembly not supported");
   }
 
+  /**
+   * Execute the export on this thread (Workbook build, or the WASM-free fast
+   * stream). Used by the Node/SSR route, the browser main route, and as the
+   * style-preserving retry when the browser worker path fails. Throws on
+   * failure; callers decide the next degradation step.
+   */
+  const runOnMainThread = async (): Promise<ExportResult> => {
+    if (needsWasm) {
+      const initStart = performance.now();
+      await loader.ensureLoaded();
+      options.onPhase?.("init", performance.now() - initStart);
+    } else {
+      // Fast stream does not use WASM; report an empty init phase so the
+      // public phase sequence remains stable across main/stream routes.
+      options.onPhase?.("init", 0);
+    }
+    let result: ExportResult;
+    const buildStart = performance.now();
+    try {
+      if (picked.workerMode === "stream") {
+        const { bytes, rowCount } = await exportAsStream(
+          options.sheets,
+          options.onProgress,
+        );
+        result = {
+          success: true,
+          blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
+          engine: "modern-xlsx",
+          mode: "stream",
+          duration: performance.now() - start,
+          rowCount,
+        };
+      } else {
+        const builder = await WorkbookBuilder.create();
+        options.sheets.forEach((s) => builder.addSheet(s));
+        const bytes = await builder.toBuffer();
+        result = {
+          success: true,
+          blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
+          engine: "modern-xlsx",
+          mode: "main",
+          duration: performance.now() - start,
+          rowCount: totalRows,
+        };
+      }
+    } finally {
+      // Reported even when the build throws, so a failed attempt that falls
+      // back to SheetJS still shows how long it spent before failing.
+      options.onPhase?.("build", performance.now() - buildStart);
+    }
+    options.onProgress?.(1);
+    // Node has no document: triggerDownload would be a no-op, so neither the
+    // click nor the "download" phase is reported (matches ExportPhase docs).
+    if (options.download !== false && typeof document !== "undefined") {
+      const downloadStart = performance.now();
+      triggerDownload(result.blob!, options.filename);
+      options.onPhase?.("download", performance.now() - downloadStart);
+    }
+    return result;
+  };
+
+  /**
+   * Worker-path degradation chain: retry on the main thread first (modern-xlsx
+   * keeps styles; the fast stream needs no WASM at all), and only when that
+   * also fails fall back to the style-less SheetJS. The trailing progress 1 is
+   * emitted exactly once on either sub-route (runOnMainThread on success, or
+   * finishWithSheetJS's finally).
+   */
+  const retryOnMainThread = async (reason: string): Promise<ExportResult> => {
+    console.warn(
+      `[excel-exporter] Worker path failed (${reason}); retrying on the main thread to preserve styles`,
+    );
+    try {
+      return await runOnMainThread();
+    } catch (e) {
+      return finishWithSheetJS(
+        `${reason}; main-thread retry failed: ${(e as Error).message}`,
+      );
+    }
+  };
+
   // Node main/stream: execute directly on this thread (no Web Worker available).
   if (
     picked.mode === "main" ||
     (picked.mode === "stream" && typeof window === "undefined")
   ) {
     try {
-      if (needsWasm) {
-        const initStart = performance.now();
-        await loader.ensureLoaded();
-        options.onPhase?.("init", performance.now() - initStart);
-      } else {
-        // Fast stream does not use WASM; report an empty init phase so the
-        // public phase sequence remains stable across main/stream routes.
-        options.onPhase?.("init", 0);
-      }
-      let result: ExportResult;
-      const buildStart = performance.now();
-      try {
-        if (picked.workerMode === "stream") {
-          const { bytes, rowCount } = await exportAsStream(
-            options.sheets,
-            options.onProgress,
-          );
-          result = {
-            success: true,
-            blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
-            engine: "modern-xlsx",
-            mode: "stream",
-            duration: performance.now() - start,
-            rowCount,
-          };
-        } else {
-          const builder = await WorkbookBuilder.create();
-          options.sheets.forEach((s) => builder.addSheet(s));
-          const bytes = await builder.toBuffer();
-          result = {
-            success: true,
-            blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
-            engine: "modern-xlsx",
-            mode: "main",
-            duration: performance.now() - start,
-            rowCount: totalRows,
-          };
-        }
-      } finally {
-        // Reported even when the build throws, so a failed attempt that falls
-        // back to SheetJS still shows how long it spent before failing.
-        options.onPhase?.("build", performance.now() - buildStart);
-      }
-      options.onProgress?.(1);
-      // Node has no document: triggerDownload would be a no-op, so neither the
-      // click nor the "download" phase is reported (matches ExportPhase docs).
-      if (options.download !== false && typeof document !== "undefined") {
-        const downloadStart = performance.now();
-        triggerDownload(result.blob!, options.filename);
-        options.onPhase?.("download", performance.now() - downloadStart);
-      }
-      return result;
+      return await runOnMainThread();
     } catch (e) {
       return finishWithSheetJS((e as Error).message);
     }
@@ -219,7 +249,7 @@ export async function exportExcel(
     const result = await exportInWorker(options, picked.workerMode!);
     if (result.success) {
       // Terminal 1 on success only: the failure route hands the sequence to
-      // finishWithSheetJS, whose finally emits it exactly once (the types.ts
+      // the degradation chain, which emits it exactly once (the types.ts
       // contract) -- emitting it here too duplicated the trailing 1.
       options.onProgress?.(1);
       if (options.download !== false) {
@@ -229,11 +259,11 @@ export async function exportExcel(
       }
       return result;
     }
-    // Worker export failed (e.g. WASM init error inside the worker) -> degrade
-    // to SheetJS, matching the main-thread path's failure handling.
-    return finishWithSheetJS(result.error?.message ?? "worker export failed");
+    // Worker export failed (e.g. WASM init error inside the worker) -> retry on
+    // the main thread before degrading to SheetJS.
+    return retryOnMainThread(result.error?.message ?? "worker export failed");
   } catch (e) {
-    return finishWithSheetJS((e as Error).message);
+    return retryOnMainThread((e as Error).message);
   }
 }
 

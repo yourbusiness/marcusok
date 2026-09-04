@@ -5,7 +5,9 @@ import { dateToSerial } from "modern-xlsx";
 export const DEFAULT_DATE_PATTERN = "yyyy-MM-dd";
 export const DEFAULT_DATETIME_PATTERN = "yyyy-MM-dd HH:mm";
 
-/** Safely stringify any value to a string (objects -> JSON, null/undef -> ''). */
+/** Safely stringify any value to a string (objects -> JSON, null/undef -> '').
+ *  Symbols/functions are not JSON-serializable (JSON.stringify returns
+ *  undefined for them); String() them so the cell never receives a non-string. */
 export function toStr(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
@@ -15,6 +17,8 @@ export function toStr(value: unknown): string {
     typeof value === "boolean" ||
     typeof value === "bigint"
   )
+    return String(value);
+  if (typeof value === "symbol" || typeof value === "function")
     return String(value);
   return JSON.stringify(value);
 }

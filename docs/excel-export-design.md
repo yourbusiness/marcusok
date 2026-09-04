@@ -14,6 +14,8 @@
 
 > 🔄 **v2.8（onProgress 兜底收尾 + sharedStrings count 规范修正 + PERF_TIGHT 残留清理，2026-08-21）**：① **onProgress 兜底契约修复（代码）**——v2.7 ③ 只统一了成功路径的收尾；SheetJS 兜底路径（WASM 不支持早退 / 主线程与 Worker 失败降级）此前 0 与 1 均不上报或只报 0，与 `types.ts`「final 1 由 exportExcel 恰好上报一次」的契约不符。现 `exportExcel` 在入口统一上报 0，兜底调用经 `.finally` 统一收尾 1（兜底自身失败亦收尾）。② **sharedStrings `count` 规范修正（代码）**——fast-xlsx 原 `count`/`uniqueCount` 同填去重数，不符合 ECMA-376（count 应为含重复的总引用数）；现按引用计数。③ **PERF_TIGHT 残留清理（代码/配置）**——`SLACK` 恒等式（两分支同为 1.0）删除，`turbo.json` globalEnv 残留声明移除。④ 4.4/4.5/4.8/4.10/7.2/3.6 快照同步；`maxRetries` 语义措辞统一为「尝试次数（共 3 次含首次）」；测试数 52→54（CI 实跑 48→50，新增兜底进度与 sst 规范两个回归用例）。
 
+> 🔄 **v2.9（跨路径值归一化 + worker wasmUrl 跟踪修正 + Worker 失败回退主线程，2026-09-04）**：① **Workbook 路径非常规值对齐**——`workbook-builder.ts` 行映射与 stream/SheetJS 路径的 `displayValue` 同口径（对象→JSON、Date→ISO、bigint→字符串、非有限数字→可见字符串），数据跨 5 万行阈值/降级前后内容逐格一致（修复前对象落成 `"[object Object]"`、Date 落成本地化长文本，实测确认）；`toStr` 加固 symbol/function（`JSON.stringify` 对其返回 undefined，显式 `String()` 分支兜底）。② **worker wasmUrl 跟踪修正**——`export.worker.ts` 改按字符串键比较 + 显式 `wasmReady` 标志，修正「URL 变更会重新初始化」的不实注释（modern-xlsx `initWasm` 幂等，首次成功初始化后不变），并消除 URL 对象经结构化克隆后引用必变导致的重复 init phase 上报。③ **Worker 失败回退主线程**——Worker 路由失败先回退主线程重试（保样式），仍失败才降级 SheetJS；4.9 v2.2 注与风险表所列「可选改进」落地。快照同步：4.4（toStr）/4.9（export.worker）/4.10（index.ts exportExcel）/5.4/风险表；4.7 仅加注（快照自 v1.1.0 起停留旧版，属已知漂移）。测试数 91 → 94（CI 实跑 87 → 90）。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -991,7 +993,9 @@ import { dateToSerial } from "modern-xlsx";
 export const DEFAULT_DATE_PATTERN = "yyyy-MM-dd";
 export const DEFAULT_DATETIME_PATTERN = "yyyy-MM-dd HH:mm";
 
-/** Safely stringify any value to a string (objects -> JSON, null/undef -> ''). */
+/** Safely stringify any value to a string (objects -> JSON, null/undef -> '').
+ *  Symbols/functions are not JSON-serializable (JSON.stringify returns
+ *  undefined for them); String() them so the cell never receives a non-string. */
 export function toStr(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
@@ -1001,6 +1005,8 @@ export function toStr(value: unknown): string {
     typeof value === "boolean" ||
     typeof value === "bigint"
   )
+    return String(value);
+  if (typeof value === "symbol" || typeof value === "function")
     return String(value);
   return JSON.stringify(value);
 }
@@ -1555,6 +1561,8 @@ function withAutoNumFormat(c: ColumnConfig): ColumnConfig {
 }
 ```
 
+> 🔄 **v2.9 注（行映射归一化，快照未全量刷新）**：`addSheet` 的行映射现与 stream/SheetJS 路径的 `displayValue` 同口径归一化——非有限数字（NaN/Infinity）、无 `format` 的对象/Date/bigint 一律写可见字符串（对象 JSON、Date ISO、bigint 十进制），数据跨 5 万行阈值或降级前后内容逐格一致（此前 Workbook 路径透传原始值，modern-xlsx 把对象 `String()` 成 `"[object Object]"`、Date 转本地化长文本，实测确认）。上方 4.7 快照其余部分停留于多级表头改造（v1.1.0）之前的旧版，属已知历史漂移，本次未随源码刷新。
+
 > 📌 三处 API 关键点（均已核实）：
 >
 > - `encodeCellRef(row, col)` 来自 modern-xlsx，将 0-based 行列转为 A1 字符串。
@@ -2028,16 +2036,25 @@ interface WorkerResponse {
   progress?: number;
 }
 
-// Track the URL we initialized with; re-init if it changes (the main thread's
-// configureWasm can swap the URL at runtime, and we must honor the new one).
-let loadedWasmUrl: string | URL | undefined | null = null;
+// Track WASM initialization by the string form of the URL. modern-xlsx's
+// initWasm is idempotent (first successful init wins; a later wasmUrl change
+// cannot take effect in an already-initialized worker), so this key exists to
+// avoid re-calling initWasm and re-reporting the "init" phase on every export
+// -- comparing by string matters because a URL-typed wasmUrl arrives via
+// structured clone as a fresh object each message and would never be `!==`.
+// (wasmReady is separate from the key: an undefined wasmUrl maps to key null
+// both before and after init, so the key alone cannot tell "never initialized".)
+let wasmReady = false;
+let loadedWasmKey: string | null = null;
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { id, options, wasmUrl, mode } = e.data;
   try {
-    if (mode !== "stream" && loadedWasmUrl !== wasmUrl) {
+    const urlKey = wasmUrl == null ? null : String(wasmUrl);
+    if (mode !== "stream" && (!wasmReady || loadedWasmKey !== urlKey)) {
       const initStart = performance.now();
       await initWasm(wasmUrl);
-      loadedWasmUrl = wasmUrl;
+      wasmReady = true;
+      loadedWasmKey = urlKey;
       (self as unknown as Worker).postMessage({
         id,
         phase: "init",
@@ -2307,6 +2324,8 @@ import {
   echartsExportToOptions,
   type EChartsExportOptions,
 } from "./echarts-export";
+import { validateSheetName, validateMerges } from "./format-utils";
+import { flattenColumnTree } from "./column-tree";
 
 export * from "./types";
 export * from "./style-presets";
@@ -2314,6 +2333,7 @@ export * from "./format-utils";
 export * from "./table-export";
 export * from "./echarts-export";
 export { configureWasm, getWasmLoader } from "./wasm-loader";
+export type { LoaderOptions, LoadState } from "./wasm-loader";
 export { WorkbookBuilder } from "./workbook-builder";
 export { exportAsStream } from "./streaming-builder";
 
@@ -2366,6 +2386,27 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
 }
 
 /**
+ * Pre-flight validation of user input. Runs the same checks as the
+ * Workbook/stream/SheetJS build paths (same functions, same messages), hoisted
+ * to the entry so a configuration error fails immediately with `{ success:
+ * false, error }` instead of first degrading to a SheetJS fallback attempt
+ * that re-runs the identical checks and fails identically. Engine failures
+ * (WASM unavailable, build errors) still degrade to SheetJS as before.
+ */
+function validateInput(options: ExportOptions): void {
+  const seen = new Set<string>();
+  for (const sheet of options.sheets) {
+    validateSheetName(sheet.name);
+    if (seen.has(sheet.name)) {
+      throw new Error(`[excel-exporter] duplicate sheet name "${sheet.name}"`);
+    }
+    seen.add(sheet.name);
+    const { leaves } = flattenColumnTree(sheet.columns);
+    validateMerges(sheet, leaves.length);
+  }
+}
+
+/**
  * Export to Excel (main entry).
  *
  * @example
@@ -2395,6 +2436,20 @@ export async function exportExcel(
   // included), so consumers always see the documented 0 -> ... -> 1 pair.
   options.onProgress?.(0);
 
+  // Invalid input fails here on every route (same messages as before; the
+  // build paths keep their own checks for direct callers). The trailing 1 is
+  // still emitted so the 0 -> 1 progress contract holds for failed exports.
+  try {
+    validateInput(options);
+  } catch (e) {
+    options.onProgress?.(1);
+    return {
+      success: false,
+      error: e as Error,
+      duration: performance.now() - start,
+    };
+  }
+
   // The SheetJS fallback never reports progress itself; closing the sequence
   // here keeps the terminal-1 contract true on degraded routes too, including
   // when the fallback itself fails and resolves with success: false.
@@ -2410,64 +2465,94 @@ export async function exportExcel(
     return finishWithSheetJS("WebAssembly not supported");
   }
 
+  /**
+   * Execute the export on this thread (Workbook build, or the WASM-free fast
+   * stream). Used by the Node/SSR route, the browser main route, and as the
+   * style-preserving retry when the browser worker path fails. Throws on
+   * failure; callers decide the next degradation step.
+   */
+  const runOnMainThread = async (): Promise<ExportResult> => {
+    if (needsWasm) {
+      const initStart = performance.now();
+      await loader.ensureLoaded();
+      options.onPhase?.("init", performance.now() - initStart);
+    } else {
+      // Fast stream does not use WASM; report an empty init phase so the
+      // public phase sequence remains stable across main/stream routes.
+      options.onPhase?.("init", 0);
+    }
+    let result: ExportResult;
+    const buildStart = performance.now();
+    try {
+      if (picked.workerMode === "stream") {
+        const { bytes, rowCount } = await exportAsStream(
+          options.sheets,
+          options.onProgress,
+        );
+        result = {
+          success: true,
+          blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
+          engine: "modern-xlsx",
+          mode: "stream",
+          duration: performance.now() - start,
+          rowCount,
+        };
+      } else {
+        const builder = await WorkbookBuilder.create();
+        options.sheets.forEach((s) => builder.addSheet(s));
+        const bytes = await builder.toBuffer();
+        result = {
+          success: true,
+          blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
+          engine: "modern-xlsx",
+          mode: "main",
+          duration: performance.now() - start,
+          rowCount: totalRows,
+        };
+      }
+    } finally {
+      // Reported even when the build throws, so a failed attempt that falls
+      // back to SheetJS still shows how long it spent before failing.
+      options.onPhase?.("build", performance.now() - buildStart);
+    }
+    options.onProgress?.(1);
+    // Node has no document: triggerDownload would be a no-op, so neither the
+    // click nor the "download" phase is reported (matches ExportPhase docs).
+    if (options.download !== false && typeof document !== "undefined") {
+      const downloadStart = performance.now();
+      triggerDownload(result.blob!, options.filename);
+      options.onPhase?.("download", performance.now() - downloadStart);
+    }
+    return result;
+  };
+
+  /**
+   * Worker-path degradation chain: retry on the main thread first (modern-xlsx
+   * keeps styles; the fast stream needs no WASM at all), and only when that
+   * also fails fall back to the style-less SheetJS. The trailing progress 1 is
+   * emitted exactly once on either sub-route (runOnMainThread on success, or
+   * finishWithSheetJS's finally).
+   */
+  const retryOnMainThread = async (reason: string): Promise<ExportResult> => {
+    console.warn(
+      `[excel-exporter] Worker path failed (${reason}); retrying on the main thread to preserve styles`,
+    );
+    try {
+      return await runOnMainThread();
+    } catch (e) {
+      return finishWithSheetJS(
+        `${reason}; main-thread retry failed: ${(e as Error).message}`,
+      );
+    }
+  };
+
   // Node main/stream: execute directly on this thread (no Web Worker available).
   if (
     picked.mode === "main" ||
     (picked.mode === "stream" && typeof window === "undefined")
   ) {
     try {
-      if (needsWasm) {
-        const initStart = performance.now();
-        await loader.ensureLoaded();
-        options.onPhase?.("init", performance.now() - initStart);
-      } else {
-        // Fast stream does not use WASM; report an empty init phase so the
-        // public phase sequence remains stable across main/stream routes.
-        options.onPhase?.("init", 0);
-      }
-      let result: ExportResult;
-      const buildStart = performance.now();
-      try {
-        if (picked.workerMode === "stream") {
-          const { bytes, rowCount } = await exportAsStream(
-            options.sheets,
-            options.onProgress,
-          );
-          result = {
-            success: true,
-            blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
-            engine: "modern-xlsx",
-            mode: "stream",
-            duration: performance.now() - start,
-            rowCount,
-          };
-        } else {
-          const builder = await WorkbookBuilder.create();
-          options.sheets.forEach((s) => builder.addSheet(s));
-          const bytes = await builder.toBuffer();
-          result = {
-            success: true,
-            blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
-            engine: "modern-xlsx",
-            mode: "main",
-            duration: performance.now() - start,
-            rowCount: totalRows,
-          };
-        }
-      } finally {
-        // Reported even when the build throws, so a failed attempt that falls
-        // back to SheetJS still shows how long it spent before failing.
-        options.onPhase?.("build", performance.now() - buildStart);
-      }
-      options.onProgress?.(1);
-      // Node has no document: triggerDownload would be a no-op, so neither the
-      // click nor the "download" phase is reported (matches ExportPhase docs).
-      if (options.download !== false && typeof document !== "undefined") {
-        const downloadStart = performance.now();
-        triggerDownload(result.blob!, options.filename);
-        options.onPhase?.("download", performance.now() - downloadStart);
-      }
-      return result;
+      return await runOnMainThread();
     } catch (e) {
       return finishWithSheetJS((e as Error).message);
     }
@@ -2476,8 +2561,11 @@ export async function exportExcel(
   // Browser worker mode: offload to worker (main thread does one structured clone).
   try {
     const result = await exportInWorker(options, picked.workerMode!);
-    options.onProgress?.(1);
     if (result.success) {
+      // Terminal 1 on success only: the failure route hands the sequence to
+      // the degradation chain, which emits it exactly once (the types.ts
+      // contract) -- emitting it here too duplicated the trailing 1.
+      options.onProgress?.(1);
       if (options.download !== false) {
         const downloadStart = performance.now();
         triggerDownload(result.blob!, options.filename);
@@ -2485,11 +2573,11 @@ export async function exportExcel(
       }
       return result;
     }
-    // Worker export failed (e.g. WASM init error inside the worker) -> degrade
-    // to SheetJS, matching the main-thread path's failure handling.
-    return finishWithSheetJS(result.error?.message ?? "worker export failed");
+    // Worker export failed (e.g. WASM init error inside the worker) -> retry on
+    // the main thread before degrading to SheetJS.
+    return retryOnMainThread(result.error?.message ?? "worker export failed");
   } catch (e) {
-    return finishWithSheetJS((e as Error).message);
+    return retryOnMainThread((e as Error).message);
   }
 }
 
@@ -2528,6 +2616,8 @@ export async function exportEcharts(
 > - **stream 不再要求"无列样式"**：v1.8 把 stream 限制为纯数据（因为觉得带样式必须走 Workbook）；v1.9 修正为——性能优先，≥5 万行一律 stream（样式用 setStylesXml 有限支持，Phase 2 增强）。带复杂样式的大数据是已知取舍，非 bug。
 > - **worker 模式内部分流**：v1.8 的 worker 只走 Workbook；v1.9 的 worker 按 workerMode 走 Workbook 或 stream，把 toBuffer 塌方挡在 Worker 内（不阻塞主线程）。
 > - **workerUrl 缺失时的降级行为（v2.2 纠正：如实描述当前实现，原句"回退 main"是 v1.9 散文遗留错误）**：`pickMode` 只检测 `typeof Worker !== "undefined" && typeof window !== "undefined"` 来决定是否走 worker，**不检查 `workerUrl` 是否已配**（`index.ts` 的 `pickMode`）。因此浏览器里忘配 `workerUrl` 且 ≥20,000 行时，请求进入 worker 分支，`worker-exporter.ts` 的 `getOrCreateWorker()` 因 `workerUrl` 为空抛错，`exportInWorker` catch 后返回 `{success:false}`，`index.ts` 的 worker 分支随即 `return exportWithSheetJS(...)` 降级到 SheetJS（**丢样式**）。也就是说：`pickMode` 返回 worker 但 worker 实际不可用时，当前实现**直接降级 SheetJS，并不回退 main**（与 v1.8 行为一致，并非上方"v1.9"标签所写的"先回退 main 保样式"——那是与代码不符的遗留描述）。如希望 `workerUrl` 缺失时回退 main 模式（保留样式、接受主线程阻塞），需在 `pickMode`（提前检测 `workerUrl`）或 `exportInWorker` 失败分支（改走 `WorkbookBuilder` 主线程路径）增加显式判断——列为可选改进，当前未实现。
+>
+> - **v2.9 注（上述可选改进已实现）**：`index.ts` 抽出主线程执行函数 `runOnMainThread`（Workbook/Fast stream 主线程构建 + init/build/download 阶段打点），Worker 路由失败（`workerUrl` 未配/404、Worker 内 WASM 初始化失败、120s 超时等）后**先回退主线程重试**——modern-xlsx 保样式，≥5 万行档位走免 WASM 的 Fast stream；仅主线程重试也失败时才最终降级 SheetJS（原因串拼接两级失败信息）。onProgress 契约不变：重试成功由主线程路径收尾 1，重试失败由 `finishWithSheetJS` 的 finally 收尾 1，恰好一次。上方 v2.2 注的行为描述保留为历史记录。
 
 ### 4.11 预设样式（`style-presets.ts`）
 
@@ -2831,12 +2921,14 @@ if ("requestIdleCallback" in window) {
 ### 5.4 降级链路
 
 ```
-WASM 不支持 ─┐
-              ├─→ SheetJS（xlsx，无样式，保证可用）
-WASM 加载失败 ─┘
+WASM 不支持 / WASM 加载失败（主线程路径）──→ SheetJS（xlsx，无样式，最后保底）
+
+Worker 路径失败（workerUrl 未配/404、Worker 内 WASM 初始化失败、超时等）
+  ──→ 主线程重试（modern-xlsx 保样式；≥5 万行档位走免 WASM 的 Fast stream）
+        ──→ 仍失败 → SheetJS（xlsx，无样式，最后保底）
 ```
 
-降级时在控制台 `warn`，并在 `ExportResult.engine` 标记 `'sheetjs'`，便于业务方监控降级率。
+降级时在控制台 `warn`，并在 `ExportResult.engine` 标记 `'sheetjs'`，便于业务方监控降级率。v2.9 起 Worker 失败不再直接降 SheetJS（此前版本见 4.9 v2.2 注）：先回退主线程保样式；进度收尾 1 仍恰好一次（重试成功由主线程路径上报，重试失败由 SheetJS 兜底的 finally 上报）。
 
 ### 5.5 内存控制
 
@@ -3243,16 +3335,16 @@ test("worker-mode WASM 初始化失败时触发降级", async ({ page }) => {
 
 ## 九、风险与应对
 
-| 风险                            | 概率 | 影响 | 应对                                                                                                                                              |
-| ------------------------------- | :--: | :--: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| WASM 加载失败（CDN/网络）       |  中  |  高  | 自托管 `.wasm`；3 次指数退避重试；失败降级 SheetJS                                                                                                |
-| 浏览器不支持 WASM               |  低  |  高  | `WebAssembly` 能力检测，直接走 SheetJS                                                                                                            |
-| Worker 序列化开销大             |  中  |  中  | 仅 ≥20,000 行启用 Worker（auto；可用 `mode` 显式覆盖，v2.6 对齐源码）                                                                             |
-| modern-xlsx 版本不兼容          |  低  |  中  | 锁定 `^1.2.0`；升级走 Changeset minor 流程 + 回归测试                                                                                             |
-| 大文件 OOM                      |  中  |  高  | ≥5 万行走 fast-xlsx（fflate minimal OOXML，v2.5 起；旧写 `StreamingXlsxWriter` 已弃用）；监控内存                                                 |
-| 颜色/样式在 Excel 中显示异常    |  低  |  中  | 用 6 位 RGB hex（不带 `#`）；样式单测 + 真机抽样验证                                                                                              |
-| SheetJS 降级路径缺少样式        |  中  |  低  | 可接受；监控降级率，逐步修复 WASM 加载根因                                                                                                        |
-| 浏览器 ≥20,000 行忘配 workerUrl |  中  |  中  | 当前实现降级 SheetJS 并打 console.warn（丢样式，非静默）；显式 configureWasm({workerUrl})；可选改进：检测缺失时回退 main 保样式（见 4.9 v2.2 注） |
+| 风险                            | 概率 | 影响 | 应对                                                                                                                                                                                                                |
+| ------------------------------- | :--: | :--: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WASM 加载失败（CDN/网络）       |  中  |  高  | 自托管 `.wasm`；3 次指数退避重试；失败降级 SheetJS                                                                                                                                                                  |
+| 浏览器不支持 WASM               |  低  |  高  | `WebAssembly` 能力检测，直接走 SheetJS                                                                                                                                                                              |
+| Worker 序列化开销大             |  中  |  中  | 仅 ≥20,000 行启用 Worker（auto；可用 `mode` 显式覆盖，v2.6 对齐源码）                                                                                                                                               |
+| modern-xlsx 版本不兼容          |  低  |  中  | 锁定 `^1.2.0`；升级走 Changeset minor 流程 + 回归测试                                                                                                                                                               |
+| 大文件 OOM                      |  中  |  高  | ≥5 万行走 fast-xlsx（fflate minimal OOXML，v2.5 起；旧写 `StreamingXlsxWriter` 已弃用）；监控内存                                                                                                                   |
+| 颜色/样式在 Excel 中显示异常    |  低  |  中  | 用 6 位 RGB hex（不带 `#`）；样式单测 + 真机抽样验证                                                                                                                                                                |
+| SheetJS 降级路径缺少样式        |  中  |  低  | 可接受；监控降级率，逐步修复 WASM 加载根因                                                                                                                                                                          |
+| 浏览器 ≥20,000 行忘配 workerUrl |  中  |  低  | v2.9 起 Worker 路由失败先回退主线程重试（保样式；≥5 万行走免 WASM 的 Fast stream），仅重试也失败才降级 SheetJS，两级均打 console.warn（非静默）；显式 configureWasm({workerUrl}) 可避免主线程阻塞（见 4.9 v2.9 注） |
 
 ---
 
@@ -3384,7 +3476,7 @@ const blob = new Blob([bytes], {
 
 ### 附录 F · Node 版本与补充依赖（v2.1 重写）
 
-> **本仓库用 Node 22，不升级到 24**：`@marcusok/excel-exporter` 与 monorepo 根的 `engines.node` 均为 `>=22.0.0`，`.nvmrc` 锁定 `22`，CI `node-version: 22`。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（54 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 50 个，2026-08-21 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
+> **本仓库用 Node 22，不升级到 24**：`@marcusok/excel-exporter` 与 monorepo 根的 `engines.node` 均为 `>=22.0.0`，`.nvmrc` 锁定 `22`，CI `node-version: 22`。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（94 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 90 个，2026-09-04 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
 >
 > v2.0 曾把 `@playwright/test`（`^1.62.0`）列入「补充依赖」、并写「Node 24+ 升级指引」，二者均与实际仓库不符（本仓库无 Playwright、CI 跑 Node 22），v2.1 已删除该依赖行与升级指引。关于 `unplugin`：6.2 的 Vite 插件是 Vite 原生插件对象（`{ name, buildStart() }`），全程未 import `unplugin`；若未来要让资源拷贝同时支持 Webpack，再按需引入。
 
@@ -3399,6 +3491,13 @@ const blob = new Blob([bytes], {
 ---
 
 ### 修订历史
+
+- **v2.9（跨路径值归一化 + worker wasmUrl 跟踪修正 + Worker 失败回退主线程，2026-09-04）**：
+  - **P1 · Workbook 路径非常规值与其他路径内容漂移（代码修复，实测确认）**：`workbook-builder.ts` 行映射此前只归一化非有限数字，其余原始值透传给 `sheetAddAoa` 由 modern-xlsx 自行 `String()`——对象落成 `"[object Object]"`、无 `format` 的 Date 落成本地化长文本（随机器时区漂移），与 stream/SheetJS 路径（`toStr`：对象 JSON、Date ISO）在同一数据跨 5 万行阈值或降级前后内容不一致。修复：行映射与 `displayValue` 同口径（number 查有限性、string/boolean 透传、其余一律 `toStr`）；`toStr` 加固 symbol/function 分支（`JSON.stringify` 对其返回 undefined，显式 `String()`，不再产出 undefined 单元格）。新增跨路径一致性回归用例（同一 sheet 经 Workbook 与 stream 产物读回逐格相等，含对象/Date/bigint/symbol）。FAQ 日期条目（zh/en）与 `types.ts` `SheetConfig.data` 契约同步。
+  - **P2 · worker 内 wasmUrl 变更承诺落空 + init phase 重复上报（代码+注释修正）**：modern-xlsx `initWasm` 幂等（`if (initialized) return`，dist 源码核实），`export.worker.ts` 注释声称的「URL 变更重新初始化」实际不会生效；且 URL 对象经结构化克隆后引用必变，`loadedWasmUrl !== wasmUrl` 恒真，导致每次导出重复空转 initWasm 并重复上报 init phase（违反 `types.ts`「init 只在真正重新初始化时上报」契约）。修复：改按字符串键比较 + 显式 `wasmReady` 标志（区分「从未初始化」与「undefined URL 已初始化」），注释改为如实描述幂等语义。4.9 快照同步。
+  - **P3 · Worker 失败直降 SheetJS 丢样式（代码修复，落地 v2.2 注/风险表所列可选改进）**：`index.ts` 抽出主线程执行函数 `runOnMainThread`；Worker 路由失败（`workerUrl` 未配/404、Worker 内 WASM 失败、超时）先回退主线程重试（modern-xlsx 保样式；≥5 万行档位走免 WASM 的 Fast stream），仍失败才降级 SheetJS（原因串含两级失败信息）。进度 0/1 各恰好一次的契约不变；`types.ts` `ExportPhase` 的 build 措辞改为「每次真实构建尝试各报一次」。`routing.test.ts` 更新原 worker 失败用例并新增三个：worker 失败→主线程重试成功（engine modern-xlsx、progress [0,1]）、stream 档位主线程重试、worker+主线程双失败→SheetJS（计数 format 函数验证完整链路）。FAQ、guide/06、guide/08（zh/en）、5.4 降级链路、风险表、4.10 快照同步。
+  - **文档同步**：顶部 v2.9 摘要条；4.4 toStr 快照（含 JSDoc 与 symbol/function 分支）；4.7 加 v2.9 注（快照自 v1.1.0 多级表头改造起停留旧版，本次不刷新）；附录 F 测试数 54/50（v2.8 口径，已漂移两版）→ 94/90；包 README 测试数 91/87 → 94/90。
+  - **复查补记（4.10 快照整体替换）**：v2.9 修改时 4.10 快照只更新了 `exportExcel` 函数段，复查（脚本逐字比对快照块与 `src/index.ts`）发现该块自提交 156584b 起就缺失 `validateInput` 前置校验块与两处 import、一处 `export type` 行——此前「4.10 快照同步」的说法不准确。已将整个代码块替换为 `index.ts` 现行源码，替换后经脚本再次校验逐字一致（4.4/4.9 快照同一脚本亦验证逐字一致）。
 
 - **v2.8（onProgress 兜底收尾 + sharedStrings count 规范修正 + PERF_TIGHT 残留清理，2026-08-21）**：
   - **P1 · onProgress 兜底路径不收尾（代码修复）**：`types.ts` 契约称「final 1 由 `exportExcel` 恰好上报一次」，但三条 SheetJS 兜底路径（`needsWasm && !supported` 早退、主线程 catch、Worker 失败/抛错）均不上报 1，早退路径连 0 也不上报。修复：`exportExcel` 入口统一上报 0（原先散落在 main 路径 init 后与 worker 路径入口的两处 0 移除），兜底统一经 `finishWithSheetJS = exportWithSheetJS(...).finally(() => onProgress(1))` 收尾——兜底自身失败（`success:false`）也收尾，消费方进度 UI 可确定性关闭。新增回归用例：`vi.stubGlobal("WebAssembly", undefined)` 强制早退降级，断言 `progress === [0, 1]`（旧代码下为 `[]`，必然失败）。

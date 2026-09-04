@@ -119,12 +119,12 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
     }
   });
 
-  it("failure -> SheetJS fallback route emits the terminal 1 exactly once (was [0, 1, 1])", async () => {
+  it("worker failure retries on the main thread, preserving styles (terminal 1 exactly once)", async () => {
     stubBrowserWorkerEnv();
     // exportInWorker catches worker errors and resolves with success:false;
-    // exportExcel then degrades to SheetJS. Pre-fix, the terminal 1 was
-    // emitted before checking success AND again in finishWithSheetJS's
-    // finally, violating the types.ts "exactly once" contract.
+    // exportExcel now retries on the main thread (modern-xlsx, styles kept)
+    // instead of degrading straight to SheetJS. WASM was sync-initialized by
+    // ./setup, so the retry succeeds.
     vi.mocked(exportInWorker).mockResolvedValue({
       success: false,
       error: new Error("worker boom"),
@@ -144,8 +144,83 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
         ],
         onProgress: (p) => progress.push(p),
       });
-      expect(r.engine).toBe("sheetjs");
+      expect(r.engine).toBe("modern-xlsx");
+      expect(r.mode).toBe("main");
       expect(r.success).toBe(true);
+      expect(progress).toEqual([0, 1]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.mocked(exportInWorker).mockReset();
+    }
+  });
+
+  it("worker failure on the stream route retries as a main-thread fast stream", async () => {
+    stubBrowserWorkerEnv();
+    // Explicit stream mode in a browser routes through the worker; the retry
+    // runs fast-xlsx on the main thread, which needs no WASM at all.
+    vi.mocked(exportInWorker).mockResolvedValue({
+      success: false,
+      error: new Error("worker boom"),
+    });
+    try {
+      const r = await exportExcel({
+        filename: "worker-stream-retry",
+        download: false,
+        mode: "stream",
+        sheets: [
+          {
+            name: "S",
+            columns: [{ key: "x", header: "X" }],
+            data: [{ x: 1 }],
+          },
+        ],
+      });
+      expect(r.success).toBe(true);
+      expect(r.engine).toBe("modern-xlsx");
+      expect(r.mode).toBe("stream");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.mocked(exportInWorker).mockReset();
+    }
+  });
+
+  it("degrades to SheetJS only when the worker AND the main-thread retry both fail", async () => {
+    stubBrowserWorkerEnv();
+    vi.mocked(exportInWorker).mockResolvedValue({
+      success: false,
+      error: new Error("worker boom"),
+    });
+    // A format function that throws on every call, numbered per invocation:
+    // the main-thread retry must throw "boom-1" and the SheetJS fallback
+    // "boom-2", proving the full worker -> main -> SheetJS chain ran.
+    let calls = 0;
+    const sheets = [
+      {
+        name: "S",
+        columns: [
+          {
+            key: "x",
+            header: "X",
+            format: () => {
+              calls++;
+              throw new Error(`boom-${calls}`);
+            },
+          },
+        ],
+        data: [{ x: 1 }],
+      },
+    ];
+    try {
+      const progress: number[] = [];
+      const r = await exportExcel({
+        filename: "worker-chain-fail",
+        download: false,
+        mode: "worker",
+        sheets,
+        onProgress: (p) => progress.push(p),
+      });
+      expect(r.success).toBe(false);
+      expect(r.error?.message).toBe("boom-2");
       expect(progress).toEqual([0, 1]);
     } finally {
       vi.unstubAllGlobals();

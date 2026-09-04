@@ -19,16 +19,25 @@ interface WorkerResponse {
   progress?: number;
 }
 
-// Track the URL we initialized with; re-init if it changes (the main thread's
-// configureWasm can swap the URL at runtime, and we must honor the new one).
-let loadedWasmUrl: string | URL | undefined | null = null;
+// Track WASM initialization by the string form of the URL. modern-xlsx's
+// initWasm is idempotent (first successful init wins; a later wasmUrl change
+// cannot take effect in an already-initialized worker), so this key exists to
+// avoid re-calling initWasm and re-reporting the "init" phase on every export
+// -- comparing by string matters because a URL-typed wasmUrl arrives via
+// structured clone as a fresh object each message and would never be `!==`.
+// (wasmReady is separate from the key: an undefined wasmUrl maps to key null
+// both before and after init, so the key alone cannot tell "never initialized".)
+let wasmReady = false;
+let loadedWasmKey: string | null = null;
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { id, options, wasmUrl, mode } = e.data;
   try {
-    if (mode !== "stream" && loadedWasmUrl !== wasmUrl) {
+    const urlKey = wasmUrl == null ? null : String(wasmUrl);
+    if (mode !== "stream" && (!wasmReady || loadedWasmKey !== urlKey)) {
       const initStart = performance.now();
       await initWasm(wasmUrl);
-      loadedWasmUrl = wasmUrl;
+      wasmReady = true;
+      loadedWasmKey = urlKey;
       (self as unknown as Worker).postMessage({
         id,
         phase: "init",

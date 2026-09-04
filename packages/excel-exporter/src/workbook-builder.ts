@@ -51,11 +51,15 @@ export class WorkbookBuilder {
     const rows = config.data.map((item) =>
       columns.map((col) => {
         const v = resolveCellFormat(col, item);
-        // NaN/Infinity are not valid xsd:double values: <v>NaN</v> produces a
-        // workbook Excel flags as corrupt. Emit the visible string form,
-        // matching displayValue on the stream/SheetJS paths (README: non-finite
-        // numbers are written as visible strings on every path).
-        return typeof v === "number" && !Number.isFinite(v) ? toStr(v) : v;
+        // Normalize exactly like displayValue on the stream/SheetJS paths, so a
+        // dataset crossing the 50k threshold (or degrading) keeps identical cell
+        // content: non-finite numbers (not valid xsd:double; <v>NaN</v> corrupts
+        // the workbook), objects (modern-xlsx would String() them into
+        // "[object Object]" instead of JSON) and Dates (localized long form
+        // instead of ISO) all become the same visible strings on every path.
+        if (typeof v === "number") return Number.isFinite(v) ? v : toStr(v);
+        if (typeof v === "string" || typeof v === "boolean") return v;
+        return toStr(v);
       }),
     );
     const aoa = [...headerGrid, ...rows];

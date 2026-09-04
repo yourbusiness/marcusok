@@ -22,7 +22,7 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
-Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package passes all tests on Node 22 (91 cases in total; CI defaults to `RUN_PERF=0`, skipping 4 performance benchmarks and running 87). This package was developed and tested against 1.2.0 — consumers are advised to pin that version (the peerDep range `^1.2.0` is allowed, but higher versions are unverified).
+Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package passes all tests on Node 22 (94 cases in total; CI defaults to `RUN_PERF=0`, skipping 4 performance benchmarks and running 90). This package was developed and tested against 1.2.0 — consumers are advised to pin that version (the peerDep range `^1.2.0` is allowed, but higher versions are unverified).
 
 > modern-xlsx is declared as a `peerDependency`, so consumers must install it explicitly. Reasons: (1) `modern-xlsx.wasm` (1.9MB) must be deployed by the consumer as a static asset — an implicit dependency would hide this hard requirement; (2) peerDep is semantically correct — this package wraps modern-xlsx and version control belongs to the consumer; (3) package managers auto-install peerDependencies by default (npm 7+ / pnpm 8+), and an implicitly installed version is outside the consumer's control — an explicit declaration is what pins the version intent. `xlsx` (SheetJS) is an optional peerDep, needed only for the fallback path.
 >
@@ -143,7 +143,7 @@ columns: [
 
 Multi-level headers and merges (including header merges) work on all four paths — main / worker / stream / SheetJS fallback. The stream and fallback paths preserve merges but still do not support styles.
 
-Invalid input fails identically on every path with `{ success: false, error }` instead of a corrupt workbook: `merges` must be integers (`row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1) staying within the data area and not overlapping each other; sheet names must be unique across `sheets`; `NaN`/`Infinity` in unformatted numeric columns are written as visible strings (illegal XML numbers would corrupt the file).
+Invalid input fails identically on every path with `{ success: false, error }` instead of a corrupt workbook: `merges` must be integers (`row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1) staying within the data area and not overlapping each other; sheet names must be unique across `sheets`; `NaN`/`Infinity` in unformatted numeric columns are written as visible strings (illegal XML numbers would corrupt the file). Values are normalized identically on every path: without a `format`, plain objects are written as JSON strings, `Date`s as ISO strings and bigints as decimal strings, so a dataset crossing the 50k-row threshold keeps the same cell content.
 
 ### Auto Routing
 
@@ -177,7 +177,7 @@ Main-thread paths additionally accept function form (`main`, and `stream` in Nod
 
 ### Fallback
 
-When WASM is unsupported or fails to load, the library automatically falls back to SheetJS ([`src/fallback.ts`](./src/fallback.ts)); fallback exports carry no styles. `ExportResult.engine` reports `'sheetjs'` so you can monitor the fallback rate.
+When the browser Worker route fails (missing/404 `workerUrl`, WASM init error inside the Worker, timeout), the library first **retries on the main thread** with modern-xlsx — styles are preserved, and the ≥ 50,000-row fast stream needs no WASM at all. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to SheetJS ([`src/fallback.ts`](./src/fallback.ts)); fallback exports carry no styles. `ExportResult.engine` reports `'sheetjs'` so you can monitor the fallback rate, and each degradation step prints an `[excel-exporter]` console warning.
 
 ## API
 

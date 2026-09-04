@@ -10,7 +10,7 @@ configureWasm({ workerUrl: "/assets/export.worker.js" });
 
 Worker 路径行为：
 
-- **必须配置 `workerUrl`**，否则该路径内部抛错并自动降级到无样式的 SheetJS 兜底——结果为 `engine: "sheetjs"`，调用方的 Promise 正常 resolve（不会 reject），console 中有 `[excel-exporter]` 前缀警告；
+- **必须配置 `workerUrl`**，否则 Worker 路由失败后**先回退到主线程重试**（modern-xlsx 保留样式；≥ 50,000 行的 Fast stream 本身不依赖 WASM）；只有重试也失败时才最终降级到无样式的 SheetJS 兜底（`engine: "sheetjs"`）。调用方的 Promise 正常 resolve（不会 reject），每一级降级都会在 console 打印 `[excel-exporter]` 前缀警告；
 - Worker 实例复用，请求按 `requestId` 并发分发，多次导出互不串扰；
 - **函数形式的 format 会被剥离**（结构化克隆无法传递函数）——worker 路径请使用 FormatSpec；
 - `onProgress` / `onPhase`（`init` / `build`）会从 Worker 转发回主线程。

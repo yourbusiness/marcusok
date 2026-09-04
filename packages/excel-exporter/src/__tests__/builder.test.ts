@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { WorkbookBuilder } from "../workbook-builder";
+import { exportAsStream } from "../streaming-builder";
 import { StylePresets } from "../style-presets";
 import { readBuffer, makeData } from "./setup";
 
@@ -240,5 +241,47 @@ describe("WorkbookBuilder round-trip", () => {
     expect(ws.cell("B2").value).toBe(1234.567);
     // Plain column (no format, no style) stays unstyled.
     expect(ws.cell("C2").styleIndex).toBeNull();
+  });
+
+  it("normalizes non-primitive values to the same strings as the stream path", async () => {
+    // Cross-path contract: a dataset crossing the 50k-row threshold (or
+    // degrading to SheetJS) must keep identical cell content. Before the fix
+    // the Workbook path passed raw values to modern-xlsx, which String()ed
+    // objects into "[object Object]" and Dates into the localized long form,
+    // while the stream/SheetJS paths emit JSON / ISO strings via toStr().
+    const sheet = {
+      name: "Mixed",
+      columns: [
+        { key: "obj", header: "Obj" },
+        { key: "d", header: "D" },
+        { key: "big", header: "Big" },
+        { key: "sym", header: "Sym" },
+      ],
+      data: [
+        {
+          obj: { a: 1 },
+          d: new Date("2025-01-05T00:00:00Z"),
+          big: 123n,
+          sym: Symbol("s"),
+        },
+      ],
+    };
+
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(sheet);
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("Mixed")!;
+    expect(ws.cell("A2").value).toBe('{"a":1}');
+    expect(ws.cell("B2").value).toBe("2025-01-05T00:00:00.000Z");
+    expect(ws.cell("C2").value).toBe("123");
+    // toStr hardening: JSON.stringify(symbol) is undefined -> String() instead.
+    expect(ws.cell("D2").value).toBe("Symbol(s)");
+
+    // The stream path must agree on every one of these cells.
+    const { bytes } = await exportAsStream([sheet]);
+    const sws = (await readBuffer(bytes)).getSheet("Mixed")!;
+    for (const ref of ["A2", "B2", "C2", "D2"]) {
+      expect(sws.cell(ref).value).toBe(ws.cell(ref).value);
+    }
   });
 });

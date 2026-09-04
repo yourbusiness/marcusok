@@ -47,7 +47,7 @@ import {
 } from "./metrics.js";
 
 // 模块加载时配置 WASM + worker URL，保证 worker/stream 模式可用。
-// 不配置 workerUrl 时 exportExcel 会打印 [excel-exporter] 警告并降级到 SheetJS fallback。
+// 不配置 workerUrl 时 worker 路由失败会先回退主线程重试（保样式），主线程也失败才降级 SheetJS fallback（均有 [excel-exporter] 警告）。
 configureWasm({ workerUrl, wasmUrl });
 
 const HISTORY_LIMIT = 10;
