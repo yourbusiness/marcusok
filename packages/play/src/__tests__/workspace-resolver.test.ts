@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  isFile,
   matchExportTarget,
   pickExportTarget,
+  readExportsMap,
+  resolvePkgDir,
   srcCandidatesFromDistTarget,
 } from "../vite/workspace-resolver";
+
+const playDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const exporterDir = resolve(playDir, "..", "excel-exporter");
 
 describe("pickExportTarget", () => {
   it("passes through a plain string target", () => {
@@ -84,5 +93,54 @@ describe("srcCandidatesFromDistTarget", () => {
 
   it("returns empty for non-dist targets", () => {
     expect(srcCandidatesFromDistTarget("./src/index.ts")).toEqual([]);
+  });
+});
+
+describe("isFile", () => {
+  it("returns true for regular files, false for directories and missing paths", () => {
+    expect(isFile(resolve(playDir, "package.json"))).toBe(true);
+    expect(isFile(resolve(playDir, "src"))).toBe(false);
+    expect(isFile(resolve(playDir, "no-such-file.xyz"))).toBe(false);
+  });
+});
+
+describe("resolvePkgDir", () => {
+  it("locates an installed third-party package root through pnpm symlinks", () => {
+    // vitest is a direct devDependency of play, so it is resolvable from
+    // play's node_modules; the root must be the dir whose package.json name
+    // matches (not an intermediate dist/ directory).
+    const dir = resolvePkgDir("vitest", playDir);
+    expect(dir).not.toBe("");
+    const pkg = JSON.parse(
+      readFileSync(resolve(dir, "package.json"), "utf8"),
+    ) as { name?: string };
+    expect(pkg.name).toBe("vitest");
+  });
+
+  it("locates a workspace dependency at its monorepo source directory", () => {
+    const dir = resolvePkgDir("@marcusok/excel-exporter", playDir);
+    expect(dir).toBe(exporterDir);
+  });
+
+  it("returns an empty string for unresolvable packages", () => {
+    expect(resolvePkgDir("definitely-not-a-real-package-xyz", playDir)).toBe(
+      "",
+    );
+  });
+});
+
+describe("readExportsMap", () => {
+  it("flattens the real excel-exporter exports map via the import condition", () => {
+    const map = readExportsMap(exporterDir);
+    expect(map.get(".")).toBe("./dist/index.js");
+    expect(map.get("./styles")).toBe("./dist/style-presets.js");
+    expect(map.get("./worker-utils")).toBe("./dist/worker-utils.js");
+    expect(map.get("./dist/export.worker.js")).toBe("./dist/export.worker.js");
+    expect(map.get("./package.json")).toBe("./package.json");
+  });
+
+  it("returns an empty map for a package without an exports field", () => {
+    // play itself is a private app with no exports map.
+    expect(readExportsMap(playDir).size).toBe(0);
   });
 });

@@ -87,6 +87,17 @@ export interface ColumnConfig {
    * precision and renders decimals via numFormat, so the same spec can store
    * `9999.99` (Workbook) vs `10000` (stream). Always set `decimals` explicitly
    * for cross-threshold consistency (see docs/excel-export-design.md 4.8).
+   *
+   * Cross-path `thousands`: the Workbook path renders the separator via an
+   * auto-injected `#,##0` numFormat; the stream/SheetJS paths (>=50k rows /
+   * degraded exports) cannot use numFormat and keep the cell a *number*, so
+   * they render `9999.99` without separators. Baking separators into the value
+   * would turn data cells into text and break downstream calculations, so the
+   * difference is intentional — do not rely on visible separators above the
+   * 50k threshold.
+   *
+   * `null`/`undefined` values in a `{ type: "number" }` column render as empty
+   * cells on every path (never `0`).
    */
   format?:
     | FormatSpec
@@ -184,5 +195,12 @@ export interface ExportResult {
   mode?: ExportMode;
   duration?: number; // ms
   rowCount?: number;
+  /**
+   * Failure cause when `success` is false. Also set — together with
+   * `success: true` — when the export succeeded via the SheetJS fallback,
+   * carrying the degradation reason (e.g. "workerUrl not configured") so
+   * callers can monitor the fallback rate programmatically. Check `success`
+   * first; a present `error` alone does not mean the export failed.
+   */
   error?: Error;
 }

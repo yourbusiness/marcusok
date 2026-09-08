@@ -53,31 +53,66 @@ describe("WasmLoader error recovery", () => {
     expect(initWasmMock).toHaveBeenCalledTimes(3);
   });
 
-  it("re-initializes from the new URL when wasmUrl changes on a ready loader", async () => {
-    initWasmMock.mockResolvedValue(undefined);
-    const loader = makeLoader("a.wasm");
-    await loader.ensureLoaded();
-    expect(loader.isReady).toBe(true);
-    expect(initWasmMock).toHaveBeenCalledTimes(1);
+  it("re-attempts initWasm with the new URL when wasmUrl changes on a ready loader", async () => {
+    // Loader state-machine contract only: updateOptions resets a ready loader
+    // so the next ensureLoaded re-CALLS initWasm with the new URL. Note the
+    // real modern-xlsx initWasm is idempotent ("first successful init wins"),
+    // so on a thread that already initialized WASM this second call is a
+    // no-op — updateOptions warns about exactly that (next test).
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      initWasmMock.mockResolvedValue(undefined);
+      const loader = makeLoader("a.wasm");
+      await loader.ensureLoaded();
+      expect(loader.isReady).toBe(true);
+      expect(initWasmMock).toHaveBeenCalledTimes(1);
 
-    loader.updateOptions({ wasmUrl: "b.wasm" });
-    expect(loader.isReady).toBe(false);
+      loader.updateOptions({ wasmUrl: "b.wasm" });
+      expect(loader.isReady).toBe(false);
 
-    await loader.ensureLoaded();
-    expect(loader.isReady).toBe(true);
-    expect(initWasmMock).toHaveBeenCalledTimes(2);
-    expect(initWasmMock).toHaveBeenLastCalledWith("b.wasm");
+      await loader.ensureLoaded();
+      expect(loader.isReady).toBe(true);
+      expect(initWasmMock).toHaveBeenCalledTimes(2);
+      expect(initWasmMock).toHaveBeenLastCalledWith("b.wasm");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("warns that a wasmUrl change cannot reload an already-initialized module", async () => {
+    // Real-dependency caveat surfaced at the API boundary: modern-xlsx's
+    // initWasm keeps the first successfully loaded module, so the reset+retry
+    // above is silently a no-op on this thread. updateOptions must say so.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      initWasmMock.mockResolvedValue(undefined);
+      const loader = makeLoader("a.wasm");
+      await loader.ensureLoaded();
+      expect(warn).not.toHaveBeenCalled();
+
+      loader.updateOptions({ wasmUrl: "b.wasm" });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain("idempotent");
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("keeps a ready loader ready when only timeouts/retries change", async () => {
-    initWasmMock.mockResolvedValue(undefined);
-    const loader = makeLoader("a.wasm");
-    await loader.ensureLoaded();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      initWasmMock.mockResolvedValue(undefined);
+      const loader = makeLoader("a.wasm");
+      await loader.ensureLoaded();
 
-    loader.updateOptions({ timeoutMs: 5_000, maxRetries: 5 });
-    expect(loader.isReady).toBe(true);
+      loader.updateOptions({ timeoutMs: 5_000, maxRetries: 5 });
+      expect(loader.isReady).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
 
-    await loader.ensureLoaded();
-    expect(initWasmMock).toHaveBeenCalledTimes(1);
+      await loader.ensureLoaded();
+      expect(initWasmMock).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

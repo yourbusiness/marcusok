@@ -135,6 +135,26 @@ export async function exportInWorker(
       (resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(id);
+          // The timed-out request can no longer receive its result. Terminate
+          // the worker: either it is wedged (must not be reused by later
+          // exports) or legitimately still working on a huge export whose
+          // result is now unwanted — either way, keeping it burns CPU and
+          // delays every request queued behind it. Sibling requests dispatched
+          // to the same worker are rejected so their callers degrade through
+          // the main-thread retry immediately, exactly like an onerror.
+          if (worker === w) {
+            w.terminate();
+            worker = null;
+          }
+          for (const [pid, p] of pending) {
+            if (p.worker !== w) continue;
+            pending.delete(pid);
+            p.reject(
+              new Error(
+                "worker terminated after a concurrent export timed out",
+              ),
+            );
+          }
           reject(
             new Error("export worker timed out after " + timeoutMs + "ms"),
           );

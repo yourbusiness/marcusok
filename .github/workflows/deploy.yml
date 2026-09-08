@@ -48,7 +48,7 @@ jobs:
         # version omitted: action reads `packageManager` from package.json
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Cache VitePress
@@ -57,7 +57,9 @@ jobs:
           path: apps/docs/.vitepress/cache
           # Source-only globs: generated wasm/worker and node_modules must not
           # participate in the cache key (slow, and flaky with symlinks).
-          key: ${{ runner.os }}-vitepress-${{ hashFiles('pnpm-lock.yaml', 'apps/docs/**/*.md', 'apps/docs/**/*.{ts,vue,css}', 'apps/docs/package.json', 'apps/docs/turbo.json', 'packages/excel-exporter/package.json', 'packages/excel-exporter/src/**/*.ts') }}
+          # Hash the whole packages/ tree (not just excel-exporter): any
+          # package can contribute registry data to the docs site.
+          key: ${{ runner.os }}-vitepress-${{ hashFiles('pnpm-lock.yaml', 'apps/docs/**/*.md', 'apps/docs/**/*.{ts,vue,css}', 'apps/docs/package.json', 'apps/docs/turbo.json', 'packages/**/package.json', 'packages/**/src/**/*.ts') }}
           restore-keys: |
             ${{ runner.os }}-vitepress-
 
@@ -65,6 +67,20 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Quality gate before deploying: this workflow runs in parallel with CI
+      # on pushes to main (cross-workflow `needs` is not possible), so without
+      # these steps a commit that fails lint/typecheck/test would still go live
+      # whenever it only breaks non-build checks. Re-running the same suite
+      # here makes the deployment itself the gate.
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+        env:
+          RUN_PERF: "0"
 
       - name: Build with VitePress
         # turbo builds @marcusok/excel-exporter first (docs app depends on it),

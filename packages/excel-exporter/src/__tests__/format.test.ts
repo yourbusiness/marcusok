@@ -37,6 +37,10 @@ describe("applyFormat", () => {
     expect(applyFormat(1234.567, { type: "number", thousands: true })).toBe(
       1234.567,
     );
+    // null/undefined -> empty cell, never Number(null) === 0 (mirrors
+    // displayValue so the workbook and stream paths agree).
+    expect(applyFormat(null, { type: "number", decimals: 2 })).toBe("");
+    expect(applyFormat(undefined, { type: "number", decimals: 2 })).toBe("");
   });
 
   it("padding: left/right align", () => {
@@ -202,6 +206,28 @@ describe("displayValue (stream/SheetJS number-decimals baking)", () => {
         { n: "abc" },
       ),
     ).toBe("abc");
+    // null/undefined -> empty cell on every path (Number(null) === 0 must not
+    // turn missing values into a meaningful 0)
+    expect(
+      displayValue(
+        {
+          key: "n",
+          header: "N",
+          format: { type: "number" as const, decimals: 2 },
+        },
+        { n: null },
+      ),
+    ).toBe("");
+    expect(
+      displayValue(
+        {
+          key: "n",
+          header: "N",
+          format: { type: "number" as const, decimals: 2 },
+        },
+        { n: undefined },
+      ),
+    ).toBe("");
   });
 });
 

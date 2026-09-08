@@ -40,6 +40,10 @@ type FormatSpec =
 
 `decimals` 默认 0，`thousands` 默认 false。**务必显式声明 `decimals`**：Workbook 路径保留完整精度经 `numFormat` 渲染，Stream/兜底路径将 `decimals` 烧入存储值，两种路径存储值可能不同。
 
+`thousands` 的跨路径差异：Workbook 路径经自动注入的 `#,##0` `numFormat` 渲染千分位；Stream/SheetJS 路径（≥ 50,000 行 / 降级导出）无法使用 `numFormat`，单元格保持为**数字**，因此不显示千分位（把分隔符烧入值会把数据单元格变成文本，破坏下游计算）。
+
+`null`/`undefined` 在所有路径下均渲染为空单元格——绝不会是 `0`。
+
 ### padding
 
 ```ts

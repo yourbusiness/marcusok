@@ -40,6 +40,11 @@ export function applyFormat(value: unknown, spec: FormatSpec): string | number {
       return d === null ? toStr(value) : dateToSerial(d);
     }
     case "number": {
+      // null/undefined render as an empty cell on every path. Without this
+      // guard Number(null) === 0 would silently turn missing values into 0
+      // while undefined became "" (asymmetric, and 0 is a meaningful value in
+      // financial data).
+      if (value == null) return "";
       const n = Number(value);
       if (!Number.isFinite(n)) return toStr(value);
       // Keep full precision: the stored cell value must not be truncated.
@@ -156,8 +161,12 @@ export function displayValue(
       // Stream/SheetJS paths have no numFormat support, so the configured
       // decimals must be baked into the displayed value here. The workbook
       // path keeps full precision and renders decimals via numFormat instead.
-      const n = Number(row[col.key ?? ""]);
-      if (!Number.isFinite(n)) return toStr(row[col.key ?? ""]);
+      // null/undefined render as an empty cell, mirroring applyFormat (never
+      // Number(null) === 0).
+      const raw = row[col.key ?? ""];
+      if (raw == null) return "";
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return toStr(raw);
       return Number(n.toFixed(spec.decimals ?? 0));
     }
   }
@@ -172,8 +181,10 @@ export function displayValue(
 }
 
 /**
- * Unified cell-value resolver (fixes the v1.9 format union bug): dispatches
- * function form directly, FormatSpec via applyFormat. Verified by minimal repro.
+ * Unified cell-value resolver: dispatches the function form directly and the
+ * FormatSpec form via applyFormat. (The pre-1.1 bug this replaced dispatched
+ * only one arm of the union, so FormatSpec columns silently fell through to
+ * raw values.)
  */
 export function resolveCellFormat(
   col: ColumnConfig,

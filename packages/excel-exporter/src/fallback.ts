@@ -5,7 +5,7 @@ import {
   validateMerges,
 } from "./format-utils";
 import { triggerDownload } from "./download";
-import { flattenColumnTree } from "./column-tree";
+import { flattenColumnTree, someColumn } from "./column-tree";
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -54,8 +54,20 @@ export async function exportWithSheetJS(
   start: number,
   reason: string,
 ): Promise<ExportResult> {
+  // Layout features are dropped on this path alongside styles. List the
+  // configured ones in the warning (parity with the stream path's per-feature
+  // warnings in fast-xlsx.ts) so the degradation is visible, not silent.
+  const dropped = new Set<string>();
+  for (const s of options.sheets) {
+    if (s.freezeRows) dropped.add("freezeRows");
+    if (s.autoFilter) dropped.add("autoFilter");
+    if (someColumn(s.columns, (c) => c.width !== undefined))
+      dropped.add("width");
+  }
   console.warn(
-    `[excel-exporter] Falling back to SheetJS (styles stripped). Reason: ${reason}`,
+    `[excel-exporter] Falling back to SheetJS (styles stripped${
+      dropped.size ? `; also dropped: ${[...dropped].join(", ")}` : ""
+    }). Reason: ${reason}`,
   );
   try {
     // Build phase includes the lazy SheetJS load (local module or CDN), which

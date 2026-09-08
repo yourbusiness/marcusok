@@ -345,6 +345,67 @@ const stableAssetNames = new Set(
   packages.flatMap((p) => p.runtimeAssets ?? []).map((a) => basename(a.to)),
 );
 
+/**
+ * Per-page social metadata. The static `head` array applies verbatim to every
+ * page — including the zh mirror — with no locale override, so og:title /
+ * og:description / og:locale are generated per page instead: the page's own
+ * title, a locale-appropriate description fallback and a matching og:locale.
+ *
+ * VitePress renders the static HTML head from `siteData.head` merged with
+ * `pageData.frontmatter.head` (NOT a top-level `pageData.head`), so the tags
+ * are appended to `frontmatter.head` here.
+ */
+const SITE_TITLES = { en: "MarcusOK Docs", zh: "MarcusOK 文档中心" } as const;
+const SITE_DESCRIPTIONS = {
+  en: "Public documentation for marcusok packages.",
+  zh: "MarcusOK 文档中心 —— marcusok 库包的公开技术文档。",
+} as const;
+
+type HeadEntry = [string, Record<string, string>];
+
+function ogHeadEntries(pageData: {
+  relativePath: string;
+  title: string;
+  description: string;
+}): HeadEntry[] {
+  const isZh = pageData.relativePath.replace(/\\/g, "/").startsWith("zh/");
+  const lang: "en" | "zh" = isZh ? "zh" : "en";
+  const pageTitle = pageData.title?.trim();
+  return [
+    [
+      "meta",
+      {
+        property: "og:title",
+        content: pageTitle
+          ? `${pageTitle} | ${SITE_TITLES[lang]}`
+          : SITE_TITLES[lang],
+      },
+    ],
+    [
+      "meta",
+      {
+        property: "og:description",
+        content: pageData.description?.trim() || SITE_DESCRIPTIONS[lang],
+      },
+    ],
+    ["meta", { property: "og:locale", content: isZh ? "zh_CN" : "en_US" }],
+  ];
+}
+
+function transformPageData(pageData: {
+  relativePath: string;
+  title: string;
+  description: string;
+  frontmatter: { head?: HeadEntry[] } & Record<string, unknown>;
+}): { frontmatter: Record<string, unknown> } {
+  return {
+    frontmatter: {
+      ...pageData.frontmatter,
+      head: [...(pageData.frontmatter.head ?? []), ...ogHeadEntries(pageData)],
+    },
+  };
+}
+
 export default defineConfig({
   lang: "en-US",
   title: "MarcusOK Docs",
@@ -355,17 +416,8 @@ export default defineConfig({
   lastUpdated: true,
   // apps/docs/README.md is a repo-facing doc, not a site page.
   srcExclude: ["README.md"],
-  head: [
-    ["link", { rel: "icon", href: `${base}favicon.svg` }],
-    ["meta", { property: "og:title", content: "MarcusOK Docs" }],
-    [
-      "meta",
-      {
-        property: "og:description",
-        content: "Public documentation for marcusok packages.",
-      },
-    ],
-  ],
+  head: [["link", { rel: "icon", href: `${base}favicon.svg` }]],
+  transformPageData,
   locales: {
     root: {
       label: "English",

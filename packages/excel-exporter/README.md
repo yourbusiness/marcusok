@@ -22,7 +22,7 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
-Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package passes all tests on Node 22 (94 cases in total; CI defaults to `RUN_PERF=0`, skipping 4 performance benchmarks and running 90). This package was developed and tested against 1.2.0 — consumers are advised to pin that version (the peerDep range `^1.2.0` is allowed, but higher versions are unverified).
+Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package passes all tests on Node 22 (100 cases in total; CI defaults to `RUN_PERF=0`, skipping 4 performance benchmarks and running 96). This package was developed and tested against 1.2.0 — consumers are advised to pin that version (the peerDep range `^1.2.0` is allowed, but higher versions are unverified).
 
 > modern-xlsx is declared as a `peerDependency`, so consumers must install it explicitly. Reasons: (1) `modern-xlsx.wasm` (1.9MB) must be deployed by the consumer as a static asset — an implicit dependency would hide this hard requirement; (2) peerDep is semantically correct — this package wraps modern-xlsx and version control belongs to the consumer; (3) package managers auto-install peerDependencies by default (npm 7+ / pnpm 8+), and an implicitly installed version is outside the consumer's control — an explicit declaration is what pins the version intent. `xlsx` (SheetJS) is an optional peerDep, needed only for the fallback path.
 >
@@ -175,6 +175,12 @@ See [`src/types.ts`](./src/types.ts). Worker mode cannot carry functions across 
 
 Main-thread paths additionally accept function form (`main`, and `stream` in Node where it runs on the main thread): `format: (v) => v ? "Yes" : "No"`. The browser Worker path strips functions and prints a warning — use `FormatSpec` there instead.
 
+Number-spec cross-path notes (see `ColumnConfig.format` in [`src/types.ts`](./src/types.ts)):
+
+- Set `decimals` explicitly: the Workbook path stores full precision and renders decimals via `numFormat`, while the stream/SheetJS paths (>= 50,000 rows / degraded exports) bake decimals into the stored value.
+- `thousands: true` renders separators only on the Workbook path (`#,##0` numFormat). The stream/SheetJS paths keep the cell a number, so separators are not visible there — baking them into the value would turn data cells into text.
+- `null`/`undefined` values render as empty cells on every path (never `0`).
+
 ### Fallback
 
 When the browser Worker route fails (missing/404 `workerUrl`, WASM init error inside the Worker, timeout), the library first **retries on the main thread** with modern-xlsx — styles are preserved, and the ≥ 50,000-row fast stream needs no WASM at all. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to SheetJS ([`src/fallback.ts`](./src/fallback.ts)); fallback exports carry no styles. `ExportResult.engine` reports `'sheetjs'` so you can monitor the fallback rate, and each degradation step prints an `[excel-exporter]` console warning.
@@ -182,7 +188,7 @@ When the browser Worker route fails (missing/404 `workerUrl`, WASM init error in
 ## API
 
 - `exportExcel(options)` — unified entry with auto routing.
-- `configureWasm(opts)` — set `wasmUrl`/`workerUrl`/`timeoutMs`/`maxRetries`.
+- `configureWasm(opts)` — set `wasmUrl`/`workerUrl`/`timeoutMs`/`maxRetries`. Note: changing `wasmUrl` after a _successful_ load does not reload WASM on a thread that already initialized it (modern-xlsx's `initWasm` is idempotent — first successful init wins); the new URL takes effect only in a fresh JS realm (page reload / a worker created after `terminateWorker()`), and a console warning is printed when this applies.
 - `onPhase(phase, durationMs)` (an `exportExcel` option) — per-phase timing callback: `init` (WASM init) / `build` (workbook build) / `download` (trigger download); reports elapsed milliseconds once per phase for metrics breakdowns, without affecting the `duration` in the returned result.
 - `WorkbookBuilder` — batch builder (<50k rows, full styling).
 - `exportAsStream(sheets)` — large-file export (>=50k rows).

@@ -12,14 +12,20 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const zhRoot = join(root, "zh");
-const SKIP_DIRS = new Set(["zh", ".vitepress", "node_modules", "public"]);
+// Root-only skips (the zh mirror itself, the config/theme dir, public assets)
+// must not swallow same-named NESTED content dirs, so they apply only at each
+// walk's base. node_modules is junk at any depth.
+const ROOT_SKIP_DIRS = new Set(["zh", ".vitepress", "public"]);
+const ALWAYS_SKIP_DIRS = new Set(["node_modules"]);
 
 function collectMd(dir, baseDir) {
   const out = [];
+  const isBase = dir === baseDir;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name)) continue;
+      if (ALWAYS_SKIP_DIRS.has(entry.name)) continue;
+      if (isBase && ROOT_SKIP_DIRS.has(entry.name)) continue;
       out.push(...collectMd(abs, baseDir));
     } else if (
       entry.isFile() &&
@@ -89,7 +95,32 @@ for (const f of required) {
   }
 }
 
-if (missingInZh.length || extraInZh.length || contentErrors.length) {
+// ---- link sanity: site-absolute links inside zh pages must stay in the zh
+// locale. A zh page linking to a bare /path silently sends the reader to the
+// English page, so a missing /zh prefix fails the check. (Anchors, external
+// URLs and relative links are unaffected; there are no root-absolute images.)
+// stripCode runs first so fenced examples like `](/guide/)` inside code blocks
+// are not mistaken for real links. ----
+const SITE_LINK_RE = /\]\((\/[^)\s]*)\)/g;
+const linkErrors = [];
+for (const f of zh) {
+  const content = stripCode(readFileSync(join(zhRoot, f), "utf8"));
+  for (const m of content.matchAll(SITE_LINK_RE)) {
+    const dest = m[1];
+    if (dest !== "/zh" && !dest.startsWith("/zh/")) {
+      linkErrors.push(
+        `${f}: site link "${dest}" escapes the zh locale (missing /zh prefix)`,
+      );
+    }
+  }
+}
+
+if (
+  missingInZh.length ||
+  extraInZh.length ||
+  contentErrors.length ||
+  linkErrors.length
+) {
   for (const f of missingInZh) {
     console.error(`[check-i18n] missing zh/ mirror: ${f}`);
   }
@@ -97,6 +128,9 @@ if (missingInZh.length || extraInZh.length || contentErrors.length) {
     console.error(`[check-i18n] unexpected zh page (no en original): ${f}`);
   }
   for (const msg of contentErrors) {
+    console.error(`[check-i18n] ${msg}`);
+  }
+  for (const msg of linkErrors) {
     console.error(`[check-i18n] ${msg}`);
   }
   console.error(

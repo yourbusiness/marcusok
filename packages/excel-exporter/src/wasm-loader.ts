@@ -40,14 +40,33 @@ export class WasmLoader {
   /**
    * Merge new options into the current set. If the WASM URL changes while the
    * loader is already ready (or mid-load), reset so the next ensureLoaded
-   * re-initializes from the new URL; otherwise keep the loaded state. This avoids
-   * discarding an already-loaded WASM module when only timeouts/retries change.
-   * A previous load *error* is always cleared by a reconfiguration, so the next
-   * ensureLoaded retries with the new settings instead of throwing forever.
+   * re-attempts initialization with the new URL; otherwise keep the loaded
+   * state. This avoids discarding an already-loaded WASM module when only
+   * timeouts/retries change. A previous load *error* is always cleared by a
+   * reconfiguration, so the next ensureLoaded retries with the new settings
+   * instead of throwing forever.
+   *
+   * Caveat (modern-xlsx 1.2.0 verified): `initWasm` is idempotent with a
+   * module-level "first successful init wins" guard. On a thread where WASM
+   * is already initialized the re-attempt is a silent no-op — the reset only
+   * guarantees initWasm is *called* with the new URL, which modern-xlsx
+   * ignores if its module-level `initialized` flag is already set. The new
+   * URL genuinely takes effect only in a fresh JS realm (a page reload, or a
+   * worker created after terminateWorker()). updateOptions warns when this
+   * caveat applies.
    */
   updateOptions(opts: LoaderOptions): void {
     const urlChanged =
       opts.wasmUrl !== undefined && opts.wasmUrl !== this.opts.wasmUrl;
+    if (urlChanged && this.state === "ready") {
+      console.warn(
+        "[excel-exporter] wasmUrl changed after WASM already initialized on this thread. " +
+          "modern-xlsx's initWasm is idempotent (first successful init wins), so the already-loaded " +
+          "module stays in effect and the new URL is ignored by initWasm. The new URL takes effect " +
+          "only in a fresh JS realm (reload the page, or terminateWorker() before the next export " +
+          "so a new worker is created).",
+      );
+    }
     this.opts = { ...this.opts, ...opts };
     if ((urlChanged && this.state !== "idle") || this.state === "error") {
       this.state = "idle";
@@ -125,9 +144,16 @@ export function getWasmLoader(): WasmLoader {
 /**
  * Inject CDN / self-hosted URLs and timeout config at app entry. Merges into the
  * existing loader rather than replacing it, so an already-loaded WASM module is
- * kept unless the WASM URL actually changes (in which case the next ensureLoaded
- * re-initializes from the new URL). A previous load error is always cleared, so
- * calling this after a failure makes the next export retry with the new settings.
+ * kept unless the WASM URL actually changes. A previous load error is always
+ * cleared, so calling this after a failure makes the next export retry with the
+ * new settings.
+ *
+ * Note: changing `wasmUrl` after a *successful* load does not reload WASM on a
+ * thread that already initialized it — modern-xlsx's `initWasm` is idempotent
+ * and keeps the first successfully loaded module (see WasmLoader.updateOptions).
+ * The new URL takes effect in a fresh JS realm only (page reload / a worker
+ * created after `terminateWorker()`), and updateOptions prints a warning when
+ * the caveat applies.
  */
 export function configureWasm(opts: LoaderOptions): void {
   defaultLoader.updateOptions(opts);

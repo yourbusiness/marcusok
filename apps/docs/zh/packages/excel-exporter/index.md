@@ -58,7 +58,7 @@ await exportExcel({
 
 ## 版本与依赖
 
-- 当前版本：以 npm registry 为准（文档站首页包卡片会从工作区 `package.json` 自动读取）
+- 当前版本：构建时从工作区 `package.json` 读取（单一数据源；文档站不查询 npm registry）
 - peerDependencies：`modern-xlsx@^1.2.0`（必装）、`xlsx@>=0.18.5`（可选，兜底）
 - 环境：Node >= 22；浏览器需支持 WebAssembly
 

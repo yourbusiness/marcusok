@@ -58,7 +58,7 @@ await exportExcel({
 
 ## Version & dependencies
 
-- Version: read from npm registry (the home card reads the workspace `package.json` automatically)
+- Version: read from the workspace `package.json` at build time (single source of truth; this site never queries the npm registry)
 - peerDependencies: `modern-xlsx@^1.2.0` (required), `xlsx@>=0.18.5` (optional, fallback)
 - Environment: Node >= 22; browsers need WebAssembly support
 

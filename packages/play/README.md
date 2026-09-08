@@ -26,10 +26,9 @@ pnpm dev:play
 The difference:
 
 - `pnpm dev`: runs `node scripts/dev.mjs`, which first runs `turbo run build` once
-  (building `excel-exporter` and friends into `dist/`, equivalent to turbo dev's
-  `dependsOn: ["^build"]`), then starts all three dev services in parallel:
-  excel-exporter's `tsup --watch`, play's `vite` (5173), and docs'
-  `vitepress dev` (5174).
+  (building `excel-exporter` and friends into `dist/`), then starts all three
+  dev services in parallel: excel-exporter's `tsup --watch`, play's `vite`
+  (5173), and docs' `vitepress dev` (5174).
 - `pnpm dev:play`: runs `node scripts/dev.mjs play` — same upstream build, then
   only play's vite.
 
@@ -124,10 +123,13 @@ registerDemo({
 });
 ```
 
-The module returned by `load()` must default-export a React component, rendered
-inside the Suspense boundary in `App.tsx`; resource cleanup (timers, fetch,
-WebSocket, etc.) happens in the component's `useEffect` cleanup, which runs
-automatically on navigation — no hand-written `destroy()` mechanism is needed.
+The module returned by `load()` must default-export a React component. It is
+rendered by the state-driven `LazyDemo` in `App.tsx` (a `Spin` placeholder
+while loading, then the component — deliberately NOT `lazy()` + Suspense, to
+satisfy React Compiler's static-components constraint), wrapped in a
+`DemoErrorBoundary`; resource cleanup (timers, fetch, WebSocket, etc.) happens
+in the component's `useEffect` cleanup, which runs automatically on navigation
+— no hand-written `destroy()` mechanism is needed.
 
 ## Module Resolution Rules (vite.config.ts)
 

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { strFromU8, unzipSync } from "fflate";
 import { WorkbookBuilder } from "../workbook-builder";
 import { exportAsStream } from "../streaming-builder";
 import { StylePresets } from "../style-presets";
@@ -283,5 +284,43 @@ describe("WorkbookBuilder round-trip", () => {
     for (const ref of ["A2", "B2", "C2", "D2"]) {
       expect(sws.cell(ref).value).toBe(ws.cell(ref).value);
     }
+  });
+
+  it("deduplicates identical styles instead of growing the styles table per cell", async () => {
+    // modern-xlsx's StyleBuilder.build appends a fresh font/fill/xf on every
+    // call without dedup, so 10 header cells + 10 columns sharing 2 styles
+    // previously produced 20 identical records (and 20 distinct styleIndex
+    // values). The builder now caches by structural key.
+    const builder = await WorkbookBuilder.create();
+    const columns = Array.from({ length: 10 }, (_, i) => ({
+      key: `c${i}`,
+      header: `C${i}`,
+      style: StylePresets.currency,
+      headerStyle: StylePresets.header,
+    }));
+    builder.addSheet({
+      name: "Dedup",
+      columns,
+      data: [Object.fromEntries(columns.map((c) => [c.key, 1]))],
+    });
+    const bytes = await builder.toBuffer();
+
+    // Cells sharing one style share one styleIndex.
+    const wb = await readBuffer(bytes);
+    const ws = wb.getSheet("Dedup")!;
+    const headerIdx = ws.cell("A1").styleIndex;
+    const dataIdx = ws.cell("A2").styleIndex;
+    for (let col = 1; col <= 10; col++) {
+      const ref = `${String.fromCharCode(64 + col)}1`;
+      expect(ws.cell(ref).styleIndex).toBe(headerIdx);
+      expect(ws.cell(`${ref.slice(0, -1)}2`).styleIndex).toBe(dataIdx);
+    }
+    expect(headerIdx).not.toBe(dataIdx);
+
+    // And the serialized styles table stays small: 2 styled xfs (+ modern-xlsx
+    // defaults), not one record per styled cell/column.
+    const stylesXml = strFromU8(unzipSync(bytes)["xl/styles.xml"]);
+    const fontCount = (stylesXml.match(/<font[ >]/g) ?? []).length;
+    expect(fontCount).toBeLessThan(6);
   });
 });

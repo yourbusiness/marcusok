@@ -79,13 +79,17 @@ const series = computed<ComputedSeries[]>(() =>
       const defs = b.series;
       const allValues = data.flatMap((d) => Object.values(d.values));
       const maxVal = Math.max(...allValues, 1);
+      const tickValues = computeTicks(maxVal);
+      // Scale bars against the LARGEST TICK, not the data max: computeTicks may
+      // emit a round tick above maxVal (e.g. max 780 -> 1000), and a maxVal
+      // full-scale previously drew that gridline above the plot area (or clipped
+      // out of the SVG entirely for max values in ~[10^k*0.67, 10^k*1.5]).
+      const scaleMax = Math.max(maxVal, tickValues[tickValues.length - 1] ?? 0);
       // Guard: maxLog <= 0 means all values are 0 or 1 -- clamp to 1 so
       // barH never produces Infinity/NaN.
-      const maxLog = Math.max(Math.log10(maxVal), 1);
+      const maxLog = Math.max(Math.log10(scaleMax), 1);
       const barH = (v: number) =>
         v > 0 ? (Math.log10(v) / maxLog) * plotH : 0;
-
-      const tickValues = computeTicks(maxVal);
       const groupW = (W - padL - 20) / data.length;
       const groupX = (i: number) => padL + groupW * i + groupW / 2;
       const seriesCount = defs.length;

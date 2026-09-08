@@ -4,7 +4,7 @@ import {
   encodeCellRef,
   type Worksheet,
 } from "modern-xlsx";
-import type { SheetConfig, ColumnConfig } from "./types";
+import type { CellStyle, SheetConfig, ColumnConfig } from "./types";
 import { buildStyleIndex } from "./style-utils";
 import { flattenColumnTree, type HeaderCell } from "./column-tree";
 import { getWasmLoader } from "./wasm-loader";
@@ -27,6 +27,14 @@ const XLSX_MIME =
  */
 export class WorkbookBuilder {
   private wb: Workbook;
+  /**
+   * structural CellStyle -> styleIndex. modern-xlsx's StyleBuilder.build
+   * appends a fresh font/fill/xf record on every call (no dedup, verified in
+   * 1.2.0 dist), so the same style used by N header cells or columns
+   * previously produced N identical records. Keyed by JSON.stringify: two
+   * structurally-identical styles share an index; a cache miss is harmless.
+   */
+  private styleIndexCache = new Map<string, number>();
 
   private constructor() {
     this.wb = new Workbook();
@@ -102,7 +110,7 @@ export class WorkbookBuilder {
     headerCells.forEach((cell) => {
       const headerStyle = cell.column.headerStyle ?? config.headerStyle;
       if (headerStyle) {
-        const idx = buildStyleIndex(this.wb, headerStyle);
+        const idx = this.cachedStyleIndex(headerStyle);
         const target = ws.cell(encodeCellRef(cell.row, cell.col));
         if (target) target.styleIndex = idx;
       }
@@ -115,7 +123,7 @@ export class WorkbookBuilder {
     // plain JS property write, bypassing ws.cell(ref) ref-parsing overhead.
     columns.forEach((c, i) => {
       if (c.style) {
-        const idx = buildStyleIndex(this.wb, c.style);
+        const idx = this.cachedStyleIndex(c.style);
         for (const row of ws.rows.slice(headerRowCount)) {
           const cell = row.cells[i];
           if (cell) cell.styleIndex = idx;
@@ -153,6 +161,19 @@ export class WorkbookBuilder {
     });
 
     return this;
+  }
+
+  /**
+   * buildStyleIndex wrapper that returns a cached index for structurally
+   * identical styles (see styleIndexCache) instead of appending duplicates.
+   */
+  private cachedStyleIndex(style: CellStyle): number {
+    const key = JSON.stringify(style);
+    const cached = this.styleIndexCache.get(key);
+    if (cached !== undefined) return cached;
+    const idx = buildStyleIndex(this.wb, style);
+    this.styleIndexCache.set(key, idx);
+    return idx;
   }
 
   /** Serialize to Uint8Array (async, avoids sync writeBlob blocking main thread). */

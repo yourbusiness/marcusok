@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { exportWithSheetJS } from "../fallback";
 import type { ExportOptions } from "../types";
 import { readBuffer } from "./setup";
@@ -116,5 +116,54 @@ describe("SheetJS fallback (exportWithSheetJS)", () => {
 
     expect(result.success).toBe(true);
     expect(result.rowCount).toBe(5);
+  });
+
+  it("lists configured layout features in the degradation warning", async () => {
+    // Parity with the stream path's per-feature warnings: width/freezeRows/
+    // autoFilter are dropped alongside styles, and the warning must say so
+    // instead of degrading them silently.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const opts = makeOptions("fallback-dropped-features");
+      opts.sheets[0].freezeRows = 1;
+      opts.sheets[0].autoFilter = true;
+      opts.sheets[0].columns = opts.sheets[0].columns.map((c) => ({
+        ...c,
+        width: 12,
+      }));
+
+      const result = await exportWithSheetJS(
+        opts,
+        performance.now(),
+        "test: dropped features",
+      );
+      expect(result.success).toBe(true);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const msg = warn.mock.calls[0][0] as string;
+      expect(msg).toContain("styles stripped");
+      expect(msg).toContain("freezeRows");
+      expect(msg).toContain("autoFilter");
+      expect(msg).toContain("width");
+      expect(msg).toContain("Reason: test: dropped features");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("keeps the plain warning when no layout features are configured", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const result = await exportWithSheetJS(
+        makeOptions("fallback-no-features"),
+        performance.now(),
+        "test: no features",
+      );
+      expect(result.success).toBe(true);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).not.toContain("also dropped");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

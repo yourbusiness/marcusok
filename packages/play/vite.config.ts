@@ -16,6 +16,15 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 const packagesDir = resolve(rootDir, "..");
 
 /**
+ * Escape regex metacharacters in a package name before splicing it into a
+ * RegExp. Names like "pdf.js" would otherwise silently mis-anchor the alias
+ * patterns (the dot matches any character) instead of failing loudly.
+ */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * Source entry of a workspace package. The monorepo convention is
  * src/index.ts (fallback: src/index.tsx); packages that don't follow it get
  * a startup warning below and resolve through their dist instead (no HMR).
@@ -89,10 +98,21 @@ const externalOverrides: {
   },
 ];
 
+// Fail loud, symmetric with the @marcusok/* check above: an entry whose dir
+// cannot be resolved would otherwise be skipped silently and its subpath
+// imports would 500 at dev time with no hint why.
+for (const { pkg, dir } of externalOverrides) {
+  if (!dir) {
+    console.warn(
+      `[play] externalOverrides 声明了 "${pkg}"，但无法从 ${rootDir} 解析到该包目录（检查它是否已安装、exports 是否仅含 import 条件）。相关子路径导入将走正常解析并可能 404/500。`,
+    );
+  }
+}
+
 // Main-entry aliases: @marcusok/<pkg> -> src/index.ts(.tsx) (HMR-friendly source).
 // Anchored regex so it does NOT swallow subpaths like /dist/export.worker.js.
 const mainAliases = sourcePackages.map(({ name, dir }) => ({
-  find: new RegExp(`^@marcusok/${name}$`),
+  find: new RegExp(`^@marcusok/${escapeRegExp(name)}$`),
   replacement: sourceEntry(dir),
 }));
 
@@ -162,7 +182,7 @@ export default defineConfig({
         // normal resolution.
         for (const { pkg, dir } of externalOverrides) {
           if (!dir) continue;
-          const m = clean.match(new RegExp(`^${pkg}/(.+)$`));
+          const m = clean.match(new RegExp(`^${escapeRegExp(pkg)}/(.+)$`));
           if (m) {
             const physical = resolve(dir, m[1]!);
             if (existsSync(physical)) return physical + query;

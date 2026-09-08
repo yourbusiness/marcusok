@@ -10,7 +10,9 @@ export interface DemoEntry {
    * stay lightweight — metadata only — so the home page never pulls heavy
    * dependencies. Put the actual UI in a separate *.demo.tsx file and
    * dynamic-import it here; the returned module's default export is a React
-   * component rendered inside a Suspense boundary.
+   * component rendered by App.tsx's state-driven LazyDemo (Spin placeholder
+   * while loading, then the component — no lazy()/Suspense, per React
+   * Compiler's static-components constraint).
    */
   load: () => Promise<{ default: ComponentType }>;
 }
