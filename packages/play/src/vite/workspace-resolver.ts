@@ -23,11 +23,30 @@ export function isFile(p: string): boolean {
  * entry and walking up until we find the package.json whose "name" matches.
  * Unlike assuming a fixed "<root>/dist/index.js" layout, this handles any
  * entry depth (root-level main, dist/esm/..., ...). Returns "" if not found.
+ *
+ * When the main entry cannot be resolved (its file does not exist — e.g. a
+ * workspace package whose "exports" points at a dist artifact that has not
+ * been built yet, which is the normal state on a fresh checkout before the
+ * first build), fall back to resolving "<pkg>/package.json". The package
+ * ROOT is still locatable even when the entry artifact is missing.
  */
 export function resolvePkgDir(pkg: string, fromDir: string): string {
+  let main: string;
   try {
     const requireFromDir = createRequire(resolve(fromDir, "noop.js"));
-    const main = requireFromDir.resolve(pkg, { paths: [fromDir] });
+    try {
+      main = requireFromDir.resolve(pkg, { paths: [fromDir] });
+    } catch {
+      main = requireFromDir.resolve(`${pkg}/package.json`, {
+        paths: [fromDir],
+      });
+    }
+  } catch {
+    // not resolvable from the caller's dependency tree (neither the main
+    // entry nor an exported "./package.json" subpath)
+    return "";
+  }
+  try {
     let dir = dirname(main);
     while (dir !== dirname(dir)) {
       const pkgJsonPath = resolve(dir, "package.json");
@@ -44,7 +63,7 @@ export function resolvePkgDir(pkg: string, fromDir: string): string {
       dir = dirname(dir);
     }
   } catch {
-    // not resolvable from the caller's dependency tree
+    // filesystem error while walking up: fall through to ""
   }
   return "";
 }

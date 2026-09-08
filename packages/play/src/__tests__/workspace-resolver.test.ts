@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   isFile,
@@ -118,8 +125,38 @@ describe("resolvePkgDir", () => {
   });
 
   it("locates a workspace dependency at its monorepo source directory", () => {
+    // Fresh checkouts run this test BEFORE the workspace package's first
+    // build (turbo's test task has no ^build dependency), so "exports"."."
+    // may point at a dist/index.js that does not exist yet — the fixture
+    // below covers that fallback branch; with dist present the main-entry
+    // branch resolves. Either way the root must be the source directory.
     const dir = resolvePkgDir("@marcusok/excel-exporter", playDir);
     expect(dir).toBe(exporterDir);
+  });
+
+  it("falls back to <pkg>/package.json when the main entry artifact is missing", () => {
+    // Hermetic fixture: a node_modules package whose exports map points its
+    // main entry at a nonexistent dist file (a fresh, unbuilt checkout) but
+    // exposes "./package.json" — the state where the previous implementation
+    // threw inside require.resolve and returned "".
+    const base = mkdtempSync(join(tmpdir(), "resolver-fallback-"));
+    try {
+      const pkgDir = join(base, "node_modules", "stub-pkg");
+      mkdirSync(pkgDir, { recursive: true });
+      writeFileSync(
+        join(pkgDir, "package.json"),
+        JSON.stringify({
+          name: "stub-pkg",
+          exports: {
+            ".": "./dist/never-built.js",
+            "./package.json": "./package.json",
+          },
+        }),
+      );
+      expect(resolvePkgDir("stub-pkg", base)).toBe(pkgDir);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   it("returns an empty string for unresolvable packages", () => {
