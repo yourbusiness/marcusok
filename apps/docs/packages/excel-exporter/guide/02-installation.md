@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node `>= 22` (the package's `engines` requirement); any package manager works — examples use pnpm, npm / yarn are equivalent
+- Node `>= 22` (the package's `engines` requirement); any package manager works — examples use pnpm, npm / yarn are equivalent. The peer `modern-xlsx` additionally declares `engines.node >= 24` — Node 22 works in practice, but a package manager that enforces engines checks rejects the install (see the note below)
 - Browsers need WebAssembly support (all modern browsers)
 - `modern-xlsx@^1.2.0` is a required peerDependency; `xlsx` (SheetJS) is optional for the fallback
 
@@ -11,6 +11,8 @@
 ```bash
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
+
+> **Node version note**: `modern-xlsx` declares `engines.node >= 24`, but its WASM core targets browsers and Node 22 works in practice — this package is developed and CI-tested on Node 22. If your package manager rejects the install on Node 22 with an engines error (e.g. pnpm with `engine-strict` enabled), add `engine-strict=false` to your project's `.npmrc`, or upgrade to Node >= 24.
 
 Install SheetJS only if you want a local fallback. Use the official CDN tarball, not npm: the last npm release (`0.18.5`) is unmaintained and carries known CVEs (CVE-2023-30533, CVE-2024-22363), while fixes are only published on the SheetJS CDN.
 

@@ -8,6 +8,8 @@
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
+> **Node 版本说明**：必装 peer `modern-xlsx` 声明了 `engines.node >= 24`，但其 WASM 核心面向浏览器，Node 22 实际可正常使用——本包在 Node 22 上开发并通过 CI。若包管理器在 Node 22 下因 engines 校验拒绝安装（如 pnpm 开启 `engine-strict` 时报错），可在项目 `.npmrc` 中加一行 `engine-strict=false`，或升级到 Node ≥ 24。
+
 `modern-xlsx` 是必装 peerDependency，原因有三：
 
 1. `modern-xlsx.wasm`（约 1.9MB）需要由消费方作为静态资源自行部署，隐式依赖会掩盖这一硬性要求；

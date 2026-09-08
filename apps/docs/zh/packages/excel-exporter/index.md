@@ -21,6 +21,8 @@
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
+> **Node 版本说明**：peer `modern-xlsx` 声明了 `engines.node >= 24`，但 Node 22 实际可用——若包管理器在 Node 22 下拒绝安装，在项目 `.npmrc` 设 `engine-strict=false` 或升级 Node，详见 [快速开始](/zh/guide/01-getting-started)。
+
 浏览器环境还需部署 `modern-xlsx.wasm` 与 `export.worker.js` 并调用 `configureWasm`，详见 [快速开始](/zh/guide/01-getting-started)。
 
 ## 快速上手

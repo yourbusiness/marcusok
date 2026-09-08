@@ -8,6 +8,8 @@ Run your first Excel export in minutes. Requirement: Node `>= 22`. Example comma
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
+> **Node version note**: the required peer `modern-xlsx` declares `engines.node >= 24`, but its WASM core targets browsers and Node 22 works in practice — this package is developed and CI-tested on Node 22. If your package manager rejects the install on Node 22 with an engines error (e.g. pnpm with `engine-strict` enabled), add `engine-strict=false` to your project's `.npmrc`, or upgrade to Node >= 24.
+
 `modern-xlsx` is a required peerDependency because:
 
 1. `modern-xlsx.wasm` (~1.9MB) must be self-hosted by the consumer as a static asset — an implicit dependency would hide this hard requirement;

@@ -21,6 +21,8 @@ An Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/moder
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
 
+> **Node version note**: the peer `modern-xlsx` declares `engines.node >= 24` while Node 22 works in practice — if your package manager rejects the install on Node 22, set `engine-strict=false` in your project's `.npmrc` or upgrade Node. Details in [Getting Started](/guide/01-getting-started).
+
 Browser consumers must also deploy `modern-xlsx.wasm` and `export.worker.js` and call `configureWasm` — see [Getting Started](/guide/01-getting-started).
 
 ## Quick example

@@ -2,7 +2,7 @@
 
 ## 环境要求
 
-- Node `>= 22`（包的 `engines` 要求）；包管理器不限，本文示例命令用 pnpm，npm / yarn 等价
+- Node `>= 22`（包的 `engines` 要求）；包管理器不限，本文示例命令用 pnpm，npm / yarn 等价。peer `modern-xlsx` 额外声明了 `engines.node >= 24`——Node 22 实际可用，但开启 engines 校验的包管理器会拒绝安装（见下方说明）
 - 浏览器需要支持 WebAssembly（现代浏览器均支持）
 - 依赖：`modern-xlsx@^1.2.0` 为必装 peerDependency；`xlsx`（SheetJS）为可选兜底依赖
 
@@ -11,6 +11,8 @@
 ```bash
 pnpm add @marcusok/excel-exporter modern-xlsx
 ```
+
+> **Node 版本说明**：`modern-xlsx` 声明了 `engines.node >= 24`，但其 WASM 核心面向浏览器，Node 22 实际可正常使用——本包在 Node 22 上开发并通过 CI。若包管理器在 Node 22 下因 engines 校验拒绝安装（如 pnpm 开启 `engine-strict` 时报错），可在项目 `.npmrc` 中加一行 `engine-strict=false`，或升级到 Node ≥ 24。
 
 需要兜底时额外安装 SheetJS。请使用官方 CDN 的 tarball 而非 npm 版本：npm 上的最后一个版本（`0.18.5`）已停止维护且存在已知 CVE（CVE-2023-30533、CVE-2024-22363），修复版只在 SheetJS 官方 CDN 发布。
 
