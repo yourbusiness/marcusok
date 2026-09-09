@@ -1,5 +1,17 @@
 # @marcusok/excel-exporter
 
+## 1.3.0
+
+### Minor Changes
+
+- d470ba9: Simplify asset integration and Node setup:
+
+  - feat: `modern-xlsx.wasm` is re-published under this package's own `exports` map (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`, forwarded at build time). Vite consumers now integrate assets with two `?url` imports + one `configureWasm` call — no copy plugin, no `public/` setup. The previous ~30-line copy plugin remains documented as the fallback for bundlers without asset-URL imports (its copy source also collapses to this package's `dist/`).
+  - feat: Node/SSR zero-configuration — when no `wasmUrl` is configured, the engine locates `modern-xlsx.wasm` through `node_modules` via `createRequire` (pnpm-symlink-safe, verified against a published-tarball install) and initializes it synchronously on first use (~20ms measured: ~4ms read + ~15ms compile). The six-line `initWasmSync(readFileSync(...))` entry boilerplate is no longer required; the explicit form stays supported for init-timing control, and any auto-init failure silently falls back to the previous `initWasm` → SheetJS degradation chain.
+  - refactor: `modern-xlsx` moved from `peerDependencies` to `dependencies` — consumers install one package, and the wasm binary always ships with the matching JS glue (its own `exports` map omits wasm subpaths, which is why the forwarding exists). `xlsx` (SheetJS) remains an optional peerDep. Engines note unchanged: modern-xlsx declares `node>=24`; Node 22 works and CI runs there.
+  - docs: README + docs-site installation/getting-started/FAQ/Node-SSR pages restructured around the layered story — `wasmUrl` is the only always-needed asset (explicit `mode: "stream"` excepted), `workerUrl` is needed only for Worker routes (auto >= 20k rows).
+  - tests: 100 → 107 (CI runs 103): Node auto-init unit tests (mock-missing-initWasmSync fallback, initWasmSync-throw degradation, configured-URL opt-out, browser-scope opt-out), a real-wasm integration file (zero-config load + real `engine: "modern-xlsx"` export), and a mock-compat fallback case. Package vitest now runs files serially (`fileParallelism: false`): the real-wasm files' CPU spikes previously pushed the timing-based performance baselines past their SLA thresholds under parallel workers (observed 204-273ms vs ~120ms isolated).
+
 ## 1.2.3
 
 ### Patch Changes
