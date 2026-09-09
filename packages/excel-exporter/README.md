@@ -19,47 +19,61 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 ## Installation
 
 ```bash
-pnpm add @marcusok/excel-exporter modern-xlsx
+pnpm add @marcusok/excel-exporter
 ```
 
-Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package passes all tests on Node 22 (100 cases in total; CI defaults to `RUN_PERF=0`, skipping 4 performance benchmarks and running 96). If your package manager enforces engines checks, installing modern-xlsx fails on Node 22 — set `engine-strict=false` in your project's `.npmrc` (the same approach this repository uses) or upgrade to Node >= 24. This package was developed and tested against 1.2.0 — consumers are advised to pin that version (the peerDep range `^1.2.0` is allowed, but higher versions are unverified).
+Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). The engine dependency `modern-xlsx@^1.2.0` is installed automatically. modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package's full test suite passes on Node 22 (CI runs there). If your package manager enforces engines checks, installation fails on Node 22 — set `engine-strict=false` in your project's `.npmrc` (the same approach this repository uses) or upgrade to Node >= 24.
 
-> modern-xlsx is declared as a `peerDependency`, so consumers must install it explicitly. Reasons: (1) `modern-xlsx.wasm` (1.9MB) must be deployed by the consumer as a static asset — an implicit dependency would hide this hard requirement; (2) peerDep is semantically correct — this package wraps modern-xlsx and version control belongs to the consumer; (3) package managers auto-install peerDependencies by default (npm 7+ / pnpm 8+), and an implicitly installed version is outside the consumer's control — an explicit declaration is what pins the version intent. `xlsx` (SheetJS) is an optional peerDep, needed only for the fallback path.
+> modern-xlsx is a direct `dependency`: this package pins the engine version it was tested against, and re-publishes `modern-xlsx.wasm` under its own `exports` map (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`), so the binary always ships with the matching JS glue — and bundlers can import it directly (modern-xlsx's own `exports` map omits its wasm subpaths, which would otherwise force a manual copy step). `xlsx` (SheetJS) is an optional peerDep, needed only for the fallback path.
 >
 > Security note on the optional `xlsx` peer: the last npm release (`0.18.5`) is unmaintained and carries known CVEs (CVE-2023-30533 ReDoS, CVE-2024-22363 prototype pollution). If you provide `xlsx` yourself, install the maintained build from the official CDN instead of npm: `pnpm add https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`. The peer range stays `>=0.18.5` for compatibility, and when no local `xlsx` is present the fallback loads `0.20.3` from the SheetJS CDN at runtime.
 
 ## Setup (Browser)
 
-Two static assets must be reachable from the consuming site: `modern-xlsx.wasm` (1.9MB) and `export.worker.js`.
+One asset is required on nearly every route: `modern-xlsx.wasm` (1.9MB, the style engine — the only exception is an explicit `mode: "stream"`, whose pure-JS fast stream needs no WASM). A second one, `export.worker.js`, is needed only when exports actually enter a Worker — auto mode with >= 20,000 rows, or an explicit `mode: "worker"` / `mode: "stream"`. Both files live in this package's `dist/` (the wasm is forwarded there at build time), so everything resolves through `@marcusok/excel-exporter` imports.
 
-The recommended approach is a Vite plugin that resolves the real paths via `require.resolve` in `buildStart` and copies them into `public/assets/`, avoiding hardcoded `node_modules` paths (incompatible with pnpm symlinks). See [design doc 6.2](https://github.com/yourbusiness/marcusok/blob/main/docs/excel-export-design.md) for details.
+### Vite (recommended)
+
+Import the assets with the `?url` suffix — Vite serves them in dev and hashes them into `dist/assets/` at build time. No copy plugin, no `public/` directory, nothing hardcoded:
 
 ```ts
-// vite.config.ts
+// main.ts
+import { configureWasm } from "@marcusok/excel-exporter";
+// Re-published by this package (modern-xlsx's own exports map omits wasm subpaths)
+import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
+// Optional — drop this line entirely if your exports stay under 20k rows
+import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
+
+configureWasm({ wasmUrl, workerUrl });
+```
+
+### Other setups (copy the files)
+
+If your bundler has no asset-URL import, copy both files out of this package's `dist/` into a static directory. Resolving the real path via `require.resolve` in `buildStart` avoids hardcoded `node_modules` paths (which break under pnpm symlinks):
+
+```ts
+// vite.config.ts / build script
 import { defineConfig } from "vite";
 import { createRequire } from "node:module";
 import { copyFileSync, mkdirSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 
 const require = createRequire(import.meta.url);
-const resolveDistDir = (spec: string) => dirname(require.resolve(spec));
+// Single source: both assets ship in @marcusok/excel-exporter/dist
+const pkgDist = dirname(require.resolve("@marcusok/excel-exporter"));
 
 export default defineConfig({
   plugins: [
     {
-      name: "copy-modern-xlsx-assets",
+      name: "copy-excel-exporter-assets",
       buildStart() {
         mkdirSync("public/assets", { recursive: true });
-        copyFileSync(
-          `${resolveDistDir("modern-xlsx")}/modern-xlsx.wasm`,
-          "public/assets/modern-xlsx.wasm",
-        );
-        const workerSrc = `${resolveDistDir("@marcusok/excel-exporter")}/export.worker.js`;
-        if (!statSync(workerSrc, { throwIfNoEntry: false }))
-          throw new Error(
-            `export.worker.js not found. Run pnpm build first. Looked at: ${workerSrc}`,
-          );
-        copyFileSync(workerSrc, "public/assets/export.worker.js");
+        for (const file of ["modern-xlsx.wasm", "export.worker.js"]) {
+          const src = `${pkgDist}/${file}`;
+          if (!statSync(src, { throwIfNoEntry: false }))
+            throw new Error(`${file} not found. Looked at: ${src}`);
+          copyFileSync(src, `public/assets/${file}`);
+        }
       },
     },
   ],
@@ -202,7 +216,9 @@ When the browser Worker route fails (missing/404 `workerUrl`, WASM init error in
 
 Node has no Web Worker, so auto routing degrades to main (<50k rows) or stream (>=50k rows) on the main thread.
 
-Node's `fetch` rejects the `file://` protocol, so **when consuming the package locally in Node you cannot rely on `exportExcel()` to auto-load WASM**. A production server must initialize WASM explicitly first (`initWasmSync`), or provide a fetchable HTTP URL via `configureWasm({ wasmUrl })`:
+**No boilerplate needed.** When no `wasmUrl` is configured, the engine locates `modern-xlsx.wasm` through `node_modules` on first use (`createRequire`, pnpm-symlink-safe) and initializes it synchronously (`initWasmSync`). Node's `fetch` rejects the `file://` auto-detected URL, so this path replaces the manual init snippet previous versions required — there is nothing to call and nothing to copy.
+
+To control initialization timing yourself (e.g. move the one-off synchronous read+compile to startup instead of the first request), keep the explicit form, which remains fully supported:
 
 ```ts
 import { readFileSync } from "node:fs";
@@ -216,7 +232,7 @@ initWasmSync(
 );
 ```
 
-Node version: this package declares `engines.node >=22`, and CI runs Node 22. The peer modern-xlsx declares `>=24`, but its WASM core targets browsers — everything is green on Node 22.
+Alternatively, `configureWasm({ wasmUrl })` with an HTTP(S) URL works too (fetched, not read from disk). Node version: this package declares `engines.node >=22`, and CI runs Node 22. The dependency modern-xlsx declares `>=24`, but its WASM core targets browsers — everything is green on Node 22.
 
 ## Design Decisions
 

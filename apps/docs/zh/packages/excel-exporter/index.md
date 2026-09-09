@@ -61,7 +61,7 @@ await exportExcel({
 ## 版本与依赖
 
 - 当前版本：构建时从工作区 `package.json` 读取（单一数据源；文档站不查询 npm registry）
-- peerDependencies：`modern-xlsx@^1.2.0`（必装）、`xlsx@>=0.18.5`（可选，兜底）
+- dependencies：`modern-xlsx@^1.2.0`（引擎，随包自动安装；wasm 由本包转发暴露）；peerDependencies：`xlsx@>=0.18.5`（可选，兜底）
 - 环境：Node >= 22；浏览器需支持 WebAssembly
 
 > 性能数字为本机实测（真实 Chrome，6 列混合类型），详见 [性能参考](/zh/packages/excel-exporter/guide/07-performance)。

@@ -16,6 +16,7 @@ export default tseslint.config(
       "apps/docs/eslint.config.mjs",
       "apps/docs/scripts/**",
       "eslint.config.mjs",
+      "packages/excel-exporter/scripts/**",
       "packages/excel-exporter/tsup.config.ts",
       "packages/excel-exporter/vitest.config.ts",
       "scripts/**",

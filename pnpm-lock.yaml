@@ -110,6 +110,9 @@ importers:
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
+      modern-xlsx:
+        specifier: ^1.2.0
+        version: 1.2.0
     devDependencies:
       "@types/node":
         specifier: ^22.10.0
@@ -117,9 +120,6 @@ importers:
       eslint:
         specifier: ^9.16.0
         version: 9.39.5(jiti@2.6.1)
-      modern-xlsx:
-        specifier: 1.2.0
-        version: 1.2.0
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.23)(typescript@5.9.3)(yaml@2.9.0)

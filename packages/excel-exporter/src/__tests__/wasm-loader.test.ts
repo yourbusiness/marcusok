@@ -115,4 +115,17 @@ describe("WasmLoader error recovery", () => {
       warn.mockRestore();
     }
   });
+
+  it("falls back to initWasm when the mocked modern-xlsx lacks initWasmSync", async () => {
+    // The mock factory in this file has no initWasmSync export (test doubles
+    // often won't): Node auto-init must step aside instead of throwing when
+    // wasmUrl is unconfigured, so the initWasm path runs as before.
+    initWasmMock.mockResolvedValue(undefined);
+    const loader = makeLoader();
+
+    await loader.ensureLoaded();
+    expect(loader.isReady).toBe(true);
+    expect(initWasmMock).toHaveBeenCalledTimes(1);
+    expect(initWasmMock).toHaveBeenCalledWith(undefined);
+  });
 });

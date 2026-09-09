@@ -2,7 +2,7 @@
 
 ### 浏览器报 WASM 404
 
-`modern-xlsx.wasm` 没有部署到站点可访问路径。按 [快速开始](/zh/guide/01-getting-started) 中的 Vite 插件把 wasm 拷贝到 `public/assets/`，并确保 `configureWasm({ wasmUrl })` 指向正确地址。
+`modern-xlsx.wasm` 没有部署到站点可访问路径。按 [快速开始](/zh/guide/01-getting-started) 用 `?url` 导入 `@marcusok/excel-exporter/dist/modern-xlsx.wasm`（Vite 自动处理部署），或用拷贝方案把它复制到 `public/assets/`，并确保 `configureWasm({ wasmUrl })` 指向正确地址。
 
 ### Worker 模式报 "workerUrl not configured"
 

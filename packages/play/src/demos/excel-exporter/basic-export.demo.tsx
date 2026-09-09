@@ -32,7 +32,7 @@ import {
   type MergeRange,
 } from "@marcusok/excel-exporter";
 import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
-import wasmUrl from "modern-xlsx/wasm/modern_xlsx_wasm_bg.wasm?url";
+import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
 import {
   createDataset,
   DATASET_PRESETS,

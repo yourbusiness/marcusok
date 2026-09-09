@@ -96,12 +96,55 @@ export class WasmLoader {
     }
   }
 
+  /**
+   * Node auto-init: when no wasmUrl is configured and we run on Node, locate
+   * modern-xlsx's wasm binary via createRequire (the same resolution the docs
+   * recommend for manual initWasmSync) and initialize synchronously. This
+   * removes the boilerplate initWasmSync(readFileSync(...)) from every Node
+   * consumer's entry file.
+   *
+   * Returns false in browsers, when a URL is configured, or on any failure,
+   * so the standard initWasm path (and its SheetJS degradation) is untouched.
+   *
+   * Node built-ins MUST stay dynamically imported: this module also ships in
+   * browser bundles, where a static `import "node:fs"` would fail to resolve.
+   */
+  private async tryNodeAutoInit(): Promise<boolean> {
+    if (this.opts.wasmUrl !== undefined) return false;
+    if (typeof process === "undefined" || !process.versions?.node) return false;
+    try {
+      const [moduleNs, fsNs, pathNs, mx] = await Promise.all([
+        import("node:module"),
+        import("node:fs"),
+        import("node:path"),
+        import("modern-xlsx"),
+      ]);
+      // Test suites mock modern-xlsx with a bare { initWasm } factory; a
+      // missing initWasmSync must skip auto-init, not throw a TypeError.
+      if (typeof mx.initWasmSync !== "function") return false;
+      const require = moduleNs.createRequire(import.meta.url);
+      const wasmPath = `${pathNs.dirname(require.resolve("modern-xlsx"))}/modern-xlsx.wasm`;
+      mx.initWasmSync(fsNs.readFileSync(wasmPath));
+      return true;
+    } catch {
+      // Resolution/read/init failure (e.g. a consumer bundling for Node
+      // without the runtime package on disk): fall through to initWasm,
+      // which retries and degrades exactly as before this path existed.
+      return false;
+    }
+  }
+
   private async loadWithRetry(): Promise<void> {
     if (!this.supported) {
       throw new Error(
         "[excel-exporter] WebAssembly not supported in this environment",
       );
     }
+    // Node without a configured URL: locate and init the wasm synchronously
+    // (initWasmSync) instead of fetching a file:// URL that Node's fetch
+    // rejects. Idempotent with initWasm (shared "initialized" flag inside
+    // modern-xlsx), so a later initWasm call on the same thread is a no-op.
+    if (await this.tryNodeAutoInit()) return;
     const wasmUrl = this.opts.wasmUrl;
     const timeoutMs = this.opts.timeoutMs ?? 10_000;
     const maxRetries = this.opts.maxRetries ?? 3;
