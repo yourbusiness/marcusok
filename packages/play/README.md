@@ -149,24 +149,31 @@ in the component's `useEffect` cleanup, which runs automatically on navigation
 
 ## Worker / WASM Assets
 
-If your package uses runtime assets like Workers or WASM (not resolvable via
-plain imports), import the asset path with Vite's `?url` suffix and pass it to
-the package's configure function. See the `excel-exporter` demo:
+Packages that locate runtime assets via `new URL(<file>, import.meta.url)`
+relative to their dist entry work zero-config in real consumer builds, but the
+source aliases above point the main entry at `src/`, where those literals
+resolve to files that do not exist (Vite's asset/worker plugins resolve them
+directly on disk, not through the plugin container). The
+`marcusok-src-asset-overrides` plugin in `vite.config.ts` handles this by
+rewriting those literals to the package's real `dist/` copies in src mode.
+
+Two ways to wire assets in a demo:
+
+1. **Zero-config (preferred)** — nothing to do; the demo imports the package
+   and the resolver maps the assets. See the `excel-exporter` demo.
+2. **Explicit** — import the asset with Vite's `?url` suffix and pass it to the
+   package's configure function:
 
 ```ts
 import workerUrl from "@marcusok/your-pkg/dist/your.worker.js?url";
-import wasmUrl from "your-wasm-dep/your.wasm?url";
-
-yourPkg.configure({ workerUrl, wasmUrl });
+yourPkg.configure({ workerUrl });
 ```
 
-Note that `@marcusok/<pkg>/dist/*.worker.js` is build output, so upstream
-packages must be built (both `pnpm dev` and `pnpm dev:play` do this
-automatically). Changes to dist output do not trigger HMR (the source alias only
-covers the main entry and subpath sources) — after changing a worker or similar
-artifact, rebuild the upstream package and refresh the page manually. Without
-worker/wasm configured, a package may silently degrade to a fallback path (e.g.
-excel-exporter falls back to SheetJS, losing styles).
+Note that `@marcusok/<pkg>/dist/*` is build output, so upstream packages must
+be built (both `pnpm dev` and `pnpm dev:play` do this automatically). Changes
+to dist output do not trigger HMR (the source alias only covers the main entry
+and subpath sources) — after changing a worker or similar artifact, rebuild
+the upstream package and refresh the page manually.
 
 ## Toolchain
 

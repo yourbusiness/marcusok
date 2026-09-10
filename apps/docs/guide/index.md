@@ -4,9 +4,9 @@
 
 ## Current packages
 
-| Package                                                 | Status | Description                                                                                                   |
-| ------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, SheetJS fallback |
+| Package                                                 | Status | Description                                                                                                  |
+| ------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback |
 
 ## Engineering conventions
 

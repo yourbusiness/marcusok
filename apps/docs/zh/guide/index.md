@@ -6,7 +6,7 @@
 
 | 包                                                         | 状态   | 说明                                                                                         |
 | ---------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](/zh/packages/excel-exporter/) | stable | Excel 导出核心库：modern-xlsx + Fast stream、完整样式、Worker 多线程、快速写入、SheetJS 兜底 |
+| [`@marcusok/excel-exporter`](/zh/packages/excel-exporter/) | stable | Excel 导出核心库：modern-xlsx + Fast stream、完整样式、Worker 多线程、快速写入、流式降级兜底 |
 
 ## 工程约定
 

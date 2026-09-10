@@ -1,5 +1,5 @@
 import type { ColumnConfig, ExportOptions, ExportResult } from "./types";
-import { getWasmLoader } from "./wasm-loader";
+import { defaultWasmUrl, getWasmLoader } from "./wasm-loader";
 import { toBlobPart } from "./download";
 
 const XLSX_MIME =
@@ -49,12 +49,17 @@ type WorkerResponse =
 function getOrCreateWorker(): Worker {
   if (worker) return worker;
   const { workerUrl } = getWasmLoader().getOptions();
-  if (!workerUrl) {
-    throw new Error(
-      '[excel-exporter] workerUrl not configured. Call configureWasm({ workerUrl: "..." }) to point at export.worker.js (see README).',
-    );
-  }
-  const w = (worker = new Worker(workerUrl, { type: "module" }));
+  // Hoisted deliberately. The inline `new Worker(new URL(<literal>,
+  // import.meta.url), ...)` form makes bundlers RE-BUNDLE the worker as a
+  // build entry — Vite 5 (VitePress) even fails outright on it (its default
+  // iife worker format rejects the code-splitting our engine's dead Node
+  // dynamic imports produce). Hoisted, only the asset-import-meta-url pattern
+  // matches, so bundlers emit the shipped file verbatim as a hashed asset —
+  // and dist/export.worker.js is a self-contained ESM with zero imports,
+  // built precisely so the verbatim copy loads as-is.
+  const url = workerUrl ?? new URL("./export.worker.js", import.meta.url);
+  const w = new Worker(url, { type: "module" });
+  worker = w;
   // Single onmessage handler registered once, dispatches by id.
   worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     const data = e.data;
@@ -78,7 +83,7 @@ function getOrCreateWorker(): Worker {
   };
   // A worker that errored (e.g. script failed to load) must not be reused:
   // terminate it and drop the cached reference so the next export creates a
-  // fresh one, instead of failing forever into the SheetJS fallback. Only the
+  // fresh one, instead of failing forever into the stream fallback. Only the
   // requests dispatched to THIS worker are rejected -- a replacement worker
   // may already be serving newer request ids.
   w.onerror = (err) => {
@@ -125,7 +130,10 @@ export async function exportInWorker(
   mode: "workbook" | "stream",
 ): Promise<ExportResult> {
   const start = performance.now();
-  const { wasmUrl } = getWasmLoader().getOptions();
+  // Always forward a resolved URL: with the default (no configureWasm call)
+  // the worker cannot locate the wasm next to its own bundled location —
+  // the main thread's default points at the asset this bundle actually ships.
+  const wasmUrl = getWasmLoader().getOptions().wasmUrl ?? defaultWasmUrl();
   const id = ++requestIdSeq;
 
   try {

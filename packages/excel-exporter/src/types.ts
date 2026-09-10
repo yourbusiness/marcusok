@@ -5,8 +5,26 @@
  * FontData.color / FillData.fgColor / BorderSideData.color (verified from
  * dist/validate-chart-D1O7LOfU.d.mts @ modern-xlsx 1.2.0).
  */
-import type { BorderStyle } from "modern-xlsx";
-export type { BorderStyle };
+
+/**
+ * Cell border line style. Inlined from modern-xlsx's BorderSideData
+ * (dist/validate-chart-D1O7LOfU.d.mts @ 1.2.0) so the published `.d.ts` has
+ * no dependency imports — the engine itself is bundled into this package.
+ */
+export type BorderStyle =
+  | "thin"
+  | "medium"
+  | "thick"
+  | "dashed"
+  | "dotted"
+  | "double"
+  | "hair"
+  | "mediumDashed"
+  | "dashDot"
+  | "mediumDashDot"
+  | "dashDotDot"
+  | "mediumDashDotDot"
+  | "slantDashDot";
 
 /** Business-friendly cell style config; mapped to StyleBuilder in style-utils.ts. */
 export interface CellStyle {
@@ -44,7 +62,7 @@ export interface CellStyle {
  *
  * Date semantics: `date`/`datetime` interpret values by their **UTC
  * components**. The workbook path serializes via modern-xlsx's `dateToSerial`
- * (UTC wall clock) and the stream/SheetJS paths format the same UTC components
+ * (UTC wall clock) and the stream path formats the same UTC components
  * into strings, so all paths agree in every timezone. Date-only ISO strings
  * ("2025-01-05") parse as UTC midnight per ECMA-262; prefer them (or
  * `Date.UTC(...)`) over locally-constructed Dates, whose UTC components can
@@ -89,8 +107,8 @@ export interface ColumnConfig {
    * for cross-threshold consistency (see docs/excel-export-design.md 4.8).
    *
    * Cross-path `thousands`: the Workbook path renders the separator via an
-   * auto-injected `#,##0` numFormat; the stream/SheetJS paths (>=50k rows /
-   * degraded exports) cannot use numFormat and keep the cell a *number*, so
+   * auto-injected `#,##0` numFormat; the stream path (>=50k rows /
+   * degraded exports) cannot use numFormat and keeps the cell a *number*, so
    * they render `9999.99` without separators. Baking separators into the value
    * would turn data cells into text and break downstream calculations, so the
    * difference is intentional — do not rely on visible separators above the
@@ -121,11 +139,11 @@ export interface SheetConfig {
   columns: ColumnConfig[];
   /**
    * Data rows keyed by column `key`. Cell values are normalized identically on
-   * every export path (main / worker / stream / SheetJS fallback): non-finite
-   * numbers (NaN/Infinity), plain objects, `Date`s and bigints without a
-   * `format` are written as their visible string form (JSON for objects, ISO
-   * for Dates), so a dataset crossing the 50k-row threshold keeps the same
-   * content.
+   * every export path (main / worker / stream, including the stream fallback):
+   * non-finite numbers (NaN/Infinity), plain objects, `Date`s and bigints
+   * without a `format` are written as their visible string form (JSON for
+   * objects, ISO for Dates), so a dataset crossing the 50k-row threshold keeps
+   * the same content.
    */
   data: Record<string, unknown>[];
   /** Style applied to every header cell, unless overridden by ColumnConfig.headerStyle. */
@@ -148,12 +166,12 @@ export type ExportMode = "auto" | "main" | "worker" | "stream";
  * - `"init"`: WASM initialization. Main-thread paths measure
  *   `loader.ensureLoaded()`; worker mode measures the worker's `initWasm()`
  *   (only reported when the worker actually re-initializes, not when its WASM
- *   instance is already cached). Not reported by the SheetJS fallback (no WASM).
- * - `"build"`: workbook construction. Covers the Workbook/stream builder, or
- *   SheetJS's sheet building + write in the fallback path. Each real build
- *   attempt reports its own `"build"` phase, so a degradation chain (e.g.
- *   failed worker build -> main-thread retry -> SheetJS fallback) reports one
- *   phase per attempt.
+ *   instance is already cached). Reported as a zero-duration phase by the
+ *   WASM-free stream fallback.
+ * - `"build"`: workbook construction. Covers the Workbook/stream builder.
+ *   Each real build attempt reports its own `"build"` phase, so a
+ *   degradation chain (e.g. failed worker build -> main-thread retry ->
+ *   stream fallback) reports one phase per attempt.
  * - `"download"`: the synchronous browser download trigger
  *   (`triggerDownload`); only reported when `download !== false`. Not reported
  *   in Node (no `document`).
@@ -169,7 +187,7 @@ export interface ExportOptions {
   /**
    * Progress callback (0-1). The leading 0 and the trailing 1 are each emitted
    * exactly once by `exportExcel` itself, on every route — including the
-   * SheetJS fallback and exports that ultimately fail — so a progress UI can
+   * stream fallback and exports that ultimately fail — so a progress UI can
    * always be closed on the final 1. The stream path additionally reports
    * intermediate values every 1,000 rows.
    */
@@ -190,17 +208,18 @@ export interface ExportResult {
   success: boolean;
   blob?: Blob;
   /** Engine actually used. */
-  engine?: "modern-xlsx" | "sheetjs";
+  engine?: "modern-xlsx";
   /** Mode actually used. */
   mode?: ExportMode;
   duration?: number; // ms
   rowCount?: number;
   /**
    * Failure cause when `success` is false. Also set — together with
-   * `success: true` — when the export succeeded via the SheetJS fallback,
-   * carrying the degradation reason (e.g. "workerUrl not configured") so
-   * callers can monitor the fallback rate programmatically. Check `success`
-   * first; a present `error` alone does not mean the export failed.
+   * `success: true` — when the export succeeded via the style-less stream
+   * fallback, carrying the degradation reason (e.g. "WebAssembly not
+   * supported") so callers can monitor the fallback rate programmatically.
+   * Check `success` first; a present `error` alone does not mean the export
+   * failed.
    */
   error?: Error;
 }

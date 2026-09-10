@@ -27,7 +27,7 @@ await exportExcel({ ..., mode: "worker" });  // force Worker (browser)
 await exportExcel({ ..., mode: "main" });    // force main thread
 ```
 
-`mode: "worker"` does **not** error in Node/SSR: it falls back to the main-thread path (stream above 50k rows), preserving style semantics instead of silently degrading to style-less SheetJS.
+`mode: "worker"` does **not** error in Node/SSR: it falls back to the main-thread path (stream above 50k rows), preserving style semantics instead of silently degrading to the style-less stream.
 
 ## Why 20,000 / 50,000
 

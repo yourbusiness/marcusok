@@ -48,7 +48,7 @@ export class WorkbookBuilder {
   addSheet(config: SheetConfig): this {
     const { leaves, headerGrid, headerCells, headerMerges, headerRowCount } =
       flattenColumnTree(config.columns);
-    // Same validation as the stream/SheetJS paths: invalid merge input must
+    // Same validation as the stream path: invalid merge input must
     // fail with a clear error, not zip a corrupt workbook.
     validateMerges(config, leaves.length);
 
@@ -59,7 +59,7 @@ export class WorkbookBuilder {
     const rows = config.data.map((item) =>
       columns.map((col) => {
         const v = resolveCellFormat(col, item);
-        // Normalize exactly like displayValue on the stream/SheetJS paths, so a
+        // Normalize exactly like displayValue on the stream path, so a
         // dataset crossing the 50k threshold (or degrading) keeps identical cell
         // content: non-finite numbers (not valid xsd:double; <v>NaN</v> corrupts
         // the workbook), objects (modern-xlsx would String() them into

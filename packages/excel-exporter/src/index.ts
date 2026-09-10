@@ -2,7 +2,6 @@ import type { ExportOptions, ExportResult, ExportMode } from "./types";
 import { WorkbookBuilder } from "./workbook-builder";
 import { exportAsStream } from "./streaming-builder";
 import { exportInWorker } from "./worker-exporter";
-import { exportWithSheetJS } from "./fallback";
 import { triggerDownload, toBlobPart } from "./download";
 import { getWasmLoader } from "./wasm-loader";
 import { tableExportToOptions, type TableExportOptions } from "./table-export";
@@ -42,7 +41,7 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
   if (explicit === "worker") {
     // Worker mode requires a Web Worker global. In environments without one
     // (Node/SSR), fall back to the main-thread path so styles are preserved
-    // instead of silently degrading to the style-less SheetJS fallback.
+    // instead of silently degrading to the style-less stream fallback.
     const isBrowser =
       typeof Worker !== "undefined" && typeof window !== "undefined";
     if (!isBrowser) {
@@ -73,11 +72,11 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
 
 /**
  * Pre-flight validation of user input. Runs the same checks as the
- * Workbook/stream/SheetJS build paths (same functions, same messages), hoisted
+ * Workbook/stream build paths (same functions, same messages), hoisted
  * to the entry so a configuration error fails immediately with `{ success:
- * false, error }` instead of first degrading to a SheetJS fallback attempt
+ * false, error }` instead of first degrading to a stream fallback attempt
  * that re-runs the identical checks and fails identically. Engine failures
- * (WASM unavailable, build errors) still degrade to SheetJS as before.
+ * (WASM unavailable, build errors) still degrade to the stream as before.
  */
 function validateInput(options: ExportOptions): void {
   const seen = new Set<string>();
@@ -118,7 +117,7 @@ export async function exportExcel(
   const start = performance.now();
   const totalRows = options.sheets.reduce((s, sh) => s + sh.data.length, 0);
 
-  // Leading 0 fires exactly once here, on every route (the SheetJS fallback
+  // Leading 0 fires exactly once here, on every route (the stream fallback
   // included), so consumers always see the documented 0 -> ... -> 1 pair.
   options.onProgress?.(0);
 
@@ -136,29 +135,22 @@ export async function exportExcel(
     };
   }
 
-  // The SheetJS fallback never reports progress itself; closing the sequence
-  // here keeps the terminal-1 contract true on degraded routes too, including
-  // when the fallback itself fails and resolves with success: false.
-  const finishWithSheetJS = (reason: string): Promise<ExportResult> =>
-    exportWithSheetJS(options, start, reason).finally(() =>
-      options.onProgress?.(1),
-    );
-
   const picked = pickMode(options, totalRows);
   const needsWasm = picked.workerMode !== "stream";
   const loader = getWasmLoader();
-  if (needsWasm && !loader.supported) {
-    return finishWithSheetJS("WebAssembly not supported");
-  }
 
   /**
    * Execute the export on this thread (Workbook build, or the WASM-free fast
    * stream). Used by the Node/SSR route, the browser main route, and as the
-   * style-preserving retry when the browser worker path fails. Throws on
-   * failure; callers decide the next degradation step.
+   * style-preserving retry when the browser worker path fails; `forceStream`
+   * selects the pure-JS stream for the terminal degradation (finishWithStream).
+   * Throws on failure; callers decide the next degradation step.
    */
-  const runOnMainThread = async (): Promise<ExportResult> => {
-    if (needsWasm) {
+  const runOnMainThread = async (
+    forceStream = false,
+  ): Promise<ExportResult> => {
+    const useStream = forceStream || picked.workerMode === "stream";
+    if (!useStream) {
       const initStart = performance.now();
       await loader.ensureLoaded();
       options.onPhase?.("init", performance.now() - initStart);
@@ -170,7 +162,7 @@ export async function exportExcel(
     let result: ExportResult;
     const buildStart = performance.now();
     try {
-      if (picked.workerMode === "stream") {
+      if (useStream) {
         const { bytes, rowCount } = await exportAsStream(
           options.sheets,
           options.onProgress,
@@ -198,7 +190,7 @@ export async function exportExcel(
       }
     } finally {
       // Reported even when the build throws, so a failed attempt that falls
-      // back to SheetJS still shows how long it spent before failing.
+      // back to the stream still shows how long it spent before failing.
       options.onPhase?.("build", performance.now() - buildStart);
     }
     options.onProgress?.(1);
@@ -212,12 +204,48 @@ export async function exportExcel(
     return result;
   };
 
+  // Terminal degradation: the pure-JS fast stream on the main thread. It
+  // covers the old SheetJS fallback's surface (headers/merges preserved,
+  // styles and layout features dropped) with none of its costs — no optional
+  // peer dependency, no runtime CDN load, no network access at all. Like the
+  // SheetJS path before it, it never leaves the trailing progress 1 dangling:
+  // runOnMainThread emits it on success, the catch below on failure.
+  // (Declared after runOnMainThread — it closes over it.)
+  const finishWithStream = async (reason: string): Promise<ExportResult> => {
+    console.warn(
+      `[excel-exporter] Falling back to the style-less fast stream. Reason: ${reason}`,
+    );
+    try {
+      const result = await runOnMainThread(true);
+      return {
+        ...result,
+        // Surface the degradation programmatically (parity with the old
+        // SheetJS fallback's soft error): success stays true.
+        error: new Error(
+          `Fallback: styles stripped (fast stream). Reason: ${reason}`,
+        ),
+      };
+    } catch (e) {
+      options.onProgress?.(1);
+      return {
+        success: false,
+        error: e as Error,
+        duration: performance.now() - start,
+      };
+    }
+  };
+
+  // WASM unsupported and the chosen route needs it: degrade straight to the
+  // WASM-free stream (checked after the closures above are initialized).
+  if (needsWasm && !loader.supported) {
+    return finishWithStream("WebAssembly not supported");
+  }
+
   /**
    * Worker-path degradation chain: retry on the main thread first (modern-xlsx
-   * keeps styles; the fast stream needs no WASM at all), and only when that
-   * also fails fall back to the style-less SheetJS. The trailing progress 1 is
-   * emitted exactly once on either sub-route (runOnMainThread on success, or
-   * finishWithSheetJS's finally).
+   * keeps styles), and only when that also fails degrade to the style-less
+   * fast stream. The trailing progress 1 is emitted exactly once on either
+   * sub-route (runOnMainThread on success, or finishWithStream's catch).
    */
   const retryOnMainThread = async (reason: string): Promise<ExportResult> => {
     console.warn(
@@ -226,7 +254,7 @@ export async function exportExcel(
     try {
       return await runOnMainThread();
     } catch (e) {
-      return finishWithSheetJS(
+      return finishWithStream(
         `${reason}; main-thread retry failed: ${(e as Error).message}`,
       );
     }
@@ -240,7 +268,7 @@ export async function exportExcel(
     try {
       return await runOnMainThread();
     } catch (e) {
-      return finishWithSheetJS((e as Error).message);
+      return finishWithStream((e as Error).message);
     }
   }
 
@@ -260,7 +288,7 @@ export async function exportExcel(
       return result;
     }
     // Worker export failed (e.g. WASM init error inside the worker) -> retry on
-    // the main thread before degrading to SheetJS.
+    // the main thread before degrading to the fast stream.
     return retryOnMainThread(result.error?.message ?? "worker export failed");
   } catch (e) {
     return retryOnMainThread((e as Error).message);

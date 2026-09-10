@@ -8,6 +8,7 @@
       "outputs": ["dist/**"]
     },
     "test": {
+      "dependsOn": ["build"],
       "outputs": []
     },
     "lint": {

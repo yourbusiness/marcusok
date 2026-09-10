@@ -1,6 +1,6 @@
 # @marcusok/excel-exporter
 
-基于 [modern-xlsx](https://github.com/ABCrimson/modern-xlsx)（WASM）与自研 Fast stream 构建的 Excel 导出库：声明式 API、自动模式路由、完整单元格样式、Web Worker 多线程、大文件快速写入，以及 SheetJS 降级兜底。
+基于 [modern-xlsx](https://github.com/ABCrimson/modern-xlsx)（WASM）与自研 Fast stream 构建的 Excel 导出库：声明式 API、自动模式路由、完整单元格样式、Web Worker 多线程、大文件快速写入，以及无样式流式降级兜底。
 
 ## 能力清单
 
@@ -12,7 +12,7 @@
 | 值格式化       | `FormatSpec` 声明式格式化（enum / date / datetime / number / padding）        |
 | Worker 多线程  | 主线程仅一次结构化克隆，构建在 Worker 内执行（≥ 5 万行的流式路径不依赖 WASM） |
 | 流式写入       | 自研 `fast-xlsx.ts` + `fflate`，10 万行约 0.8s                                |
-| 多级兜底       | WASM 不可用时自动降级 SheetJS（样式剥离）                                     |
+| 多级兜底       | WASM 不可用时自动降级无样式快速流                                             |
 | 进度/阶段回调  | `onProgress`、`onPhase` 便于可视化与埋点                                      |
 
 ## 安装
@@ -23,7 +23,7 @@ pnpm add @marcusok/excel-exporter modern-xlsx
 
 > **Node 版本说明**：peer `modern-xlsx` 声明了 `engines.node >= 24`，但 Node 22 实际可用——若包管理器在 Node 22 下拒绝安装，在项目 `.npmrc` 设 `engine-strict=false` 或升级 Node，详见 [快速开始](/zh/guide/01-getting-started)。
 
-浏览器环境还需部署 `modern-xlsx.wasm` 与 `export.worker.js` 并调用 `configureWasm`，详见 [快速开始](/zh/guide/01-getting-started)。
+浏览器环境零配置（资产自动定位，自托管场景才需要 `configureWasm`），详见 [快速开始](/zh/guide/01-getting-started)。
 
 ## 快速上手
 

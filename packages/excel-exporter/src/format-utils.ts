@@ -50,7 +50,7 @@ export function applyFormat(value: unknown, spec: FormatSpec): string | number {
       // Keep full precision: the stored cell value must not be truncated.
       // Display decimals/thousands are rendered via an auto-injected numFormat
       // on the workbook path (see numFormatForSpec / withAutoNumFormat). The
-      // stream/SheetJS paths (no numFormat support) bake decimals into the
+      // stream path (no numFormat support) bakes decimals into the
       // displayed value in displayValue instead.
       return n;
     }
@@ -93,8 +93,8 @@ export function numFormatForSpec(spec: FormatSpec): string | null {
  *
  * Uses the date's **UTC components** (not local ones), matching modern-xlsx's
  * `dateToSerial` (the workbook path also derives the serial from UTC
- * components). The same input therefore renders identically on the workbook,
- * stream and SheetJS paths in every timezone. Note that date-only ISO strings
+ * components). The same input therefore renders identically on the workbook
+ * and stream paths in every timezone. Note that date-only ISO strings
  * ("2025-01-05") parse as UTC midnight per ECMA-262, while locally-constructed
  * Dates (`new Date(2025, 0, 5)`) carry local wall time whose UTC components can
  * fall on the previous day in non-UTC timezones.
@@ -141,8 +141,8 @@ export function formatDateByPattern(value: unknown, pattern: string): string {
 
 /**
  * Resolve a column value to its display form: typed (number/boolean) when the
- * cell supports it, or a pattern-formatted string for dates. Shared by the
- * streaming path and the SheetJS fallback, which both lack numFormat support.
+ * cell supports it, or a pattern-formatted string for dates. Used by the
+ * streaming path, which lacks numFormat support.
  */
 export function displayValue(
   col: ColumnConfig,
@@ -158,7 +158,7 @@ export function displayValue(
       return formatDateByPattern(row[col.key ?? ""], pattern);
     }
     if (spec.type === "number") {
-      // Stream/SheetJS paths have no numFormat support, so the configured
+      // The stream path has no numFormat support, so the configured
       // decimals must be baked into the displayed value here. The workbook
       // path keeps full precision and renders decimals via numFormat instead.
       // null/undefined render as an empty cell, mirroring applyFormat (never
@@ -172,9 +172,8 @@ export function displayValue(
   }
   const v = resolveCellFormat(col, row);
   // NaN/Infinity are not valid xsd:double values: writing <v>NaN</v> produces a
-  // workbook Excel flags as corrupt (the same applies inside SheetJS's
-  // aoa_to_sheet). Emit the visible string form instead, matching the
-  // number-spec branch above.
+  // workbook Excel flags as corrupt. Emit the visible string form instead,
+  // matching the number-spec branch above.
   if (typeof v === "number") return Number.isFinite(v) ? v : toStr(v);
   if (typeof v === "boolean") return v;
   return toStr(v);
@@ -235,7 +234,7 @@ export function validateSheetName(name: string): void {
  * Validate user-supplied merge ranges against the sheet's data area. A merge
  * with a zero/negative span or an out-of-bounds endpoint would produce a
  * reversed or dangling range that Excel treats as a corrupt workbook, so
- * reject it here -- identically on the Workbook, stream and SheetJS paths --
+ * reject it here -- identically on the Workbook and stream paths --
  * with a message naming the offending merge.
  *
  * `MergeRange` is data-relative (row 0 = first data row): bounds are the leaf

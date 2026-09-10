@@ -1,6 +1,6 @@
 # @marcusok/excel-exporter · Excel Export Engine
 
-An Excel export library built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (WASM) plus a custom Fast stream writer. It offers a declarative API, automatic mode routing, full cell styling, Web Worker multithreading, fast writes, and a SheetJS fallback.
+An Excel export library built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (WASM) plus a custom Fast stream writer. It offers a declarative API, automatic mode routing, full cell styling, Web Worker multithreading, fast writes, and a style-less pure-JS stream fallback.
 
 > 📖 **Online docs**: https://yourbusiness.github.io/marcusok/packages/excel-exporter/
 
@@ -22,72 +22,7 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 pnpm add @marcusok/excel-exporter
 ```
 
-Environment: Node >= 22 (any package manager works — the examples here use pnpm; `pnpm >= 9` is only a requirement of this repo's own development setup). The engine dependency `modern-xlsx@^1.2.0` is installed automatically. modern-xlsx@1.2.0 declares `engines.node>=24`, but its WASM core targets browsers; this package's full test suite passes on Node 22 (CI runs there). If your package manager enforces engines checks, installation fails on Node 22 — set `engine-strict=false` in your project's `.npmrc` (the same approach this repository uses) or upgrade to Node >= 24.
-
-> modern-xlsx is a direct `dependency`: this package pins the engine version it was tested against, and re-publishes `modern-xlsx.wasm` under its own `exports` map (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`), so the binary always ships with the matching JS glue — and bundlers can import it directly (modern-xlsx's own `exports` map omits its wasm subpaths, which would otherwise force a manual copy step). `xlsx` (SheetJS) is an optional peerDep, needed only for the fallback path.
->
-> Security note on the optional `xlsx` peer: the last npm release (`0.18.5`) is unmaintained and carries known CVEs (CVE-2023-30533 ReDoS, CVE-2024-22363 prototype pollution). If you provide `xlsx` yourself, install the maintained build from the official CDN instead of npm: `pnpm add https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`. The peer range stays `>=0.18.5` for compatibility, and when no local `xlsx` is present the fallback loads `0.20.3` from the SheetJS CDN at runtime.
-
-## Setup (Browser)
-
-One asset is required on nearly every route: `modern-xlsx.wasm` (1.9MB, the style engine — the only exception is an explicit `mode: "stream"`, whose pure-JS fast stream needs no WASM). A second one, `export.worker.js`, is needed only when exports actually enter a Worker — auto mode with >= 20,000 rows, or an explicit `mode: "worker"` / `mode: "stream"`. Both files live in this package's `dist/` (the wasm is forwarded there at build time), so everything resolves through `@marcusok/excel-exporter` imports.
-
-### Vite (recommended)
-
-Import the assets with the `?url` suffix — Vite serves them in dev and hashes them into `dist/assets/` at build time. No copy plugin, no `public/` directory, nothing hardcoded:
-
-```ts
-// main.ts
-import { configureWasm } from "@marcusok/excel-exporter";
-// Re-published by this package (modern-xlsx's own exports map omits wasm subpaths)
-import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
-// Optional — drop this line entirely if your exports stay under 20k rows
-import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
-
-configureWasm({ wasmUrl, workerUrl });
-```
-
-### Other setups (copy the files)
-
-If your bundler has no asset-URL import, copy both files out of this package's `dist/` into a static directory. Resolving the real path via `require.resolve` in `buildStart` avoids hardcoded `node_modules` paths (which break under pnpm symlinks):
-
-```ts
-// vite.config.ts / build script
-import { defineConfig } from "vite";
-import { createRequire } from "node:module";
-import { copyFileSync, mkdirSync, statSync } from "node:fs";
-import { dirname } from "node:path";
-
-const require = createRequire(import.meta.url);
-// Single source: both assets ship in @marcusok/excel-exporter/dist
-const pkgDist = dirname(require.resolve("@marcusok/excel-exporter"));
-
-export default defineConfig({
-  plugins: [
-    {
-      name: "copy-excel-exporter-assets",
-      buildStart() {
-        mkdirSync("public/assets", { recursive: true });
-        for (const file of ["modern-xlsx.wasm", "export.worker.js"]) {
-          const src = `${pkgDist}/${file}`;
-          if (!statSync(src, { throwIfNoEntry: false }))
-            throw new Error(`${file} not found. Looked at: ${src}`);
-          copyFileSync(src, `public/assets/${file}`);
-        }
-      },
-    },
-  ],
-});
-```
-
-```ts
-// main.ts
-import { configureWasm } from "@marcusok/excel-exporter";
-configureWasm({
-  wasmUrl: "/assets/modern-xlsx.wasm",
-  workerUrl: "/assets/export.worker.js",
-});
-```
+That is the entire setup. The package has **zero runtime dependencies** — the engine (modern-xlsx JS glue + fflate) is bundled in at build time, and the 1.9MB `modern-xlsx.wasm` binary ships under this package's own `exports` map (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`), so the binary always matches the JS glue. No engine package to install, no `engine-strict` conflicts from upstream `engines` ranges, no fallback package, nothing to configure in `main.ts` or your bundler.
 
 ## Usage
 
@@ -126,6 +61,39 @@ await exportExcel({
 });
 ```
 
+## How assets resolve (zero configuration)
+
+Two files ship alongside the code and are located automatically:
+
+- **`modern-xlsx.wasm`** (1.9MB, the style engine) — needed on every route except an explicit `mode: "stream"`, whose pure-JS fast stream needs no WASM at all.
+- **`export.worker.js`** (self-contained, zero imports of its own) — needed only when exports actually enter a Worker (auto mode with ≥ 20,000 rows, or an explicit `mode: "worker"` / `mode: "stream"`).
+
+Both default to `new URL(<file>, import.meta.url)` relative to the package entry:
+
+- **Bundlers** (Vite dev's dependency pre-bundling and production builds — verified on Vite 8; webpack 5 documents the same `new URL(..., import.meta.url)` asset pattern) rewrite the expression and emit the file as a hashed asset. Nothing to import, copy or configure.
+- **Node** reads the binary from disk next to the installed package and initializes it synchronously (`initWasmSync`) — no fetch, no boilerplate (see [Node Usage](#node-usage)).
+
+`configureWasm` remains as an optional escape hatch for setups where the defaults cannot work — self-hosted copies on a CDN, Service Worker environments, or bundlers without asset-URL support:
+
+```ts
+import { configureWasm } from "@marcusok/excel-exporter";
+configureWasm({
+  // Both optional; set only what you want to override.
+  wasmUrl: "https://cdn.example.com/modern-xlsx.wasm",
+  workerUrl: "https://cdn.example.com/export.worker.js",
+});
+```
+
+Bundlers with asset imports can also wire the files explicitly (the pre-2.0 recommended setup — still fully supported):
+
+```ts
+import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
+import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
+configureWasm({ wasmUrl, workerUrl });
+```
+
+Without a bundler (plain `<script type="module">`), copy the two files out of this package's `dist/` into a static directory and point `configureWasm` at them.
+
 ### Multi-level Headers and Merges
 
 Columns support a `children` tree to produce multi-row headers: a group column header automatically merges across all its leaf columns, and a leaf column header automatically spans the remaining header rows vertically — no manual merge-range math needed. Data-area merges use `merges` (positioned relative to the data area, where `row 0` is the first data row).
@@ -155,9 +123,9 @@ columns: [
 ],
 ```
 
-Multi-level headers and merges (including header merges) work on all four paths — main / worker / stream / SheetJS fallback. The stream and fallback paths preserve merges but still do not support styles.
+Multi-level headers and merges (including header merges) work on all routes — main / worker / stream (including the style-less stream fallback). The stream path preserves merges but does not support styles.
 
-Invalid input fails identically on every path with `{ success: false, error }` instead of a corrupt workbook: `merges` must be integers (`row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1) staying within the data area and not overlapping each other; sheet names must be unique across `sheets`; `NaN`/`Infinity` in unformatted numeric columns are written as visible strings (illegal XML numbers would corrupt the file). Values are normalized identically on every path: without a `format`, plain objects are written as JSON strings, `Date`s as ISO strings and bigints as decimal strings, so a dataset crossing the 50k-row threshold keeps the same cell content.
+Invalid input fails identically on every route with `{ success: false, error }` instead of a corrupt workbook: `merges` must be integers (`row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1) staying within the data area and not overlapping each other; sheet names must be unique across `sheets`; `NaN`/`Infinity` in unformatted numeric columns are written as visible strings (illegal XML numbers would corrupt the file). Values are normalized identically on every route: without a `format`, plain objects are written as JSON strings, `Date`s as ISO strings and bigints as decimal strings, so a dataset crossing the 50k-row threshold keeps the same cell content.
 
 ### Auto Routing
 
@@ -191,18 +159,18 @@ Main-thread paths additionally accept function form (`main`, and `stream` in Nod
 
 Number-spec cross-path notes (see `ColumnConfig.format` in [`src/types.ts`](./src/types.ts)):
 
-- Set `decimals` explicitly: the Workbook path stores full precision and renders decimals via `numFormat`, while the stream/SheetJS paths (>= 50,000 rows / degraded exports) bake decimals into the stored value.
-- `thousands: true` renders separators only on the Workbook path (`#,##0` numFormat). The stream/SheetJS paths keep the cell a number, so separators are not visible there — baking them into the value would turn data cells into text.
+- Set `decimals` explicitly: the Workbook path stores full precision and renders decimals via `numFormat`, while the stream path (>= 50,000 rows / degraded exports) bakes decimals into the stored value.
+- `thousands: true` renders separators only on the Workbook path (`#,##0` numFormat). The stream path keeps the cell a number, so separators are not visible there — baking them into the value would turn data cells into text.
 - `null`/`undefined` values render as empty cells on every path (never `0`).
 
 ### Fallback
 
-When the browser Worker route fails (missing/404 `workerUrl`, WASM init error inside the Worker, timeout), the library first **retries on the main thread** with modern-xlsx — styles are preserved, and the ≥ 50,000-row fast stream needs no WASM at all. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to SheetJS ([`src/fallback.ts`](./src/fallback.ts)); fallback exports carry no styles. `ExportResult.engine` reports `'sheetjs'` so you can monitor the fallback rate, and each degradation step prints an `[excel-exporter]` console warning.
+When the browser Worker route fails (missing/404 worker asset, WASM init error inside the Worker, timeout), the library first **retries on the main thread** with modern-xlsx — styles are preserved. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to the **pure-JS fast stream** — no WASM, no network, headers and merges preserved, styles stripped. A successful degraded export carries `result.error` (with `success: true`) describing the degradation, and each degradation step prints an `[excel-exporter]` console warning — check `result.error` to monitor the fallback rate.
 
 ## API
 
 - `exportExcel(options)` — unified entry with auto routing.
-- `configureWasm(opts)` — set `wasmUrl`/`workerUrl`/`timeoutMs`/`maxRetries`. Note: changing `wasmUrl` after a _successful_ load does not reload WASM on a thread that already initialized it (modern-xlsx's `initWasm` is idempotent — first successful init wins); the new URL takes effect only in a fresh JS realm (page reload / a worker created after `terminateWorker()`), and a console warning is printed when this applies.
+- `configureWasm(opts)` — optional overrides for `wasmUrl`/`workerUrl`/`timeoutMs`/`maxRetries` (see [How assets resolve](#how-assets-resolve-zero-configuration)). Note: changing `wasmUrl` after a _successful_ load does not reload WASM on a thread that already initialized it (modern-xlsx's `initWasm` is idempotent — first successful init wins); the new URL takes effect only in a fresh JS realm (page reload / a worker created after `terminateWorker()`), and a console warning is printed when this applies.
 - `onPhase(phase, durationMs)` (an `exportExcel` option) — per-phase timing callback: `init` (WASM init) / `build` (workbook build) / `download` (trigger download); reports elapsed milliseconds once per phase for metrics breakdowns, without affecting the `duration` in the returned result.
 - `WorkbookBuilder` — batch builder (<50k rows, full styling).
 - `exportAsStream(sheets)` — large-file export (>=50k rows).
@@ -216,29 +184,24 @@ When the browser Worker route fails (missing/404 `workerUrl`, WASM init error in
 
 Node has no Web Worker, so auto routing degrades to main (<50k rows) or stream (>=50k rows) on the main thread.
 
-**No boilerplate needed.** When no `wasmUrl` is configured, the engine locates `modern-xlsx.wasm` through `node_modules` on first use (`createRequire`, pnpm-symlink-safe) and initializes it synchronously (`initWasmSync`). Node's `fetch` rejects the `file://` auto-detected URL, so this path replaces the manual init snippet previous versions required — there is nothing to call and nothing to copy.
+**No boilerplate needed.** With nothing configured, the engine reads this package's `dist/modern-xlsx.wasm` from disk (relative to the installed package, pnpm-symlink-safe) and initializes it synchronously (`initWasmSync`) on first use — there is nothing to call and nothing to copy.
 
-To control initialization timing yourself (e.g. move the one-off synchronous read+compile to startup instead of the first request), keep the explicit form, which remains fully supported:
+To control initialization timing yourself (e.g. move the one-off synchronous read+compile to startup instead of the first request), await the loader once at boot:
 
 ```ts
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { initWasmSync } from "modern-xlsx";
-const require = createRequire(import.meta.url);
-initWasmSync(
-  readFileSync(
-    `${require("path").dirname(require.resolve("modern-xlsx"))}/modern-xlsx.wasm`,
-  ),
-);
+import { getWasmLoader } from "@marcusok/excel-exporter";
+await getWasmLoader().ensureLoaded(); // reads + compiles the shipped wasm once
 ```
 
-Alternatively, `configureWasm({ wasmUrl })` with an HTTP(S) URL works too (fetched, not read from disk). Node version: this package declares `engines.node >=22`, and CI runs Node 22. The dependency modern-xlsx declares `>=24`, but its WASM core targets browsers — everything is green on Node 22.
+Alternatively, `configureWasm({ wasmUrl })` with an HTTP(S) URL works too (fetched, not read from disk). Note: `initWasmSync` from a separately installed `modern-xlsx` does **not** pre-warm this package — the engine is bundled in, so an external copy is a different module instance.
 
 ## Design Decisions
 
 - **50k-row cutover**: `STREAM_THRESHOLD=50_000` (branch `>=`); below 50k rows uses Workbook (full styling), 50k and above uses Fast stream.
 - **Worker threshold at 20,000 rows**: below 20k rows uses main (10k×6 columns measures ~120ms in a browser); 20k and above uses a Worker to avoid long main-thread blocking.
-- **ESM-only**: modern-xlsx ships ESM only, and this package provides no CJS build.
+- **Zero runtime dependencies**: the engine (modern-xlsx glue, fflate) is bundled at build time and the wasm binary ships under this package's own `exports` map — consumers install one package, and upstream `engines` declarations never leak into their install.
+- **Self-contained worker**: `dist/export.worker.js` is a single ESM file with zero imports. Bundlers emit it verbatim as an asset (the default `new URL` resolution), so a chunked worker whose sibling imports are not tracked can never 404 in production builds.
+- **ESM-only**: this package provides no CJS build.
 - **Worker-compatible format**: functions cannot cross structured clone. The browser Worker path (including stream executed inside a Worker) accepts only `FormatSpec`, and `exportInWorker` strips function formats; Node's stream runs on the main thread, so functions are fine there.
 - **Fast stream has no styles**: the large-file path emits minimal OOXML and does not support `StyleBuilder`. Multi-row headers and merges are preserved; `width`/`freezeRows` etc. are dropped with a warning under stream.
 - **Concurrency safety**: Worker communication routes by requestId with a `pending: Map`; `onmessage` is registered only once.

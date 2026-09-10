@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 // No mocks anywhere in this file: it exercises the REAL zero-configuration
 // Node path a published-package consumer gets — no configureWasm call, no
-// initWasmSync boilerplate. The loader must locate modern-xlsx's wasm through
-// node_modules (createRequire, pnpm-symlink-safe), init it synchronously, and
-// a small export must come back styled-engine ("modern-xlsx", not the
-// style-less SheetJS fallback).
+// initWasmSync boilerplate. The loader must locate this package's shipped
+// wasm on disk (import.meta.url-relative, symlink-safe), init it
+// synchronously, and a small export must come back styled-engine
+// ("modern-xlsx" mode "main", not the style-less stream fallback).
 import { exportExcel, getWasmLoader } from "../index";
 
 describe("Node auto-init (integration, real wasm binary)", () => {
@@ -31,8 +31,8 @@ describe("Node auto-init (integration, real wasm binary)", () => {
     });
 
     expect(result.success).toBe(true);
-    // engine proves the styled WASM engine ran; a degraded export would be
-    // "sheetjs" with a styles-stripped warning.
+    // engine proves the styled WASM engine ran; a degraded export would come
+    // back mode "stream" with a styles-stripped soft error.
     expect(result.engine).toBe("modern-xlsx");
     expect(result.mode).toBe("main");
     expect(result.blob).toBeInstanceOf(Blob);

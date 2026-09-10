@@ -28,7 +28,7 @@ const src = resolve(
 if (!statSync(src, { throwIfNoEntry: false })) {
   throw new Error(
     `[excel-exporter] modern-xlsx.wasm not found at ${src}. ` +
-      "Run pnpm install first (modern-xlsx is a dependency of this package).",
+      "Run pnpm install first (modern-xlsx is a devDependency of this package).",
   );
 }
 

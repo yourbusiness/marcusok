@@ -64,7 +64,7 @@ describe("non-finite numbers (NaN/Infinity)", () => {
     expect(ws.cell("B2").value).toBe("Infinity");
   });
 
-  it("SheetJS fallback writes the same visible strings", async () => {
+  it("stream fallback writes the same visible strings", async () => {
     vi.stubGlobal("WebAssembly", undefined);
     try {
       const r = await exportExcel({
@@ -72,7 +72,8 @@ describe("non-finite numbers (NaN/Infinity)", () => {
         download: false,
         sheets: [baseSheet({ data: [{ a: NaN, b: Infinity }] })],
       });
-      expect(r.engine).toBe("sheetjs");
+      expect(r.engine).toBe("modern-xlsx");
+      expect(r.mode).toBe("stream");
       expect(r.success).toBe(true);
       const wb = await readBuffer(new Uint8Array(await r.blob!.arrayBuffer()));
       const ws = wb.getSheet("S")!;
@@ -131,7 +132,7 @@ describe("merge range validation", () => {
       ],
     });
     // The pre-flight check in exportExcel fails the call directly (previously:
-    // workbook build threw -> SheetJS fallback re-validated -> failed too,
+    // workbook build threw -> fallback re-validated -> failed too,
     // after one wasted fallback attempt and a misleading warn).
     expect(r.success).toBe(false);
     expect(r.error?.message).toMatch(/rowspan\/colspan must be >= 1/);
@@ -152,17 +153,17 @@ describe("merge range validation", () => {
       });
       expect(r.success).toBe(false);
       // No engine ran: the failure came from the entry-point pre-flight, not
-      // from a degraded (style-less) SheetJS attempt.
+      // from a degraded (style-less) stream attempt.
       expect(r.engine).toBeUndefined();
       expect(r.error?.message).toMatch(/rowspan\/colspan must be >= 1/);
-      // And no "Falling back to SheetJS" warn may be printed for input errors.
+      // And no "Falling back" warn may be printed for input errors.
       expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
   });
 
-  it("SheetJS fallback reports the same failure", async () => {
+  it("stream fallback reports the same failure", async () => {
     vi.stubGlobal("WebAssembly", undefined);
     try {
       const r = await exportExcel({
@@ -197,21 +198,21 @@ describe("duplicate sheet names", () => {
     ).rejects.toThrow(/duplicate sheet name "S"/);
   });
 
-  it("workbook path degrades to SheetJS which reports the same failure", async () => {
+  it("workbook path fails with the same duplicate error", async () => {
     const r = await exportExcel({
       filename: "dup-main",
       download: false,
       mode: "main",
       sheets: [baseSheet({ name: "S" }), baseSheet({ name: "S" })],
     });
-    // Previously: modern-xlsx threw "already exists" -> fallback let SheetJS
-    // silently rename to S_1. Now the pre-flight check (and, for direct
+    // Previously: modern-xlsx threw "already exists" -> the SheetJS fallback
+    // silently renamed to S_1. Now the pre-flight check (and, for direct
     // builders, every path) fails with a clear duplicate error.
     expect(r.success).toBe(false);
     expect(r.error?.message).toMatch(/duplicate sheet name "S"/);
   });
 
-  it("SheetJS fallback rejects duplicates too", async () => {
+  it("stream fallback rejects duplicates too", async () => {
     vi.stubGlobal("WebAssembly", undefined);
     try {
       const r = await exportExcel({
@@ -274,7 +275,7 @@ describe("stream feature warnings on nested columns", () => {
 });
 
 describe("empty columns", () => {
-  it("exportExcel fails fast with a clear error (no SheetJS fallback)", async () => {
+  it("exportExcel fails fast with a clear error (no fallback)", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const r = await exportExcel({
@@ -283,7 +284,7 @@ describe("empty columns", () => {
         mode: "main",
         // Pre-fix this crashed the Workbook autoFilter layout with a cryptic
         // TypeError (encodeCellRef(0, -1) -> "@1"), then silently degraded to
-        // SheetJS. The pre-flight check must fail it directly instead.
+        // the fallback. The pre-flight check must fail it directly instead.
         sheets: [baseSheet({ columns: [], autoFilter: true })],
       });
       expect(r.success).toBe(false);

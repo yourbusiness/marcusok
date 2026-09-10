@@ -191,27 +191,11 @@ export const packages: PackageEntry[] = [
       en: "Excel export engine (WASM + Fast stream, ~0.8s at 100k rows)",
     },
     keywords: ["excel", "xlsx", "export", "wasm"],
-    runtimeAssets: [
-      {
-        // Resolve through @marcusok/excel-exporter so the docs app does not
-        // need modern-xlsx as a direct dep (pnpm auto-install-peers pulls
-        // it in as excel-exporter's peerDep). Copied under the wasm-bindgen
-        // default name (modern_xlsx_wasm_bg.wasm) as a defensive measure: if
-        // `configureWasm({ wasmUrl })` were ever omitted, the bundled worker
-        // would fall back to `new URL("modern_xlsx_wasm_bg.wasm", import.meta.url)`
-        // and still find the file next to itself. With wasmUrl configured
-        // (the ExportDemo does), the file name is otherwise arbitrary.
-        resolveFrom: "modern-xlsx",
-        through: "@marcusok/excel-exporter",
-        file: "modern-xlsx.wasm",
-        to: "assets/modern_xlsx_wasm_bg.wasm",
-      },
-      {
-        resolveFrom: "@marcusok/excel-exporter",
-        file: "export.worker.js",
-        to: "assets/export.worker.js",
-      },
-    ],
+    // No runtimeAssets: the wasm/worker ship with the package and are located
+    // by default (new URL(<file>, import.meta.url) next to the entry), which
+    // the bundler emits as base-aware hashed assets — nothing to copy into
+    // public/. The runtimeAssets mechanism stays for future packages that
+    // genuinely need public-dir copies.
     benchmarks: [
       {
         data: [
@@ -284,8 +268,8 @@ export const packages: PackageEntry[] = [
         icon: "🛡️",
         title: { zh: "多级兜底", en: "Layered Fallbacks" },
         details: {
-          zh: "环境不支持或 WASM 加载失败时自动降级到 SheetJS，多数异常下仍能拿到导出文件。",
-          en: "Automatically degrades to SheetJS when WASM is unavailable, so most failures still produce a file.",
+          zh: "环境不支持或 WASM 加载失败时自动降级到无样式纯 JS 快速流，多数异常下仍能拿到导出文件。",
+          en: "Automatically degrades to the style-less pure-JS fast stream when WASM is unavailable, so most failures still produce a file.",
         },
       },
     ],

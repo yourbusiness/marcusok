@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  App as AntdApp,
   Button,
   Card,
   Checkbox,
@@ -20,9 +19,8 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { ThunderboltOutlined } from "@ant-design/icons";
 import {
-  configureWasm,
   exportExcel,
   getWasmLoader,
   type ColumnConfig,
@@ -31,8 +29,6 @@ import {
   type ExportResult,
   type MergeRange,
 } from "@marcusok/excel-exporter";
-import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
-import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
 import {
   createDataset,
   DATASET_PRESETS,
@@ -45,10 +41,6 @@ import {
   formatDuration,
   formatThroughput,
 } from "./metrics.js";
-
-// 模块加载时配置 WASM + worker URL，保证 worker/stream 模式可用。
-// 不配置 workerUrl 时 worker 路由失败会先回退主线程重试（保样式），主线程也失败才降级 SheetJS fallback（均有 [excel-exporter] 警告）。
-configureWasm({ workerUrl, wasmUrl });
 
 const HISTORY_LIMIT = 10;
 
@@ -182,7 +174,6 @@ const history: RunRecord[] = [];
 let historySeq = 0;
 
 export default function BasicExportDemo() {
-  const { message } = AntdApp.useApp();
   const [rows, setRows] = useState<number>(DEFAULT_ROWS);
   const [mode, setMode] = useState<ExportMode>("auto");
   const [headerMode, setHeaderMode] = useState<"flat" | "grouped">("flat");
@@ -243,9 +234,11 @@ export default function BasicExportDemo() {
       : success
         ? null
         : (result?.error?.message ?? "导出失败");
+    // 零配置下降级不再由引擎名标识（终端兜底就是本包的 fast stream）：
+    // 成功但携带软错误（result.error）即视为降级。
     const status: RunStatus = !success
       ? "error"
-      : engine === "sheetjs"
+      : result?.error
         ? "degraded"
         : "ok";
 
@@ -368,17 +361,6 @@ export default function BasicExportDemo() {
     }
   };
 
-  const resetWasm = (): void => {
-    // 同样的 wasmUrl 会复用已加载实例（wasm-loader.updateOptions 只在 URL
-    // 变化时重置），因此提示文案说明实际情况而不是承诺一次不会发生的重初始化。
-    configureWasm({ workerUrl, wasmUrl });
-    message.info(
-      getWasmLoader().isReady
-        ? "WASM 配置已重新应用；URL 未变化，已加载的 WASM 实例继续复用。"
-        : "WASM 配置已重新应用，下次导出时初始化。",
-    );
-  };
-
   const columns: TableProps<RunRecord>["columns"] = [
     { title: "时间", dataIndex: "at", width: 90 },
     {
@@ -387,8 +369,7 @@ export default function BasicExportDemo() {
     },
     {
       title: "引擎",
-      render: (_value, r) =>
-        r.engine === "sheetjs" ? <Tag color="orange">sheetjs</Tag> : r.engine,
+      render: (_value, r) => r.engine,
     },
     {
       title: "行数",
@@ -486,9 +467,6 @@ export default function BasicExportDemo() {
             >
               导出 Excel
             </Button>
-            <Button size="large" icon={<ReloadOutlined />} onClick={resetWasm}>
-              重置 WASM
-            </Button>
           </Space>
         </Flex>
       </Card>
@@ -535,12 +513,7 @@ export default function BasicExportDemo() {
               {
                 key: "engine",
                 label: "引擎",
-                children:
-                  run.engine === "sheetjs" ? (
-                    <Tag color="orange">SheetJS（降级）</Tag>
-                  ) : (
-                    run.engine
-                  ),
+                children: run.engine,
               },
               {
                 key: "mode",
@@ -568,7 +541,7 @@ export default function BasicExportDemo() {
                 label: "WASM 支持",
                 children: getWasmLoader().supported
                   ? "可用"
-                  : "不可用（走 SheetJS 降级）",
+                  : "不可用（走流式降级）",
               },
               {
                 key: "status",

@@ -21,7 +21,7 @@ function stubBrowserWorkerEnv(): void {
 // Node (vitest environment: 'node') has no Web Worker / window globals, so this
 // suite verifies the env-aware fallbacks in pickMode without mocking.
 describe("exportExcel mode routing (Node environment)", () => {
-  it("forced 'worker' mode in a no-Worker env falls back to modern-xlsx, not SheetJS", async () => {
+  it("forced 'worker' mode in a no-Worker env falls back to modern-xlsx, not the style-less stream", async () => {
     const r = await exportExcel({
       filename: "routing-worker",
       download: false,
@@ -52,7 +52,7 @@ describe("exportExcel mode routing (Node environment)", () => {
     expect(r.mode).toBe("stream");
   });
 
-  it("emits the documented 0 -> 1 onProgress pair even on the SheetJS fallback", async () => {
+  it("emits the documented 0 -> 1 onProgress pair even on the stream fallback", async () => {
     // Force the early-bail fallback (WASM reported unsupported). The fallback
     // itself never reports progress; exportExcel must still open and close
     // the sequence exactly once each (types.ts onProgress contract).
@@ -71,7 +71,8 @@ describe("exportExcel mode routing (Node environment)", () => {
         ],
         onProgress: (p) => progress.push(p),
       });
-      expect(r.engine).toBe("sheetjs");
+      expect(r.engine).toBe("modern-xlsx");
+      expect(r.mode).toBe("stream");
       expect(r.success).toBe(true);
       expect(progress).toEqual([0, 1]);
     } finally {
@@ -184,15 +185,15 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
     }
   });
 
-  it("degrades to SheetJS only when the worker AND the main-thread retry both fail", async () => {
+  it("degrades to the stream only when the worker AND the main-thread retry both fail", async () => {
     stubBrowserWorkerEnv();
     vi.mocked(exportInWorker).mockResolvedValue({
       success: false,
       error: new Error("worker boom"),
     });
     // A format function that throws on every call, numbered per invocation:
-    // the main-thread retry must throw "boom-1" and the SheetJS fallback
-    // "boom-2", proving the full worker -> main -> SheetJS chain ran.
+    // the main-thread retry must throw "boom-1" and the stream fallback
+    // "boom-2", proving the full worker -> main -> stream chain ran.
     let calls = 0;
     const sheets = [
       {

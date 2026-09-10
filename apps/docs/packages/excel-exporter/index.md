@@ -1,6 +1,6 @@
 # @marcusok/excel-exporter
 
-An Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (WASM) plus a custom Fast stream writer: declarative API, auto mode routing, full cell styling, Web Worker threading, fast large-file writes and a SheetJS fallback.
+An Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (WASM) plus a custom Fast stream writer: declarative API, auto mode routing, full cell styling, Web Worker threading, fast large-file writes and a style-less pure-JS stream fallback.
 
 ## Capabilities
 
@@ -12,7 +12,7 @@ An Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/moder
 | Value formatting           | Structured `FormatSpec` (enum / date / datetime / number / padding)                                                 |
 | Worker threading           | Main thread only does one structured clone; building runs in a Worker (the ≥ 50k-row stream path does not use WASM) |
 | Streaming writes           | Custom `fast-xlsx.ts` + `fflate`, ~0.8s at 100k rows                                                                |
-| Layered fallback           | Auto-degrades to SheetJS (styles stripped) when WASM is unavailable                                                 |
+| Layered fallback           | Auto-degrades to a style-less fast stream when WASM is unavailable                                                  |
 | Progress / phase callbacks | `onProgress`, `onPhase` for visualizations and telemetry                                                            |
 
 ## Install

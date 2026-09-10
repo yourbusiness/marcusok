@@ -64,7 +64,7 @@ Rules:
 - Leaf columns (no `children`) need a `key`; group columns may omit it and contribute header rows only;
 - `width` / `style` / `format` apply to leaf columns only;
 - Group header cells style via that column's `headerStyle`, leaf headers likewise (falling back to the sheet-level `headerStyle`);
-- Multi-row headers work on every path (main / worker / stream / SheetJS fallback); merges survive on the stream and fallback paths too (styles excepted).
+- Multi-row headers work on every path (main / worker / stream, including the stream fallback); merges survive on the stream and fallback paths too (styles excepted).
 
 Try it live: below is a mock preview of the `sales-grouped` dataset (two-level grouped header, matching the exported file's header structure); pick the `sales-grouped` dataset in the demo panel on the [package home](/packages/excel-exporter/) to export a real file with a multi-row header and data-area merges.
 
@@ -98,7 +98,7 @@ await exportExcel({
   ...,
   onProgress: (progress) => {
     // 0 → 1; the leading 0 and trailing 1 fire exactly once each on every route
-    // (the SheetJS fallback included); incremental progress only on the stream
+    // (the stream fallback included); incremental progress only on the stream
     // path (every 1000 rows)
     bar.style.width = `${progress * 100}%`;
   },
@@ -111,11 +111,11 @@ await exportExcel({
 
 Phase semantics:
 
-| Phase      | Description                                                                                                                                                                                                                                                                                   |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `init`     | WASM init; reported on every main-path export (~0ms once loaded); Node's main-thread stream path does not load WASM but still reports a single 0ms to keep the phase sequence stable; on Worker + Workbook only when the worker initializes; never on Worker + stream or the SheetJS fallback |
-| `build`    | Workbook construction (reported once per actual attempt, including fallback)                                                                                                                                                                                                                  |
-| `download` | Browser download trigger (absent with `download: false`; absent in Node)                                                                                                                                                                                                                      |
+| Phase      | Description                                                                                                                                                                                                                                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init`     | WASM init; reported on every main-path export (~0ms once loaded); Node's main-thread stream path does not load WASM but still reports a single 0ms to keep the phase sequence stable; on Worker + Workbook only when the worker initializes; never on Worker + stream or the stream fallback (0ms instead) |
+| `build`    | Workbook construction (reported once per actual attempt, including fallback)                                                                                                                                                                                                                               |
+| `download` | Browser download trigger (absent with `download: false`; absent in Node)                                                                                                                                                                                                                                   |
 
 > `onPhase` measures per-phase wall time only; `ExportResult.duration` always measures the whole export.
 
@@ -132,7 +132,7 @@ const result = await exportExcel({ ..., download: false });
 interface ExportResult {
   success: boolean;
   blob?: Blob;
-  engine?: "modern-xlsx" | "sheetjs"; // engine actually used
+  engine?: "modern-xlsx"; // engine actually used
   mode?: ExportMode; // mode actually used
   duration?: number; // total export duration in ms
   rowCount?: number;
@@ -140,4 +140,4 @@ interface ExportResult {
 }
 ```
 
-Show `result.error` on failure; when `engine` is `"sheetjs"`, warn the user that styles may be stripped.
+Show `result.error` on failure; on a successful export a non-empty `result.error` marks a degraded (style-less stream) export.

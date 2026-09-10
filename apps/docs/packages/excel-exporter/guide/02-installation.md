@@ -2,91 +2,62 @@
 
 ## Requirements
 
-- Node `>= 22` (the package's `engines` requirement); any package manager works — examples use pnpm, npm / yarn are equivalent. The peer `modern-xlsx` additionally declares `engines.node >= 24` — Node 22 works in practice, but a package manager that enforces engines checks rejects the install (see the note below)
+- Node `>= 22` (the package's `engines` requirement); any package manager works — examples use pnpm, npm / yarn are equivalent
 - Browsers need WebAssembly support (all modern browsers)
-- `modern-xlsx@^1.2.0` is a required peerDependency; `xlsx` (SheetJS) is optional for the fallback
 
 ## Install
 
 ```bash
-pnpm add @marcusok/excel-exporter modern-xlsx
+pnpm add @marcusok/excel-exporter
 ```
 
-> **Node version note**: `modern-xlsx` declares `engines.node >= 24`, but its WASM core targets browsers and Node 22 works in practice — this package is developed and CI-tested on Node 22. If your package manager rejects the install on Node 22 with an engines error (e.g. pnpm with `engine-strict` enabled), add `engine-strict=false` to your project's `.npmrc`, or upgrade to Node >= 24.
+That is the entire setup. The package has **zero runtime dependencies**: the export engine (modern-xlsx JS glue + fflate) is bundled in at build time, and the WASM binary ships under this package's own `exports` map — there is no engine package to install, no optional fallback package, and nothing to add to `main.ts` or your bundler config.
 
-Install SheetJS only if you want a local fallback. Use the official CDN tarball, not npm: the last npm release (`0.18.5`) is unmaintained and carries known CVEs (CVE-2023-30533, CVE-2024-22363), while fixes are only published on the SheetJS CDN.
+## Browser: assets resolve automatically
 
-```bash
-pnpm add https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
-```
+Two files ship alongside the code and are located by default, so a plain `import { exportExcel } from "@marcusok/excel-exporter"` works out of the box:
 
-Without it, the fallback dynamically loads `xlsx.mjs` (0.20.3) from the official SheetJS CDN — self-hosting is recommended for production.
+| Asset              | Description                                                                                                                                                 |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modern-xlsx.wasm` | WASM core (~1.9MB); needed on every route except an explicit `mode: "stream"` (pure JS)                                                                     |
+| `export.worker.js` | Self-contained worker entry (a single ESM file, zero imports); needed only when exports enter a Worker (auto ≥ 20,000 rows, or explicit worker/stream mode) |
 
-## Browser: static assets
+Resolution order:
 
-Two assets must be reachable by your site:
+1. **Bundlers** — both default to `new URL(<file>, import.meta.url)` next to the package entry. Vite rewrites this in dev (dependency pre-bundling) and emits hashed assets at build time; webpack 5 documents the same asset pattern. No plugins, no `?url` imports, no copy step.
+2. **Node** — the binary is read from disk next to the installed package and initialized synchronously (see [Node / SSR](#node-ssr)).
 
-| Asset              | Description                                                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `modern-xlsx.wasm` | WASM core (~1.9MB), pointed to by `configureWasm({ wasmUrl })`                                                                                                                        |
-| `export.worker.js` | Worker entry, pointed to by `configureWasm({ workerUrl })`; needed by every browser path that enters a Worker (auto ≥ 20,000 rows, plus explicit `mode: "worker"` / `mode: "stream"`) |
+### Optional: `configureWasm`
 
-Recommended: a Vite plugin that resolves real paths from `require.resolve` in `buildStart` and copies them to `public/assets/` (robust under pnpm symlinks):
-
-```ts
-// vite.config.ts
-import { defineConfig } from "vite";
-import { createRequire } from "node:module";
-import { copyFileSync, mkdirSync, statSync } from "node:fs";
-import { dirname } from "node:path";
-
-const require = createRequire(import.meta.url);
-const resolveDistDir = (spec: string) => dirname(require.resolve(spec));
-
-export default defineConfig({
-  plugins: [
-    {
-      name: "copy-modern-xlsx-assets",
-      buildStart() {
-        mkdirSync("public/assets", { recursive: true });
-        copyFileSync(
-          `${resolveDistDir("modern-xlsx")}/modern-xlsx.wasm`,
-          "public/assets/modern-xlsx.wasm",
-        );
-        const workerSrc = `${resolveDistDir("@marcusok/excel-exporter")}/export.worker.js`;
-        if (!statSync(workerSrc, { throwIfNoEntry: false }))
-          throw new Error(
-            `export.worker.js not found. Run pnpm build first. Looked at: ${workerSrc}`,
-          );
-        copyFileSync(workerSrc, "public/assets/export.worker.js");
-      },
-    },
-  ],
-});
-```
-
-Configure once at app entry:
+An escape hatch for setups where the defaults cannot work — self-hosted copies on a CDN, Service Worker environments, bundlers without asset-URL support, or load-timeout tuning:
 
 ```ts
 import { configureWasm } from "@marcusok/excel-exporter";
 
 configureWasm({
-  wasmUrl: "/assets/modern-xlsx.wasm",
-  workerUrl: "/assets/export.worker.js",
+  // Both optional; set only what you want to override.
+  wasmUrl: "https://cdn.example.com/modern-xlsx.wasm",
+  workerUrl: "https://cdn.example.com/export.worker.js",
 });
 ```
 
-### configureWasm options
+Bundlers with asset imports can wire the shipped files explicitly instead (fully supported, the pre-2.0 recommended setup):
 
-| Option       | Type            | Default  | Description                                                         |
-| ------------ | --------------- | -------- | ------------------------------------------------------------------- |
-| `wasmUrl`    | `string \| URL` | —        | Self-hosted WASM URL; explicitly configuring it avoids CDN drift    |
-| `workerUrl`  | `string \| URL` | —        | `export.worker.js` URL; required for worker mode                    |
-| `timeoutMs`  | `number`        | `10_000` | Per-attempt load timeout                                            |
-| `maxRetries` | `number`        | `3`      | Max attempts; 3 by default — failed attempts wait 300ms, then 600ms |
+```ts
+import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
+import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
+configureWasm({ wasmUrl, workerUrl });
+```
+
+| Option       | Type            | Default                 | Description                                          |
+| ------------ | --------------- | ----------------------- | ---------------------------------------------------- |
+| `wasmUrl`    | `string \| URL` | the shipped `.wasm`     | Override for a self-hosted / CDN copy                |
+| `workerUrl`  | `string \| URL` | the shipped worker file | Override for a self-hosted / CDN copy                |
+| `timeoutMs`  | `number`        | `10_000`                | Per-attempt load timeout                             |
+| `maxRetries` | `number`        | `3`                     | Max attempts; failed attempts wait 300ms, then 600ms |
 
 `configureWasm` merges options: only a changed `wasmUrl` resets an already-loaded (or mid-load) WASM instance; changing timeouts/retries alone never causes re-initialization. If a previous load failed (error state), any `configureWasm` call clears the error so the next export retries with the new settings.
 
 ## Node / SSR
 
-No browser static assets are needed in Node, but **WASM must be initialized first when running locally**: the auto-detected `file://` URL cannot be fetched by Node, and without bootstrapping the export degrades to the style-less SheetJS fallback (with an `[excel-exporter]` console warning). Either call `initWasmSync(readFileSync(...))` at your entry (full example in [Node/SSR](/packages/excel-exporter/guide/09-node-ssr)) or point `configureWasm({ wasmUrl })` at a fetchable HTTP URL. `auto` never uses Workers in Node; ≥ 50k rows switch to streaming on the main thread (the stream path does not use WASM).
+No browser static assets and **no initialization boilerplate** are needed in Node: with nothing configured, the engine locates this package's `dist/modern-xlsx.wasm` on disk (pnpm-symlink-safe) and initializes it synchronously on first use. `auto` never uses Workers in Node; ≥ 50k rows switch to streaming on the main thread (the stream path does not use WASM). See [Node/SSR](/packages/excel-exporter/guide/09-node-ssr) for explicit-init timing control and bundler caveats.

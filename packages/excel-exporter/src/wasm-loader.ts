@@ -1,16 +1,36 @@
-import { initWasm } from "modern-xlsx";
+import { initWasm, initWasmSync } from "modern-xlsx";
 
 export type LoadState = "idle" | "loading" | "ready" | "error";
 
 export interface LoaderOptions {
-  /** Self-hosted WASM URL. Strongly recommended in production to avoid CDN drift. */
+  /**
+   * WASM URL. Defaults to the binary shipped next to this package's entry
+   * (`dist/modern-xlsx.wasm`): bundlers that support the `new URL(asset,
+   * import.meta.url)` pattern (Vite, webpack 5, Rollup) rewrite it to a hashed
+   * asset automatically, and Node locates it through `node_modules`. Override
+   * only for self-hosted copies, a CDN, or bundlers without asset-URL support.
+   */
   wasmUrl?: string | URL;
-  /** Self-hosted export.worker.js URL, required for worker mode. */
+  /**
+   * export.worker.js URL, required for worker mode. Defaults to the
+   * self-contained worker shipped next to this package's entry — the same
+   * bundler rewrite applies. Override for self-hosted copies.
+   */
   workerUrl?: string | URL;
   /** Per-attempt load timeout, default 10s. */
   timeoutMs?: number;
   /** Max load attempts (total, including the first), default 3. */
   maxRetries?: number;
+}
+
+/**
+ * Default WASM location: the binary this package ships next to its entry.
+ * Kept as a `new URL(<literal>, import.meta.url)` expression — the exact form
+ * Vite's `vite:asset-import-meta-url` / webpack 5 match to emit a hashed
+ * asset at build time, and the natural relative location in Node.
+ */
+export function defaultWasmUrl(): URL {
+  return new URL("./modern-xlsx.wasm", import.meta.url);
 }
 
 export class WasmLoader {
@@ -97,14 +117,19 @@ export class WasmLoader {
   }
 
   /**
-   * Node auto-init: when no wasmUrl is configured and we run on Node, locate
-   * modern-xlsx's wasm binary via createRequire (the same resolution the docs
-   * recommend for manual initWasmSync) and initialize synchronously. This
-   * removes the boilerplate initWasmSync(readFileSync(...)) from every Node
-   * consumer's entry file.
+   * Node auto-init: when no wasmUrl is configured and we run on Node, read
+   * this package's own `dist/modern-xlsx.wasm` from disk and initialize
+   * synchronously (Node's fetch rejects the file:// URL the browser default
+   * would produce). This removes any init boilerplate from Node consumers —
+   * nothing to call, nothing to copy.
+   *
+   * Resolution order within this method:
+   *  1. `./modern-xlsx.wasm` next to the published entry (dist/).
+   *  2. `../dist/modern-xlsx.wasm` — the binary's location when this module
+   *     runs from src/ (repo tests, source-aliased monorepo consumers).
    *
    * Returns false in browsers, when a URL is configured, or on any failure,
-   * so the standard initWasm path (and its SheetJS degradation) is untouched.
+   * so the standard initWasm path (and its stream degradation) is untouched.
    *
    * Node built-ins MUST stay dynamically imported: this module also ships in
    * browser bundles, where a static `import "node:fs"` would fail to resolve.
@@ -113,22 +138,23 @@ export class WasmLoader {
     if (this.opts.wasmUrl !== undefined) return false;
     if (typeof process === "undefined" || !process.versions?.node) return false;
     try {
-      const [moduleNs, fsNs, pathNs, mx] = await Promise.all([
-        import("node:module"),
-        import("node:fs"),
-        import("node:path"),
-        import("modern-xlsx"),
-      ]);
       // Test suites mock modern-xlsx with a bare { initWasm } factory; a
       // missing initWasmSync must skip auto-init, not throw a TypeError.
-      if (typeof mx.initWasmSync !== "function") return false;
-      const require = moduleNs.createRequire(import.meta.url);
-      const wasmPath = `${pathNs.dirname(require.resolve("modern-xlsx"))}/modern-xlsx.wasm`;
-      mx.initWasmSync(fsNs.readFileSync(wasmPath));
+      if (typeof initWasmSync !== "function") return false;
+      const fsNs = await import("node:fs");
+      let bytes: Uint8Array;
+      try {
+        bytes = fsNs.readFileSync(defaultWasmUrl());
+      } catch {
+        bytes = fsNs.readFileSync(
+          new URL("../dist/modern-xlsx.wasm", import.meta.url),
+        );
+      }
+      initWasmSync(bytes);
       return true;
     } catch {
       // Resolution/read/init failure (e.g. a consumer bundling for Node
-      // without the runtime package on disk): fall through to initWasm,
+      // without the package files on disk): fall through to initWasm,
       // which retries and degrades exactly as before this path existed.
       return false;
     }
@@ -145,7 +171,7 @@ export class WasmLoader {
     // rejects. Idempotent with initWasm (shared "initialized" flag inside
     // modern-xlsx), so a later initWasm call on the same thread is a no-op.
     if (await this.tryNodeAutoInit()) return;
-    const wasmUrl = this.opts.wasmUrl;
+    const wasmUrl = this.opts.wasmUrl ?? defaultWasmUrl();
     const timeoutMs = this.opts.timeoutMs ?? 10_000;
     const maxRetries = this.opts.maxRetries ?? 3;
     let lastErr: unknown;
@@ -185,18 +211,21 @@ export function getWasmLoader(): WasmLoader {
 }
 
 /**
- * Inject CDN / self-hosted URLs and timeout config at app entry. Merges into the
- * existing loader rather than replacing it, so an already-loaded WASM module is
- * kept unless the WASM URL actually changes. A previous load error is always
- * cleared, so calling this after a failure makes the next export retry with the
- * new settings.
+ * Configure WASM / worker URLs and timeout settings. Entirely optional since
+ * the assets default to their shipped locations (see LoaderOptions): call
+ * this only to point at self-hosted copies, a CDN, or a custom build.
  *
- * Note: changing `wasmUrl` after a *successful* load does not reload WASM on a
- * thread that already initialized it — modern-xlsx's `initWasm` is idempotent
- * and keeps the first successfully loaded module (see WasmLoader.updateOptions).
- * The new URL takes effect in a fresh JS realm only (page reload / a worker
- * created after `terminateWorker()`), and updateOptions prints a warning when
- * the caveat applies.
+ * Merges into the existing loader rather than replacing it, so an
+ * already-loaded WASM module is kept unless the WASM URL actually changes. A
+ * previous load error is always cleared, so calling this after a failure
+ * makes the next export retry with the new settings.
+ *
+ * Note: changing `wasmUrl` after a *successful* load does not reload WASM on
+ * a thread that already initialized it — modern-xlsx's `initWasm` is
+ * idempotent and keeps the first successfully loaded module (see
+ * WasmLoader.updateOptions). The new URL takes effect in a fresh JS realm
+ * only (page reload / a worker created after `terminateWorker()`), and
+ * updateOptions prints a warning when the caveat applies.
  */
 export function configureWasm(opts: LoaderOptions): void {
   defaultLoader.updateOptions(opts);

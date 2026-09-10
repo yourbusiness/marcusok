@@ -2,23 +2,15 @@
 
 ### 浏览器报 WASM 404
 
-`modern-xlsx.wasm` 没有部署到站点可访问路径。按 [快速开始](/zh/guide/01-getting-started) 用 `?url` 导入 `@marcusok/excel-exporter/dist/modern-xlsx.wasm`（Vite 自动处理部署），或用拷贝方案把它复制到 `public/assets/`，并确保 `configureWasm({ wasmUrl })` 指向正确地址。
+默认（零配置）定位下，Vite / webpack 5 会把随包发布的 `modern-xlsx.wasm` 自动发射为 hash 资产，不应出现 404。若仍遇到，通常是覆盖了 URL（`configureWasm({ wasmUrl })` 指向了错误路径），或使用的打包器不支持 `new URL(资产, import.meta.url)` 资产模式；把 `configureWasm` 指向站点实际可访问的地址，或从本包 `dist/` 把文件拷贝到静态目录即可。
 
-### Worker 模式报 "workerUrl not configured"
+### Worker 模式回退到了主线程
 
-`export.worker.js` 需要显式配置并部署：
+worker 资产（`export.worker.js`）默认自动定位；回退发生在 Worker 路由失败时（例如 `workerUrl` 覆盖配置指向了 404 的地址）。此时导出会**在主线程重试**（modern-xlsx 保留样式；Fast stream 本身不需要 WASM）——只有主线程重试也失败时，才最后降级到无样式的流式兜底。查看 console 中 `[excel-exporter]` 前缀的警告可定位原因。
 
-```ts
-configureWasm({
-  workerUrl: "/assets/export.worker.js",
-});
-```
+### 导出成功但 result.error 有值
 
-只有浏览器中会进入 Worker 的路径需要它：`auto`（数据量 ≥ 20,000 行）、显式 `mode: "worker"`，以及浏览器中的显式 `mode: "stream"`（浏览器下 stream 同样在 Worker 内执行）。未配置时这些路径会在 Worker 路由内失败并**回退到主线程重试**（modern-xlsx 保留样式；Fast stream 本身不需要 WASM）——只有主线程重试也失败时，才最后降级到无样式的 SheetJS 兜底。
-
-### 导出结果里 engine 是 "sheetjs"
-
-说明 WASM 路径加载失败或环境不支持，已自动降级到 SheetJS 兜底（样式会被剥离）。查看浏览器 console 中的 `[excel-exporter]` 前缀警告可定位原因，常见是 wasm URL 404 或 CDN/网络受限。详见 [兜底机制](/zh/packages/excel-exporter/guide/08-fallback)。
+说明导出降级到了无样式快速流（WASM 失败或环境不支持）：样式被剥离，表头与合并保留。原因见 `result.error.message` 与 console 中的 `[excel-exporter]` 警告——通常是 wasm 资产 404。详见 [兜底机制](/zh/packages/excel-exporter/guide/08-fallback)。
 
 ### 10 万行数据导出非常慢（>15s）
 
@@ -34,4 +26,4 @@ Stream 路径 v1 支持多行表头（`children`）与数据区合并（`merges`
 
 ### 日期列显示为长文本，Excel 不识别为日期
 
-不声明 `format` 时，`Date` 值会按普通文本写入单元格，Excel 不会识别为日期：所有路径（main / worker / stream / SheetJS 兜底）统一写入 ISO 字符串（如 `2026-07-01T00:00:00.000Z`）。日期列需要声明 `format: { type: "date" }`（或 `datetime`）：Workbook 路径会写入 Excel 日期序列并自动注入对应 `numFormat`，单元格才会被 Excel 识别为真正的日期。
+不声明 `format` 时，`Date` 值会按普通文本写入单元格，Excel 不会识别为日期：所有路径（main / worker / stream）统一写入 ISO 字符串（如 `2026-07-01T00:00:00.000Z`）。日期列需要声明 `format: { type: "date" }`（或 `datetime`）：Workbook 路径会写入 Excel 日期序列并自动注入对应 `numFormat`，单元格才会被 Excel 识别为真正的日期。

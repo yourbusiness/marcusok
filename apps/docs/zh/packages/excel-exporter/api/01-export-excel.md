@@ -6,30 +6,30 @@
 exportExcel(options: ExportOptions): Promise<ExportResult>
 ```
 
-核心入口函数（`exportTable` / `exportEcharts` 等便捷封装最终都委托给它）。根据数据量与环境自动路由到 main / worker / stream，WASM 不可用时降级 SheetJS。
+核心入口函数（`exportTable` / `exportEcharts` 等便捷封装最终都委托给它）。根据数据量与环境自动路由到 main / worker / stream，WASM 不可用时降级无样式快速流。
 
 ## ExportOptions
 
-| 字段         | 类型                                               | 必填 | 说明                                                                                                                                        |
-| ------------ | -------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sheets`     | `SheetConfig[]`                                    | 是   | 工作表配置，至少一个                                                                                                                        |
-| `filename`   | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                                                                                                 |
-| `mode`       | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`，按行数自动路由                                                                                                               |
-| `onProgress` | `(progress: number) => void`                       | —    | 0 → 1；首尾 0 与 1 由 `exportExcel` 在所有路径各上报一次（含 SheetJS 兜底与最终失败的导出）；分段进度仅 stream 路径有（每 1000 行上报一次） |
-| `onPhase`    | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                                                                                      |
-| `download`   | `boolean`                                          | —    | 默认 `true` 触发浏览器下载；`false` 只返回 Blob                                                                                             |
+| 字段         | 类型                                               | 必填 | 说明                                                                                                                                   |
+| ------------ | -------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `sheets`     | `SheetConfig[]`                                    | 是   | 工作表配置，至少一个                                                                                                                   |
+| `filename`   | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                                                                                            |
+| `mode`       | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`，按行数自动路由                                                                                                          |
+| `onProgress` | `(progress: number) => void`                       | —    | 0 → 1；首尾 0 与 1 由 `exportExcel` 在所有路径各上报一次（含流式兜底与最终失败的导出）；分段进度仅 stream 路径有（每 1000 行上报一次） |
+| `onPhase`    | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                                                                                 |
+| `download`   | `boolean`                                          | —    | 默认 `true` 触发浏览器下载；`false` 只返回 Blob                                                                                        |
 
 ## ExportResult
 
-| 字段        | 类型                         | 说明                         |
-| ----------- | ---------------------------- | ---------------------------- |
-| `success`   | `boolean`                    | 是否成功                     |
-| `blob?`     | `Blob`                       | 导出文件内容                 |
-| `engine?`   | `"modern-xlsx" \| "sheetjs"` | 实际使用的引擎               |
-| `mode?`     | `ExportMode`                 | 实际使用的模式               |
-| `duration?` | `number`                     | 完整导出耗时（ms）           |
-| `rowCount?` | `number`                     | 导出行数                     |
-| `error?`    | `Error`                      | 失败原因（兜底路径也会返回） |
+| 字段        | 类型            | 说明                         |
+| ----------- | --------------- | ---------------------------- |
+| `success`   | `boolean`       | 是否成功                     |
+| `blob?`     | `Blob`          | 导出文件内容                 |
+| `engine?`   | `"modern-xlsx"` | 实际使用的引擎               |
+| `mode?`     | `ExportMode`    | 实际使用的模式               |
+| `duration?` | `number`        | 完整导出耗时（ms）           |
+| `rowCount?` | `number`        | 导出行数                     |
+| `error?`    | `Error`         | 失败原因（兜底路径也会返回） |
 
 ## configureWasm
 
@@ -37,12 +37,14 @@ exportExcel(options: ExportOptions): Promise<ExportResult>
 configureWasm(options: LoaderOptions): void
 ```
 
-| 字段         | 默认值   | 说明                                                    |
-| ------------ | -------- | ------------------------------------------------------- |
-| `wasmUrl`    | —        | 自托管 `modern-xlsx.wasm` 地址                          |
-| `workerUrl`  | —        | `export.worker.js` 地址，worker 模式必填                |
-| `timeoutMs`  | `10_000` | 单次加载超时                                            |
-| `maxRetries` | `3`      | 最大加载尝试次数（默认共 3 次含首次，退避 300ms/600ms） |
+可选——资产默认定位到随包发布的位置（见[安装与配置](/zh/packages/excel-exporter/guide/02-installation)）。仅自托管副本、CDN、或不支持资产 URL 的打包器需要覆盖。
+
+| 字段         | 默认值             | 说明                                                    |
+| ------------ | ------------------ | ------------------------------------------------------- |
+| `wasmUrl`    | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                                 |
+| `workerUrl`  | 随包发布的 worker  | 覆盖为自托管 / CDN 副本                                 |
+| `timeoutMs`  | `10_000`           | 单次加载超时                                            |
+| `maxRetries` | `3`                | 最大加载尝试次数（默认共 3 次含首次，退避 300ms/600ms） |
 
 ## 其他导出符号
 

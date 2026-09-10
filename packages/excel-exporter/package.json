@@ -54,14 +54,6 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "xlsx": ">=0.18.5"
-  },
-  "peerDependenciesMeta": {
-    "xlsx": {
-      "optional": true
-    }
-  },
   "publishConfig": {
     "access": "public"
   },
@@ -75,13 +67,10 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "eslint": "^9.16.0",
+    "fflate": "^0.8.3",
+    "modern-xlsx": "^1.2.0",
     "tsup": "^8.3.5",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
-  },
-  "dependencies": {
-    "fflate": "^0.8.3",
-    "modern-xlsx": "^1.2.0"
+    "vitest": "^4.1.10"
   }
 }

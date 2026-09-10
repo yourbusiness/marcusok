@@ -28,7 +28,6 @@
     "typescript": "^5.9.3",
     "vitepress": "^1.6.4",
     "vue-eslint-parser": "^10.4.1",
-    "vue-tsc": "^3.3.9",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "vue-tsc": "^3.3.9"
   }
 }

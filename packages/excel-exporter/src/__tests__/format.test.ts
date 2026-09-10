@@ -24,8 +24,8 @@ describe("applyFormat", () => {
   it("number: returns a typed number; grouping/precision are left to numFormat", () => {
     // applyFormat keeps full precision: the stored cell value is never truncated.
     // Display formatting (decimals/thousands) is rendered via the auto-injected
-    // numFormat on the workbook path (see numFormatForSpec). The stream/SheetJS
-    // paths bake decimals into displayValue instead.
+    // numFormat on the workbook path (see numFormatForSpec). The stream path
+    // bakes decimals into displayValue instead.
     expect(
       applyFormat(1234567, { type: "number", decimals: 2, thousands: true }),
     ).toBe(1234567);
@@ -179,14 +179,14 @@ describe("formatDateByPattern", () => {
   });
 });
 
-describe("displayValue (stream/SheetJS number-decimals baking)", () => {
+describe("displayValue (stream number-decimals baking)", () => {
   it("bakes decimals into the displayed value when a number spec is set", () => {
     const col = {
       key: "n",
       header: "N",
       format: { type: "number" as const, decimals: 2 },
     };
-    // stream/SheetJS have no numFormat -> decimals applied here (1234.567 -> 1234.57)
+    // the stream path has no numFormat -> decimals applied here (1234.567 -> 1234.57)
     expect(displayValue(col, { n: 1234.567 })).toBe(1234.57);
     // decimals default 0 -> integer display (1234.567 -> 1235)
     expect(

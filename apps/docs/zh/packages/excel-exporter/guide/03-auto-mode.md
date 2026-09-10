@@ -27,7 +27,7 @@ await exportExcel({ ..., mode: "worker" });  // 强制 Worker（浏览器）
 await exportExcel({ ..., mode: "main" });    // 强制主线程
 ```
 
-`mode: "worker"` 在 Node/SSR 环境不会报错：库会回退到主线程路径（≥ 5 万行用 stream），保证样式语义不丢失，而不是降级成无样式的 SheetJS。
+`mode: "worker"` 在 Node/SSR 环境不会报错：库会回退到主线程路径（≥ 5 万行用 stream），保证样式语义不丢失，而不是降级成无样式的流式路径。
 
 ## 阈值为什么是 20,000 / 50,000
 

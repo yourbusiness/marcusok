@@ -4,13 +4,11 @@
 
 浏览器中数据量 ≥ 20,000 行时，`auto` 会选择 Worker 路径：主线程只做一次结构化克隆（10 万行约 94ms），其余工作都在 Worker 内执行。其中 20,000–49,999 行在 Worker 内加载 WASM 并构建（Workbook 路径）；≥ 50,000 行切换为不依赖 WASM 的 Fast stream（见下）。
 
-```ts
-configureWasm({ workerUrl: "/assets/export.worker.js" });
-```
+worker 资产（`export.worker.js`，自包含单文件 ESM）默认自动定位，无需任何配置；仅自托管副本场景需要 `configureWasm({ workerUrl })` 覆盖。
 
 Worker 路径行为：
 
-- **必须配置 `workerUrl`**，否则 Worker 路由失败后**先回退到主线程重试**（modern-xlsx 保留样式；≥ 50,000 行的 Fast stream 本身不依赖 WASM）；只有重试也失败时才最终降级到无样式的 SheetJS 兜底（`engine: "sheetjs"`）。调用方的 Promise 正常 resolve（不会 reject），每一级降级都会在 console 打印 `[excel-exporter]` 前缀警告；
+- **Worker 失败会优雅降级**——Worker 路由失败时（例如 `workerUrl` 覆盖配置指向 404），导出会**先回退到主线程重试**（modern-xlsx 保留样式；≥ 50,000 行的 Fast stream 本身不依赖 WASM）；只有重试也失败时才最终降级到无样式的流式兜底（`mode: "stream"` 且 `result.error` 非空，`success` 仍为 `true`）。调用方的 Promise 正常 resolve（不会 reject），每一级降级都会在 console 打印 `[excel-exporter]` 前缀警告；
 - Worker 实例复用，请求按 `requestId` 并发分发，多次导出互不串扰；
 - **函数形式的 format 会被剥离**（结构化克隆无法传递函数）——worker 路径请使用 FormatSpec；
 - `onProgress` / `onPhase`（`init` / `build`）会从 Worker 转发回主线程。

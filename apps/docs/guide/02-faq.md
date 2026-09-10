@@ -2,23 +2,15 @@
 
 ### WASM 404 in the browser
 
-`modern-xlsx.wasm` is not reachable by your site. Copy it into `public/assets/` with the Vite plugin from [Getting Started](/guide/01-getting-started) and point `configureWasm({ wasmUrl })` at the right URL.
+With the default (zero-config) resolution this should not happen on Vite / webpack 5 — the bundler emits the shipped `modern-xlsx.wasm` as a hashed asset automatically. If you see a 404, you are likely overriding the URL (`configureWasm({ wasmUrl })` pointing at a wrong path) or using a bundler without `new URL(asset, import.meta.url)` support; point `configureWasm` at a URL your site actually serves, or copy the file out of this package's `dist/` into a static directory.
 
-### Worker mode throws "workerUrl not configured"
+### Worker mode degrades to the main thread
 
-`export.worker.js` must be deployed and configured explicitly:
+The worker asset (`export.worker.js`) resolves automatically; degradation happens when the Worker route fails (e.g. a misconfigured `workerUrl` override 404s). The export then **retries on the main thread** (modern-xlsx keeps styles; the fast stream needs no WASM at all) — the style-less stream fallback is only the last resort when the main-thread retry also fails. Check for `[excel-exporter]` console warnings to find the reason.
 
-```ts
-configureWasm({
-  workerUrl: "/assets/export.worker.js",
-});
-```
+### `result.error` is set although `success` is true
 
-It is needed by every browser path that enters a Worker: `auto` (≥ 20,000 rows), explicit `mode: "worker"`, and explicit `mode: "stream"` in the browser (stream also runs inside a Worker there). Without it those paths fail inside the Worker route and **retry on the main thread** (modern-xlsx keeps styles; the fast stream needs no WASM at all) — the style-less SheetJS fallback is only the last resort when the main-thread retry also fails.
-
-### `result.engine` is "sheetjs"
-
-The WASM path failed or is unsupported, so the library degraded to the SheetJS fallback (styles stripped). Look for `[excel-exporter]` warnings in the console to find the reason — usually a 404 wasm URL or blocked CDN. See [fallback](/packages/excel-exporter/guide/08-fallback).
+The export degraded to the style-less fast stream (WASM failed or is unsupported). Styles are stripped; headers and merges are preserved. The reason is in `result.error.message` and in the `[excel-exporter]` console warnings — usually a 404 wasm URL. See [fallback](/packages/excel-exporter/guide/08-fallback).
 
 ### Exporting 100k rows is very slow (>15s)
 
@@ -34,4 +26,4 @@ No. All processing happens in the browser or the Node process; business data nev
 
 ### Date columns render as long text, not dates
 
-Without a `format`, `Date` values are written as plain text Excel does not recognize as a date — an ISO string (e.g. `2026-07-01T00:00:00.000Z`) on every path (main / worker / stream / SheetJS fallback). Declare `format: { type: "date" }` (or `datetime`) on date columns: the Workbook path then stores the Excel date serial and auto-injects the matching `numFormat`, so the cell becomes a real date.
+Without a `format`, `Date` values are written as plain text Excel does not recognize as a date — an ISO string (e.g. `2026-07-01T00:00:00.000Z`) on every path (main / worker / stream). Declare `format: { type: "date" }` (or `datetime`) on date columns: the Workbook path then stores the Excel date serial and auto-injects the matching `numFormat`, so the cell becomes a real date.

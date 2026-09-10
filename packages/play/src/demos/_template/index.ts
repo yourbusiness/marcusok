@@ -20,12 +20,14 @@
  * 如果 demo 有异步操作（定时器、fetch、WebSocket 等），在 React 组件里用
  * useEffect 的 cleanup 清理资源，避免导航离开后残留。参考 excel-exporter demo。
  *
- * 如果你的包用到 Worker / WASM 等运行时资源（不是普通 JS import），
- * 需要通过 Vite 的 ?url 后缀导入资源路径，然后传给包的配置函数：
+ * 如果你的包通过 new URL(<file>, import.meta.url) 定位 Worker / WASM 等
+ * 运行时资源（相对 dist 入口），源码别名模式下这些字面量会解析到 src/
+ * 下的不存在路径 —— 在 vite.config.ts 的 srcAssetOverrides 数组里加一条，
+ * transform 插件会把字面量改写为包内真实的 dist 副本（参考 excel-exporter）。
+ * 也可以不走默认定位，直接用 ?url 导入资源路径传给包的配置函数：
  *
  *   import workerUrl from "@marcusok/your-pkg/dist/your.worker.js?url";
- *   import wasmUrl from "your-wasm-dep/your.wasm?url";
- *   yourPkg.configure({ workerUrl, wasmUrl });
+ *   yourPkg.configure({ workerUrl });
  *
  * 第三方包如果 "exports" 没暴露你需要的子路径（如 wasm/），
  * 在 vite.config.ts 的 externalOverrides 数组里加一条即可。

@@ -5,75 +5,12 @@ Run your first Excel export in minutes. Requirement: Node `>= 22`. Example comma
 ## 1. Install
 
 ```bash
-pnpm add @marcusok/excel-exporter modern-xlsx
+pnpm add @marcusok/excel-exporter
 ```
 
-> **Node version note**: the required peer `modern-xlsx` declares `engines.node >= 24`, but its WASM core targets browsers and Node 22 works in practice — this package is developed and CI-tested on Node 22. If your package manager rejects the install on Node 22 with an engines error (e.g. pnpm with `engine-strict` enabled), add `engine-strict=false` to your project's `.npmrc`, or upgrade to Node >= 24.
+That is the entire setup — one package, zero runtime dependencies. The export engine (modern-xlsx JS glue + fflate) is bundled in at build time, and the WASM binary ships under this package's own `exports` map, so there is no engine package to install and no `engines` conflict from upstream ranges.
 
-`modern-xlsx` is a required peerDependency because:
-
-1. `modern-xlsx.wasm` (~1.9MB) must be self-hosted by the consumer as a static asset — an implicit dependency would hide this hard requirement;
-2. this package wraps modern-xlsx; consumers should own version control;
-3. package managers do auto-install peerDependencies by default (npm 7+ / pnpm 8+), but the implicitly picked version is not under your control — declaring it explicitly pins your intent.
-
-`xlsx` (SheetJS) is an **optional** peerDependency used only by the fallback path; without it the fallback loads from the official CDN.
-
-## 2. Configure browser static assets (browser only)
-
-Two assets must be reachable by your site:
-
-- `modern-xlsx.wasm` (WASM core)
-- `export.worker.js` (worker path)
-
-The recommended approach is a Vite plugin that resolves the real paths from `require.resolve` and copies them into `public/assets/` (avoids hardcoding `node_modules`, which breaks under pnpm symlinks):
-
-```ts
-// vite.config.ts
-import { defineConfig } from "vite";
-import { createRequire } from "node:module";
-import { copyFileSync, mkdirSync, statSync } from "node:fs";
-import { dirname } from "node:path";
-
-const require = createRequire(import.meta.url);
-const resolveDistDir = (spec: string) => dirname(require.resolve(spec));
-
-export default defineConfig({
-  plugins: [
-    {
-      name: "copy-modern-xlsx-assets",
-      buildStart() {
-        mkdirSync("public/assets", { recursive: true });
-        copyFileSync(
-          `${resolveDistDir("modern-xlsx")}/modern-xlsx.wasm`,
-          "public/assets/modern-xlsx.wasm",
-        );
-        const workerSrc = `${resolveDistDir("@marcusok/excel-exporter")}/export.worker.js`;
-        if (!statSync(workerSrc, { throwIfNoEntry: false }))
-          throw new Error(
-            `export.worker.js not found. Run pnpm build first. Looked at: ${workerSrc}`,
-          );
-        copyFileSync(workerSrc, "public/assets/export.worker.js");
-      },
-    },
-  ],
-});
-```
-
-Then configure the URLs at app entry:
-
-```ts
-// main.ts
-import { configureWasm } from "@marcusok/excel-exporter";
-
-configureWasm({
-  wasmUrl: "/assets/modern-xlsx.wasm",
-  workerUrl: "/assets/export.worker.js",
-});
-```
-
-Node / SSR environments need **no** browser static assets, but WASM must be initialized first when running locally (`initWasmSync`, see [Node/SSR](/packages/excel-exporter/guide/09-node-ssr)) — otherwise the export degrades to the style-less SheetJS fallback.
-
-## 3. First export
+## 2. First export
 
 ```ts
 import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
@@ -120,7 +57,9 @@ await exportExcel({
 
 In the browser this triggers a download; `.xlsx` is appended when missing. Use `download: false` to receive the Blob only.
 
-## 4. Next steps
+No `main.ts` wiring, no bundler plugins: the two shipped assets (`modern-xlsx.wasm`, `export.worker.js`) are located automatically — bundlers emit them as hashed assets via the standard `new URL(asset, import.meta.url)` pattern, and Node reads the wasm from disk. Node / SSR environments need no browser assets and no initialization boilerplate (see [Node/SSR](/packages/excel-exporter/guide/09-node-ssr)). Self-hosted or CDN-hosted copies are the one case that needs [`configureWasm`](/packages/excel-exporter/guide/02-installation).
+
+## 3. Next steps
 
 - Learn how [auto mode routing](/packages/excel-exporter/guide/03-auto-mode) picks main / worker / stream
 - Try different modes and row counts in the [play](/play)

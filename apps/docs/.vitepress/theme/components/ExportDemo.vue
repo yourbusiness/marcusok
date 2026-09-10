@@ -76,12 +76,11 @@ async function run() {
   result.value = null;
   error.value = null;
   try {
-    const { configureWasm, exportExcel, StylePresets } =
+    // Zero-config: wasm/worker assets default to the files shipped with the
+    // package; the bundler emits them as hashed assets (base-aware), so no
+    // configureWasm call and no public/ copies are needed here.
+    const { exportExcel, StylePresets } =
       await import("@marcusok/excel-exporter");
-    configureWasm({
-      wasmUrl: `${import.meta.env.BASE_URL}assets/modern_xlsx_wasm_bg.wasm`,
-      workerUrl: `${import.meta.env.BASE_URL}assets/export.worker.js`,
-    });
 
     const ds = getDataset(datasetKey.value);
     const data = ds.rows(rowsCount.value);

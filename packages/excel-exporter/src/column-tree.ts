@@ -1,14 +1,14 @@
 import type { ColumnConfig } from "./types";
 
 /**
- * Multi-row header flattening, shared by the Workbook, stream and SheetJS
- * fallback paths (and, via bundling, the worker).
+ * Multi-row header flattening, shared by the Workbook and stream paths
+ * (and, via bundling, the worker).
  *
  * A column tree (`ColumnConfig.children`) is flattened into:
  * - `leaves`: the ordered data columns (only these produce data cells),
  * - `headerRowCount` (H): the header depth = 1 + max leaf depth (1 for flat),
  * - `headerGrid`: an H x leaves grid of header texts (null where a merge
- *   covers the cell), fed straight into the aoa/XML/SheetJS writers,
+ *   covers the cell), fed straight into the aoa/XML writers,
  * - `headerCells`: every header cell's top-left + its owning column, used for
  *   header styling,
  * - `headerMerges`: the subset of `headerCells` that actually spans more than
@@ -54,8 +54,8 @@ export function flattenColumnTree(
   // An empty column list produces a degenerate sheet (no cells at all) and
   // previously crashed the Workbook path's autoFilter layout with a cryptic
   // TypeError (encodeCellRef(0, -1) -> "@1" has no column letters), which
-  // exportExcel then masked by degrading to the SheetJS fallback. Reject it
-  // here so all paths (Workbook / stream / SheetJS / pre-flight) fail with
+  // exportExcel then masked by degrading to the fallback. Reject it
+  // here so all paths (Workbook / stream / pre-flight) fail with
   // the same clear error.
   if (columns.length === 0) {
     throw new Error(

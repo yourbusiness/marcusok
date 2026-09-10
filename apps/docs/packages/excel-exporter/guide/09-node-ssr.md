@@ -1,6 +1,6 @@
 # Node / SSR Usage
 
-In Node servers (including SSR) you don't need browser assets, but local filesystem runtimes must initialize WASM first; otherwise the library falls back to SheetJS.
+In Node servers (including SSR) you don't need browser assets and there is **no initialization boilerplate**: the engine locates this package's `dist/modern-xlsx.wasm` on disk (pnpm-symlink-safe) and initializes it synchronously on first use. The explicit `initWasmSync` bootstrap from earlier versions is no longer required — keep it only if you want the one-off read+compile at startup instead of the first request.
 
 ## Environment differences
 
@@ -15,17 +15,7 @@ In Node servers (including SSR) you don't need browser assets, but local filesys
 
 ```ts
 import { exportExcel } from "@marcusok/excel-exporter";
-import { initWasmSync } from "modern-xlsx";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { writeFile } from "node:fs/promises";
-
-const require = createRequire(import.meta.url);
-initWasmSync(
-  readFileSync(
-    `${require("node:path").dirname(require.resolve("modern-xlsx"))}/modern-xlsx.wasm`,
-  ),
-);
 
 const result = await exportExcel({
   filename: "server-report",
@@ -44,19 +34,6 @@ if (result.success && result.blob) {
 ```ts
 // app/api/export/route.ts
 import { exportExcel } from "@marcusok/excel-exporter";
-import { initWasmSync } from "modern-xlsx";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-
-// Same bootstrap as the "write to disk" example above: Node must initialize
-// WASM first (once, at module load) — otherwise exportExcel degrades to the
-// style-less SheetJS fallback.
-const require = createRequire(import.meta.url);
-initWasmSync(
-  readFileSync(
-    `${require("node:path").dirname(require.resolve("modern-xlsx"))}/modern-xlsx.wasm`,
-  ),
-);
 
 export async function GET() {
   const result = await exportExcel({
@@ -76,6 +53,20 @@ export async function GET() {
   });
 }
 ```
+
+## Optional: explicit init timing
+
+To move the one-off synchronous WASM read+compile from the first request to process startup, await the loader before serving traffic:
+
+```ts
+import { getWasmLoader } from "@marcusok/excel-exporter";
+
+await getWasmLoader().ensureLoaded(); // reads + compiles the shipped wasm once
+```
+
+> Do not use `initWasmSync` from a separately installed `modern-xlsx` for this: the engine is bundled into `@marcusok/excel-exporter`, so an external copy initializes a different module instance and does not pre-warm the bundled one.
+
+> Bundler caveat: if your server build bundles this package and the WASM asset is not emitted alongside the bundle, the automatic disk lookup fails and WASM-dependent routes degrade to the style-less stream (headers/merges preserved). Either keep the package external (the default for Node server builds), pass `configureWasm({ wasmUrl })` with an HTTP URL, or copy the asset where the bundle can read it.
 
 ## Performance tip
 

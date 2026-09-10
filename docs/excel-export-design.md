@@ -3,6 +3,8 @@
 > 包名：`@marcusok/excel-exporter` ｜ 技术方案：modern-xlsx + WebAssembly ｜ 架构：pnpm Monorepo
 >
 > 本文档所有 API、性能数据、依赖版本均经过实际核对（modern-xlsx@1.2.0 npm tarball 解包 + `dist/index.d.mts` / `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）。性能数字均经过**两次独立进程真机实测**（Node v22.22.2，4 列，独立进程首次跑），两组数据互相印证。
+>
+> **⚠ 2.0 现状注记**：本文档为历史设计记录，以下章节描述的机制在 2.0 已变更——4.12 的 SheetJS 降级已移除（终端兜底改为主线程无样式 fast stream，`fallback.ts` 已删除）；`configureWasm` 由必配项变为可选覆盖（wasm/worker 默认 `new URL(<file>, import.meta.url)` 自动定位）；modern-xlsx/fflate 由直接依赖改为构建期打包（零运行时依赖）；Node 自动初始化改为解析本包自身 `dist/modern-xlsx.wasm`。当前行为的权威描述见包 README 与文档站；变更全貌见 `.changeset/zero-config-assets-major.md`。
 
 ---
 

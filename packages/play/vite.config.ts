@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -116,10 +116,51 @@ const mainAliases = sourcePackages.map(({ name, dir }) => ({
   replacement: sourceEntry(dir),
 }));
 
+// src-alias asset mapping: @marcusok/excel-exporter locates its wasm/worker
+// via `new URL(<literal>, import.meta.url)`, relative to the published dist
+// entry — the assets sit in dist/, next to the entry. The aliases above point
+// the main entry at src/, so those literals resolve into src/ where the files
+// do not exist. Vite's asset and worker plugins resolve relative URLs on disk
+// themselves (path.resolve + tryFsResolve, not through the plugin container),
+// and the worker build then fails outright (UNRESOLVED_ENTRY). A transform is
+// the one mechanism that applies on every path: rewrite the literals to
+// ../dist/<file>, which exists on disk for build-time resolution, resolves
+// correctly against the served module URL in dev, and matches the same
+// ../dist fallback the package's own Node auto-init uses in src mode.
+const srcAssetOverrides: { dir: string; files: string[] }[] = [
+  {
+    dir: resolve(packagesDir, "excel-exporter"),
+    files: ["modern-xlsx.wasm", "export.worker.js"],
+  },
+];
+
+const srcAssetOverridePlugin: Plugin = {
+  name: "marcusok-src-asset-overrides",
+  enforce: "pre",
+  transform(code, id) {
+    // Vite module ids use forward slashes even on Windows; normalize both
+    // sides before comparing, or the startsWith check silently never matches.
+    const norm = (p: string) => p.replaceAll("\\", "/");
+    const override = srcAssetOverrides.find(({ dir }) =>
+      norm(id).startsWith(`${norm(resolve(dir, "src"))}/`),
+    );
+    if (!override) return null;
+    let rewritten = code;
+    for (const file of override.files) {
+      rewritten = rewritten.replaceAll(
+        `new URL("./${file}", import.meta.url)`,
+        `new URL("../dist/${file}", import.meta.url)`,
+      );
+    }
+    return rewritten === code ? null : { code: rewritten, map: null };
+  },
+};
+
 export default defineConfig({
   resolve: { alias: mainAliases },
   plugins: [
     react(),
+    srcAssetOverridePlugin,
     {
       name: "marcusok-resolver",
       enforce: "pre",

@@ -30,7 +30,7 @@ Outputs the mapped label; unmapped values use `fallback`, or pass through when a
 { type: "datetime", pattern: "yyyy-MM-dd HH:mm:ss" }
 ```
 
-Accepts `Date` / parseable string / timestamp. The Workbook path writes an Excel date serial and auto-injects `numFormat`; Stream/SheetJS paths output the pattern-formatted string. Values are interpreted by their **UTC components** (matching the workbook serial's `dateToSerial` convention, so all paths and timezones render the same); ISO date strings parse as UTC midnight per ECMA-262 — see the timezone note in [Value Formatting](/packages/excel-exporter/guide/04-formatting).
+Accepts `Date` / parseable string / timestamp. The Workbook path writes an Excel date serial and auto-injects `numFormat`; the stream path outputs the pattern-formatted string. Values are interpreted by their **UTC components** (matching the workbook serial's `dateToSerial` convention, so all paths and timezones render the same); ISO date strings parse as UTC midnight per ECMA-262 — see the timezone note in [Value Formatting](/packages/excel-exporter/guide/04-formatting).
 
 ### number
 
@@ -40,7 +40,7 @@ Accepts `Date` / parseable string / timestamp. The Workbook path writes an Excel
 
 `decimals` defaults to 0, `thousands` to false. **Always set `decimals` explicitly**: the Workbook path keeps full precision rendered via `numFormat`, while Stream/fallback paths bake decimals into the stored value — the two can differ otherwise.
 
-Cross-path `thousands`: the Workbook path renders the separator via an auto-injected `#,##0` `numFormat`; the Stream/SheetJS paths (>= 50,000 rows / degraded exports) cannot use `numFormat` and keep the cell a **number**, so separators are not visible there (baking them into the value would turn data cells into text and break downstream calculations).
+Cross-path `thousands`: the Workbook path renders the separator via an auto-injected `#,##0` `numFormat`; the stream path (>= 50,000 rows / degraded exports) cannot use `numFormat` and keeps the cell a **number**, so separators are not visible there (baking them into the value would turn data cells into text and break downstream calculations).
 
 `null`/`undefined` values render as empty cells on every path — never `0`.
 

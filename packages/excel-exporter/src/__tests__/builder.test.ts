@@ -246,10 +246,10 @@ describe("WorkbookBuilder round-trip", () => {
 
   it("normalizes non-primitive values to the same strings as the stream path", async () => {
     // Cross-path contract: a dataset crossing the 50k-row threshold (or
-    // degrading to SheetJS) must keep identical cell content. Before the fix
+    // degrading to the stream) must keep identical cell content. Before the fix
     // the Workbook path passed raw values to modern-xlsx, which String()ed
     // objects into "[object Object]" and Dates into the localized long form,
-    // while the stream/SheetJS paths emit JSON / ISO strings via toStr().
+    // while the stream path emits JSON / ISO strings via toStr().
     const sheet = {
       name: "Mixed",
       columns: [
