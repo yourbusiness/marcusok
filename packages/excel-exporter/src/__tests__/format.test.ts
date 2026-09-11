@@ -150,6 +150,16 @@ describe("formatDateByPattern", () => {
     expect(formatDateByPattern(d, "mm/dd")).toBe("01/05");
   });
 
+  it("resolves mm as minutes before a seconds token (Excel convention)", () => {
+    const d = new Date(Date.UTC(2025, 2, 15, 10, 20, 30));
+    // mm directly before ss is minutes, matching Excel's numFormat semantics
+    // on the workbook path (previously rendered month:seconds, "03:30").
+    expect(formatDateByPattern(d, "mm:ss")).toBe("20:30");
+    expect(formatDateByPattern(d, "HH:mm:ss")).toBe("10:20:30");
+    // mm after (not before) a seconds token stays the month.
+    expect(formatDateByPattern(d, "ss mm")).toBe("30 03");
+  });
+
   it("parses date-coercible strings (ISO date-only = UTC midnight)", () => {
     expect(formatDateByPattern("2025-01-05", "yyyy-MM-dd")).toBe("2025-01-05");
   });
@@ -252,5 +262,11 @@ describe("validateSheetName", () => {
     for (const bad of ["a/b", "a:b", "a?b", "a*b", "a[b]", "a\\b"]) {
       expect(() => validateSheetName(bad)).toThrow(/forbidden/);
     }
+  });
+
+  it("rejects leading/trailing apostrophes but allows inner ones", () => {
+    expect(() => validateSheetName("'Sheet1")).toThrow(/apostrophe/);
+    expect(() => validateSheetName("Sheet1'")).toThrow(/apostrophe/);
+    expect(() => validateSheetName("it's")).not.toThrow();
   });
 });

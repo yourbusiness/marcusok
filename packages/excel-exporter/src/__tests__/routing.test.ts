@@ -185,6 +185,54 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
     }
   });
 
+  it("worker failure on the stream route runs the fast stream once more, then fails", async () => {
+    stubBrowserWorkerEnv();
+    vi.mocked(exportInWorker).mockResolvedValue({
+      success: false,
+      error: new Error("worker boom"),
+    });
+    // A format function that throws on every call, numbered per invocation:
+    // the main-thread retry is already the fast stream on this route, so a
+    // third attempt via finishWithStream would fail deterministically. The
+    // chain must stop after exactly one main-thread attempt (calls === 1).
+    let calls = 0;
+    const sheets = [
+      {
+        name: "S",
+        columns: [
+          {
+            key: "x",
+            header: "X",
+            format: () => {
+              calls++;
+              throw new Error(`boom-${calls}`);
+            },
+          },
+        ],
+        data: [{ x: 1 }],
+      },
+    ];
+    try {
+      const progress: number[] = [];
+      const r = await exportExcel({
+        filename: "worker-stream-fail-once",
+        download: false,
+        mode: "stream",
+        sheets,
+        onProgress: (p) => progress.push(p),
+      });
+      expect(r.success).toBe(false);
+      expect(calls).toBe(1);
+      expect(r.error?.message).toBe(
+        "worker boom; main-thread stream retry failed: boom-1",
+      );
+      expect(progress).toEqual([0, 1]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.mocked(exportInWorker).mockReset();
+    }
+  });
+
   it("degrades to the stream only when the worker AND the main-thread retry both fail", async () => {
     stubBrowserWorkerEnv();
     vi.mocked(exportInWorker).mockResolvedValue({

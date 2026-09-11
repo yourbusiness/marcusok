@@ -21,6 +21,12 @@ export interface LoaderOptions {
   timeoutMs?: number;
   /** Max load attempts (total, including the first), default 3. */
   maxRetries?: number;
+  /**
+   * Worker export timeout, default 120s. A timed-out export terminates the
+   * shared worker and rejects its sibling requests, so raise this only for
+   * legitimately huge exports (and prefer splitting into multiple sheets).
+   */
+  workerTimeoutMs?: number;
 }
 
 /**

@@ -2,15 +2,15 @@
 
 ## SheetConfig
 
-| Field          | Type                        | Required | Description                                                    |
-| -------------- | --------------------------- | -------- | -------------------------------------------------------------- |
-| `name`         | `string`                    | yes      | Non-empty, ≤ 31 chars, no `: \ / ? * [ ]`                      |
-| `columns`      | `ColumnConfig[]`            | yes      | Column definitions                                             |
-| `data`         | `Record<string, unknown>[]` | yes      | Row data                                                       |
-| `headerStyle?` | `CellStyle`                 | —        | Default header style; overridden by column-level `headerStyle` |
-| `freezeRows?`  | `number`                    | —        | Freeze the first N header rows                                 |
-| `merges?`      | `MergeRange[]`              | —        | Merged cells (relative to the data area)                       |
-| `autoFilter?`  | `boolean`                   | —        | Header auto filter                                             |
+| Field          | Type                        | Required | Description                                                               |
+| -------------- | --------------------------- | -------- | ------------------------------------------------------------------------- |
+| `name`         | `string`                    | yes      | Non-empty, ≤ 31 chars, no `: \ / ? * [ ]`, no leading/trailing apostrophe |
+| `columns`      | `ColumnConfig[]`            | yes      | Column definitions                                                        |
+| `data`         | `Record<string, unknown>[]` | yes      | Row data                                                                  |
+| `headerStyle?` | `CellStyle`                 | —        | Default header style; overridden by column-level `headerStyle`            |
+| `freezeRows?`  | `number`                    | —        | Freeze the first N header rows                                            |
+| `merges?`      | `MergeRange[]`              | —        | Merged cells (relative to the data area)                                  |
+| `autoFilter?`  | `boolean`                   | —        | Header auto filter                                                        |
 
 ## ColumnConfig
 

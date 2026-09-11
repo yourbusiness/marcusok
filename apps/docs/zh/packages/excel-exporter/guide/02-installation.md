@@ -17,10 +17,10 @@ pnpm add @marcusok/excel-exporter
 
 两份文件随包发布、默认自动定位，直接 `import { exportExcel } from "@marcusok/excel-exporter"` 即可使用：
 
-| 资源               | 何时需要                                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `modern-xlsx.wasm` | 约 1.9MB，样式引擎核心；除显式 `mode: "stream"`（纯 JS 流式）外都需要                                                                  |
-| `export.worker.js` | 自包含 worker（单文件 ESM，零自身 import）；仅进入 Worker 的路径需要（auto ≥ 20,000 行，以及显式 `mode: "worker"` / `mode: "stream"`） |
+| 资源               | 何时需要                                                                                                                                           |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modern-xlsx.wasm` | 约 1.9MB，样式引擎核心；带样式路径（main / worker + Workbook）需要——Fast stream 路径（显式 `mode: "stream"`，或 auto/Node ≥ 50,000 行）不依赖 WASM |
+| `export.worker.js` | 自包含 worker（单文件 ESM，零自身 import）；仅进入 Worker 的路径需要（auto ≥ 20,000 行，以及显式 `mode: "worker"` / `mode: "stream"`）             |
 
 定位顺序：
 
@@ -49,12 +49,13 @@ import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
 configureWasm({ wasmUrl, workerUrl });
 ```
 
-| 参数         | 类型            | 默认值             | 说明                                             |
-| ------------ | --------------- | ------------------ | ------------------------------------------------ |
-| `wasmUrl`    | `string \| URL` | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                          |
-| `workerUrl`  | `string \| URL` | 随包发布的 worker  | 覆盖为自托管 / CDN 副本                          |
-| `timeoutMs`  | `number`        | `10_000`           | 单次加载超时                                     |
-| `maxRetries` | `number`        | `3`                | 最大尝试次数；失败后按 300ms、600ms 指数退避等待 |
+| 参数              | 类型            | 默认值             | 说明                                             |
+| ----------------- | --------------- | ------------------ | ------------------------------------------------ |
+| `wasmUrl`         | `string \| URL` | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                          |
+| `workerUrl`       | `string \| URL` | 随包发布的 worker  | 覆盖为自托管 / CDN 副本                          |
+| `timeoutMs`       | `number`        | `10_000`           | 单次加载超时                                     |
+| `maxRetries`      | `number`        | `3`                | 最大尝试次数；失败后按 300ms、600ms 指数退避等待 |
+| `workerTimeoutMs` | `number`        | `120_000`          | Worker 导出超时；超时导出会终止共享 worker       |
 
 `configureWasm` 是合并语义：仅当 `wasmUrl` 变化时才重置已加载（或加载中）的 WASM 实例，只改超时/重试不会造成重复初始化；若此前加载失败（error 态），任意 `configureWasm` 调用都会清除错误态，下次导出按新配置重试。
 

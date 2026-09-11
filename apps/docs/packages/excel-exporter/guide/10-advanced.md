@@ -14,7 +14,7 @@ await exportExcel({
 });
 ```
 
-Sheet names must satisfy ECMA-376 constraints: non-empty, ≤ 31 characters, and must not contain `: \ / ? * [ ]`. They must also be unique across `sheets` — a duplicate name fails the same way instead of producing a corrupt file or a silently renamed sheet. A violation never produces a corrupt file and never throws to the caller — the validation error is caught and routed through the fallback, which re-validates the same name, so the export finally resolves with `{ success: false, error }` (with a clear error message).
+Sheet names must satisfy ECMA-376 constraints: non-empty, ≤ 31 characters, must not contain `: \ / ? * [ ]`, and must not begin or end with an apostrophe. They must also be unique across `sheets` — a duplicate name fails the same way instead of producing a corrupt file or a silently renamed sheet. A violation never produces a corrupt file and never throws to the caller — the validation error is caught and routed through the fallback, which re-validates the same name, so the export finally resolves with `{ success: false, error }` (with a clear error message).
 
 ## Frozen rows
 

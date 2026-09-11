@@ -104,9 +104,11 @@ export function formatDateByPattern(value: unknown, pattern: string): string {
   if (!d) return toStr(value);
   const pad = (n: number) => String(n).padStart(2, "0");
   // Excel format codes are case-insensitive, so normalize to lowercase first.
-  // `mm` is ambiguous: minutes when it directly follows an hour token (`hh`),
-  // otherwise the month. Scan the token stream once and resolve each `mm` from
-  // its predecessor so `yyyy-mm-dd`, `yyyy-MM-dd` and `HH:mm:ss` all match.
+  // `mm` is ambiguous: minutes when adjacent to a time token (directly after an
+  // hour token `hh`, or directly before a seconds token `ss` — Excel's own
+  // numFormat convention), otherwise the month. Scan the token stream once and
+  // resolve each `mm` from its neighbors so `yyyy-mm-dd`, `yyyy-MM-dd`,
+  // `HH:mm:ss` and `mm:ss` all match the workbook path's Excel rendering.
   const lower = pattern.toLowerCase();
   const parts = {
     yyyy: String(d.getUTCFullYear()),
@@ -129,8 +131,12 @@ export function formatDateByPattern(value: unknown, pattern: string): string {
     out += lower.slice(lastEnd, idx);
     lastEnd = idx + tok.length;
     if (tok === "mm") {
-      // Minute only when directly preceded by an hour token; else month.
-      out += hits[i - 1]?.tok === "hh" ? parts.minute : parts.month;
+      // Minute when the previous token is an hour or the next is seconds;
+      // else month.
+      out +=
+        hits[i - 1]?.tok === "hh" || hits[i + 1]?.tok === "ss"
+          ? parts.minute
+          : parts.month;
     } else {
       out += parts[tok as keyof typeof parts];
     }
@@ -211,8 +217,9 @@ const SHEET_NAME_FORBIDDEN = /[\\/?*[\]:]/;
 
 /**
  * Validate a sheet name per ECMA-376 / Excel constraints. Throws on names that
- * would produce a corrupt workbook: empty, longer than 31 chars, or containing
- * any of `: \ / ? * [ ]`.
+ * would produce a corrupt workbook: empty, longer than 31 chars, containing
+ * any of `: \ / ? * [ ]`, or beginning/ending with an apostrophe (Excel rejects
+ * such names even though the character is legal inside the name).
  */
 export function validateSheetName(name: string): void {
   if (typeof name !== "string" || name.length === 0) {
@@ -226,6 +233,11 @@ export function validateSheetName(name: string): void {
   if (SHEET_NAME_FORBIDDEN.test(name)) {
     throw new Error(
       `[excel-exporter] sheet name "${name}" contains forbidden characters (: \\ / ? * [ ])`,
+    );
+  }
+  if (name.startsWith("'") || name.endsWith("'")) {
+    throw new Error(
+      `[excel-exporter] sheet name "${name}" must not begin or end with an apostrophe (')`,
     );
   }
 }

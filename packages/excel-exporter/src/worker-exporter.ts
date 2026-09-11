@@ -138,7 +138,7 @@ export async function exportInWorker(
 
   try {
     const w = getOrCreateWorker();
-    const timeoutMs = 120_000; // 2-minute timeout
+    const timeoutMs = getWasmLoader().getOptions().workerTimeoutMs ?? 120_000; // 2-minute default
     const [bytes, workerRowCount] = await new Promise<[Uint8Array, number]>(
       (resolve, reject) => {
         const timer = setTimeout(() => {
@@ -180,12 +180,23 @@ export async function exportInWorker(
           onProgress: options.onProgress,
           onPhase: (phase, duration) => options.onPhase?.(phase, duration),
         });
-        w.postMessage({
-          id,
-          options: stripFunctionFormats(options),
-          wasmUrl,
-          mode,
-        });
+        try {
+          w.postMessage({
+            id,
+            options: stripFunctionFormats(options),
+            wasmUrl,
+            mode,
+          });
+        } catch (e) {
+          // postMessage throws synchronously on un-cloneable payloads (e.g.
+          // Symbol/function values in row data -> DataCloneError). Clean up
+          // immediately: otherwise the timeout timer above would fire later
+          // for this id and terminate the healthy shared worker, also
+          // rejecting every sibling request dispatched to it.
+          pending.delete(id);
+          clearTimeout(timer);
+          reject(e instanceof Error ? e : new Error(String(e)));
+        }
       },
     );
     const blob = new Blob([toBlobPart(bytes)], { type: XLSX_MIME });

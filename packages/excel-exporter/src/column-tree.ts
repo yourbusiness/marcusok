@@ -45,8 +45,10 @@ export interface FlattenedColumnTree {
  * - a group column emits no data column and a header cell at its depth with
  *   `colSpan = leafCount(subtree)`.
  *
- * Throws when a leaf column lacks a string `key`, or when `children` contain a
- * reference cycle (would otherwise overflow the stack in the DFS).
+ * Throws when a leaf column lacks a string `key`, when `children` contain a
+ * reference cycle (would otherwise overflow the stack in the DFS), or when the
+ * same column object appears twice in the tree (a diamond would silently emit
+ * duplicate data columns).
  */
 export function flattenColumnTree(
   columns: ColumnConfig[],
@@ -186,15 +188,25 @@ function columnName(index: number): string {
 
 function assertAcyclic(columns: ColumnConfig[]): void {
   const visiting = new Set<ColumnConfig>();
+  const visited = new Set<ColumnConfig>();
   const visit = (col: ColumnConfig): void => {
     if (visiting.has(col)) {
       throw new Error(
         "[excel-exporter] circular children reference in column tree",
       );
     }
+    if (visited.has(col)) {
+      // The same ColumnConfig instance hung under two parents (a diamond, not
+      // a cycle): the DFS above finishes it once and would walk it again,
+      // silently emitting duplicate leaf (data) columns. Reject instead.
+      throw new Error(
+        "[excel-exporter] column object reused in the column tree: each ColumnConfig instance may appear only once",
+      );
+    }
     visiting.add(col);
     col.children?.forEach(visit);
     visiting.delete(col);
+    visited.add(col);
   };
   columns.forEach(visit);
 }

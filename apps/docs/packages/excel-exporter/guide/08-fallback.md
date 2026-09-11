@@ -6,7 +6,7 @@ When the WASM path is unavailable, the library automatically degrades to the pur
 
 - The environment does not support `WebAssembly` (this only affects the main and Worker + Workbook paths; the ≥ 50,000-row stream path does not use WASM and is unaffected);
 - `modern-xlsx.wasm` fails to load (after `maxRetries` attempts, default 3);
-- The Worker path fails (e.g. the worker asset 404s) **and** the automatic main-thread retry also fails — the retry runs modern-xlsx on the main thread first (styles preserved), so the stream is the last resort, not the immediate next step;
+- The Worker path fails (e.g. the worker asset 404s) **and** the automatic main-thread retry also fails — on the Workbook route the retry runs modern-xlsx on the main thread first (styles preserved), so the stream is the last resort, not the immediate next step. On the ≥ 50,000-row stream route the retry is the fast stream itself (identical code, identical input), so a failure there is terminal — no third attempt;
 - The build throws (e.g. an internal modern-xlsx build error). Note: an invalid sheet name is not rescuable here — the fallback re-validates the same name and fails, so the export resolves with `success: false`.
 
 ## Behavioral differences

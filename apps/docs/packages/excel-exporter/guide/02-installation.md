@@ -17,10 +17,10 @@ That is the entire setup. The package has **zero runtime dependencies**: the exp
 
 Two files ship alongside the code and are located by default, so a plain `import { exportExcel } from "@marcusok/excel-exporter"` works out of the box:
 
-| Asset              | Description                                                                                                                                                 |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `modern-xlsx.wasm` | WASM core (~1.9MB); needed on every route except an explicit `mode: "stream"` (pure JS)                                                                     |
-| `export.worker.js` | Self-contained worker entry (a single ESM file, zero imports); needed only when exports enter a Worker (auto ≥ 20,000 rows, or explicit worker/stream mode) |
+| Asset              | Description                                                                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modern-xlsx.wasm` | WASM core (~1.9MB); needed by the styled routes (main / worker + Workbook) — the Fast stream routes (explicit `mode: "stream"`, or auto/Node ≥ 50,000 rows) do not use WASM |
+| `export.worker.js` | Self-contained worker entry (a single ESM file, zero imports); needed only when exports enter a Worker (auto ≥ 20,000 rows, or explicit worker/stream mode)                 |
 
 Resolution order:
 
@@ -49,12 +49,13 @@ import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
 configureWasm({ wasmUrl, workerUrl });
 ```
 
-| Option       | Type            | Default                 | Description                                          |
-| ------------ | --------------- | ----------------------- | ---------------------------------------------------- |
-| `wasmUrl`    | `string \| URL` | the shipped `.wasm`     | Override for a self-hosted / CDN copy                |
-| `workerUrl`  | `string \| URL` | the shipped worker file | Override for a self-hosted / CDN copy                |
-| `timeoutMs`  | `number`        | `10_000`                | Per-attempt load timeout                             |
-| `maxRetries` | `number`        | `3`                     | Max attempts; failed attempts wait 300ms, then 600ms |
+| Option            | Type            | Default                 | Description                                                            |
+| ----------------- | --------------- | ----------------------- | ---------------------------------------------------------------------- |
+| `wasmUrl`         | `string \| URL` | the shipped `.wasm`     | Override for a self-hosted / CDN copy                                  |
+| `workerUrl`       | `string \| URL` | the shipped worker file | Override for a self-hosted / CDN copy                                  |
+| `timeoutMs`       | `number`        | `10_000`                | Per-attempt load timeout                                               |
+| `maxRetries`      | `number`        | `3`                     | Max attempts; failed attempts wait 300ms, then 600ms                   |
+| `workerTimeoutMs` | `number`        | `120_000`               | Worker export timeout; a timed-out export terminates the shared worker |
 
 `configureWasm` merges options: only a changed `wasmUrl` resets an already-loaded (or mid-load) WASM instance; changing timeouts/retries alone never causes re-initialization. If a previous load failed (error state), any `configureWasm` call clears the error so the next export retries with the new settings.
 

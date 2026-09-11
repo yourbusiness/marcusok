@@ -18,12 +18,10 @@
 ## 安装
 
 ```bash
-pnpm add @marcusok/excel-exporter modern-xlsx
+pnpm add @marcusok/excel-exporter
 ```
 
-> **Node 版本说明**：peer `modern-xlsx` 声明了 `engines.node >= 24`，但 Node 22 实际可用——若包管理器在 Node 22 下拒绝安装，在项目 `.npmrc` 设 `engine-strict=false` 或升级 Node，详见 [快速开始](/zh/guide/01-getting-started)。
-
-浏览器环境零配置（资产自动定位，自托管场景才需要 `configureWasm`），详见 [快速开始](/zh/guide/01-getting-started)。
+一个包、零运行时依赖：导出引擎已在构建期打包进本包，WASM / worker 资产在打包器与 Node 中均自动定位（自托管场景才需要 `configureWasm`），详见 [快速开始](/zh/guide/01-getting-started)。
 
 ## 快速上手
 
@@ -61,7 +59,7 @@ await exportExcel({
 ## 版本与依赖
 
 - 当前版本：构建时从工作区 `package.json` 读取（单一数据源；文档站不查询 npm registry）
-- dependencies：`modern-xlsx@^1.2.0`（引擎，随包自动安装；wasm 由本包转发暴露）；peerDependencies：`xlsx@>=0.18.5`（可选，兜底）
+- 运行时依赖：无——modern-xlsx 引擎（JS 胶水）与 fflate 在构建期打包进本包，WASM 二进制通过本包自己的 `exports` 暴露
 - 环境：Node >= 22；浏览器需支持 WebAssembly
 
 > 性能数字为本机实测（真实 Chrome，6 列混合类型），详见 [性能参考](/zh/packages/excel-exporter/guide/07-performance)。

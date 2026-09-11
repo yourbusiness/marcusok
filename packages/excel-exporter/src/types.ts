@@ -135,7 +135,7 @@ export interface MergeRange {
 
 /** Sheet configuration. */
 export interface SheetConfig {
-  name: string; // 1-31 chars, ECMA-376 validation
+  name: string; // 1-31 chars, ECMA-376 validation (no `: \ / ? * [ ]`, no leading/trailing apostrophe)
   columns: ColumnConfig[];
   /**
    * Data rows keyed by column `key`. Cell values are normalized identically on

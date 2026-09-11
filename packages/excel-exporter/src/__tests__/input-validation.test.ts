@@ -191,6 +191,33 @@ describe("merge range validation", () => {
   });
 });
 
+describe("empty sheets array", () => {
+  it("exportExcel fails fast with a clear error (no fallback, no corrupt file)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const r = await exportExcel({
+        filename: "empty-sheets",
+        download: false,
+        mode: "main",
+        // Pre-fix the Workbook build threw (modern-xlsx requires >= 1 sheet),
+        // the export degraded to the fast stream and RESOLVED success: true
+        // with a zero-sheet workbook Excel flags as corrupt.
+        sheets: [],
+      });
+      expect(r.success).toBe(false);
+      expect(r.blob).toBeUndefined();
+      expect(r.error?.message).toMatch(/at least one sheet/);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("stream path rejects an empty sheets array with the same error", async () => {
+    await expect(exportAsStream([])).rejects.toThrow(/at least one sheet/);
+  });
+});
+
 describe("duplicate sheet names", () => {
   it("stream path rejects duplicates before writing any XML", async () => {
     await expect(

@@ -100,4 +100,67 @@ describe("exportInWorker timeout recovery", () => {
     );
     expect(FakeWorker.instances[0].terminated).toBe(true);
   });
+
+  it("cleans up immediately when postMessage throws (no delayed worker kill)", async () => {
+    stubBrowser();
+    configureWasm({ workerUrl: "/fake/export.worker.js" });
+    vi.useFakeTimers();
+
+    // postMessage throws synchronously on un-cloneable payloads (e.g. Symbol
+    // or function values in row data -> DataCloneError).
+    const throwing = vi
+      .spyOn(FakeWorker.prototype, "postMessage")
+      .mockImplementation(() => {
+        throw new Error("DataCloneError: could not be cloned");
+      });
+
+    const r = await exportInWorker(
+      { filename: "clone-error", download: false, sheets },
+      "workbook",
+    );
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(/could not be cloned/);
+
+    // Pre-fix the request stayed in `pending` with its 120s timer live, so
+    // the timer later fired and terminated the healthy shared worker. The
+    // worker must survive the full timeout window, and the next export must
+    // reuse it (no new instance).
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(FakeWorker.instances[0].terminated).toBe(false);
+
+    throwing.mockRestore();
+    const second = exportInWorker(
+      { filename: "after-clone-error", download: false, sheets },
+      "workbook",
+    );
+    expect(FakeWorker.instances.length).toBe(1);
+    await vi.advanceTimersByTimeAsync(120_000);
+    const r2 = await second;
+    expect(r2.success).toBe(false);
+    expect(r2.error?.message).toMatch(/timed out after 120000ms/);
+  });
+
+  it("honors a custom workerTimeoutMs", async () => {
+    stubBrowser();
+    configureWasm({
+      workerUrl: "/fake/export.worker.js",
+      workerTimeoutMs: 5_000,
+    });
+    vi.useFakeTimers();
+    try {
+      const first = exportInWorker(
+        { filename: "custom-timeout", download: false, sheets },
+        "workbook",
+      );
+      await vi.advanceTimersByTimeAsync(5_000);
+      const r1 = await first;
+      expect(r1.success).toBe(false);
+      expect(r1.error?.message).toMatch(/timed out after 5000ms/);
+      expect(FakeWorker.instances[0].terminated).toBe(true);
+    } finally {
+      // Loader options merge across tests (module-level default loader);
+      // restore the default so later tests see the 120s timeout.
+      configureWasm({ workerTimeoutMs: 120_000 });
+    }
+  });
 });

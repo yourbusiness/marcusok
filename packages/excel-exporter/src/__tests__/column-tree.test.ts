@@ -113,6 +113,18 @@ describe("flattenColumnTree", () => {
     expect(() => flattenColumnTree([a])).toThrow(/circular children/);
   });
 
+  it("throws when the same column object is reused (diamond, not a cycle)", () => {
+    const leaf: ColumnConfig = { key: "a", header: "A" };
+    // Hung under two parents: previously passed the path-based cycle check
+    // and was walked twice, silently emitting duplicate data columns.
+    expect(() =>
+      flattenColumnTree([
+        { header: "G1", children: [leaf] },
+        { header: "G2", children: [leaf] },
+      ]),
+    ).toThrow(/reused/);
+  });
+
   it("a1Range renders 0-based ranges as A1 refs", () => {
     expect(a1Range(0, 0, 1, 1)).toBe("A1:A1");
     expect(a1Range(0, 0, 3, 1)).toBe("A1:A3");

@@ -36,10 +36,9 @@ export interface RuntimeAsset {
   resolveFrom: string;
   /**
    * Optional: resolve `resolveFrom` within another package's dependency
-   * context (via createRequire). Use this for peer-dep assets (e.g. a wasm
-   * shipped by modern-xlsx, which is a peerDep of excel-exporter) so the
-   * docs app does not need to list the asset's source package as a direct
-   * dependency — pnpm auto-install-peers makes it resolvable transitively.
+   * context (via createRequire). Use this when the asset ships with a
+   * transitive dependency rather than a direct one, so the docs app does not
+   * need to list the asset's source package as a direct dependency itself.
    */
   through?: string;
   /** File path within the resolved package directory. */

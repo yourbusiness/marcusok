@@ -39,12 +39,13 @@ configureWasm(options: LoaderOptions): void
 
 Optional — assets default to the files shipped next to the package entry (see [Installation](/packages/excel-exporter/guide/02-installation)). Override for self-hosted copies, a CDN, or bundlers without asset-URL support.
 
-| Field        | Default                 | Description                                                      |
-| ------------ | ----------------------- | ---------------------------------------------------------------- |
-| `wasmUrl`    | the shipped `.wasm`     | Override for a self-hosted / CDN copy                            |
-| `workerUrl`  | the shipped worker file | Override for a self-hosted / CDN copy                            |
-| `timeoutMs`  | `10_000`                | Per-attempt load timeout                                         |
-| `maxRetries` | `3`                     | Max load attempts (3 total incl. the first; 300ms/600ms backoff) |
+| Field             | Default                 | Description                                                      |
+| ----------------- | ----------------------- | ---------------------------------------------------------------- |
+| `wasmUrl`         | the shipped `.wasm`     | Override for a self-hosted / CDN copy                            |
+| `workerUrl`       | the shipped worker file | Override for a self-hosted / CDN copy                            |
+| `timeoutMs`       | `10_000`                | Per-attempt load timeout                                         |
+| `maxRetries`      | `3`                     | Max load attempts (3 total incl. the first; 300ms/600ms backoff) |
+| `workerTimeoutMs` | `120_000`               | Worker export timeout                                            |
 
 ## Other exported symbols
 

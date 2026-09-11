@@ -211,6 +211,13 @@ export function exportFastXlsx(
   const contentOverrides: string[] = [];
   const stringTable = createSharedStringTable();
 
+  // A zero-sheet workbook violates ECMA-376 (Excel flags it as corrupt);
+  // reject before building anything, same as the duplicate-name guard below
+  // and the pre-flight check in exportExcel.
+  if (sheets.length === 0) {
+    throw new Error("[excel-exporter] at least one sheet is required");
+  }
+
   // Duplicate sheet names violate ECMA-376 uniqueness and yield a workbook
   // Excel flags as corrupt; reject before building anything.
   const seenSheetNames = new Set<string>();

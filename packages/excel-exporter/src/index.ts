@@ -79,6 +79,12 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
  * (WASM unavailable, build errors) still degrade to the stream as before.
  */
 function validateInput(options: ExportOptions): void {
+  // An empty sheets array is not a build error on the stream path (fast-xlsx
+  // would zip a zero-sheet workbook Excel flags as corrupt while reporting
+  // success), so reject it here like every other structural input error.
+  if (!Array.isArray(options.sheets) || options.sheets.length === 0) {
+    throw new Error("[excel-exporter] at least one sheet is required");
+  }
   const seen = new Set<string>();
   for (const sheet of options.sheets) {
     validateSheetName(sheet.name);
@@ -254,6 +260,20 @@ export async function exportExcel(
     try {
       return await runOnMainThread();
     } catch (e) {
+      // When the worker was on the stream route, the main-thread retry just ran
+      // the very same fast stream on the very same input: a third attempt via
+      // finishWithStream would fail deterministically, so fail here instead of
+      // paying for (and logging) a doomed extra build.
+      if (picked.workerMode === "stream") {
+        options.onProgress?.(1);
+        return {
+          success: false,
+          error: new Error(
+            `${reason}; main-thread stream retry failed: ${(e as Error).message}`,
+          ),
+          duration: performance.now() - start,
+        };
+      }
       return finishWithStream(
         `${reason}; main-thread retry failed: ${(e as Error).message}`,
       );
