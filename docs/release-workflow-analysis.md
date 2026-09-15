@@ -46,7 +46,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
@@ -155,13 +155,13 @@ env:
 - uses: pnpm/action-setup@v4
 - uses: actions/setup-node@v4
   with:
-    node-version: 22
+    node-version-file: .nvmrc
     cache: pnpm
     registry-url: https://registry.npmjs.org
 - run: pnpm install --frozen-lockfile
 ```
 
-这几步和 CI 几乎一模一样（拉全历史、自动读 pnpm 9.12、装 Node 22、缓存、冻结安装），不再重复。**唯一多出来的一行**是：
+这几步和 CI 几乎一模一样（拉全历史、自动读 pnpm 9.12、Node 版本由 `node-version-file: .nvmrc` 读取、缓存、冻结安装），不再重复。**唯一多出来的一行**是：
 
 ```yaml
 registry-url: https://registry.npmjs.org

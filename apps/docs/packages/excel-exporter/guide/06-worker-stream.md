@@ -17,7 +17,7 @@ Worker path behavior:
 
 `fast-xlsx.ts` uses `fflate` to produce minimal OOXML: ~0.8s at 100k rows (vs 17.5s on the Workbook path). `auto` selects it at ≥ 50k rows.
 
-Known stream limitations (v1):
+Known stream limitations:
 
 | Feature                        | Stream path                                        |
 | ------------------------------ | -------------------------------------------------- |

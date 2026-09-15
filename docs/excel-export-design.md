@@ -277,7 +277,7 @@ marcusok/
   "version": "0.0.0",
   "type": "module",
   "packageManager": "pnpm@9.12.0",
-  "engines": { "node": ">=22.0.0", "pnpm": ">=9" },
+  "engines": { "node": ">=22.12.0", "pnpm": ">=9" },
   "scripts": {
     "build": "turbo run build",
     "dev": "node scripts/dev.mjs",
@@ -288,7 +288,8 @@ marcusok/
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,vue}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,mjs,js,json,md,yaml,yml,vue}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,mjs,js,json,md,yaml,yml,vue}\"",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "turbo run lint typecheck test build && changeset publish",
@@ -319,7 +320,7 @@ marcusok/
 }
 ```
 
-> **Node 版本说明（v2.1 修正）**：根 `package.json` 的 `engines.node` 设为 **`>=22.0.0`**（与 `.nvmrc` 的 `22`、CI 的 `node-version: 22` 一致）。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其运行时目标是浏览器、WASM 核心与 Node 版本无关；本仓库在 Node 22（v22.22.2 实测）下 `lint/typecheck/test/build` 全绿（35 个测试全部通过，见 `packages/excel-exporter/src/__tests__/`）。注意：modern-xlsx README 顶部声明 "Requires a runtime with WASM support (Node.js 24+, ...)"，但无专门的 "Node Usage" 章节；Node 22 可用性由本仓库测试套件实测验证，而非 README 声明。为避免 modern-xlsx 的 engines 声明在 Node 22 下 `pnpm install` 报错，`.npmrc` 设 `engine-strict=false`（见 3.5）。CI 与本地开发统一用 Node 22（`.nvmrc` 锁定）。
+> **Node 版本说明（v2.1 修正）**：monorepo 根 `package.json` 的 `engines.node` 为 **`>=22.12.0`**，发布包 `@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 直接读它。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其运行时目标是浏览器、WASM 核心与 Node 版本无关；本仓库在 Node 22（v22.22.2 实测）下 `lint/typecheck/test/build` 全绿（127 个测试全部通过，见 `packages/excel-exporter/src/__tests__/`）。注意：modern-xlsx README 顶部声明 "Requires a runtime with WASM support (Node.js 24+, ...)"，但无专门的 "Node Usage" 章节；Node 22 可用性由本仓库测试套件实测验证，而非 README 声明。为避免 modern-xlsx 的 engines 声明在 Node 22 下 `pnpm install` 报错，`.npmrc` 设 `engine-strict=false`（见 3.5）。CI 与本地开发统一用 Node 22（`.nvmrc` 锁定）。
 
 > **`@types/node` 落在根 devDependencies**：本 monorepo 所有包共享 TS 基线（`tsconfig.base.json` 含 `DOM`+`WebWorker`），`@types/node`（`^22.10.0`，与 engines 对齐）在根声明一次即可被子包通过 workspace 符号链接继承，子包 `excel-exporter/package.json` 不重复声明。v2.0 曾把 `@playwright/test` 列入根 devDependencies，但本仓库当前**不包含浏览器集成测试**（7.3 的 Playwright 方案为未实现的未来计划），v2.1 已将其移除。
 
@@ -537,6 +538,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -550,12 +554,22 @@ jobs:
         # (pnpm@9.12.0), keeping CI in sync with local corepack.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Lint commit messages
         if: github.event_name == 'pull_request'
         run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD
+      - name: Lint pushed commit messages (main)
+        if: github.event_name == 'push'
+        run: |
+          FROM="${{ github.event.before }}"
+          if git cat-file -e "$FROM" 2>/dev/null; then
+            pnpm exec commitlint --from "$FROM" --to HEAD
+          else
+            pnpm exec commitlint --from HEAD~1 --to HEAD
+          fi
+      - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -592,7 +606,7 @@ jobs:
         # (pnpm@9.12.0), keeping CI in sync with local corepack.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
@@ -3478,7 +3492,7 @@ const blob = new Blob([bytes], {
 
 ### 附录 F · Node 版本与补充依赖（v2.1 重写）
 
-> **本仓库用 Node 22，不升级到 24**：`@marcusok/excel-exporter` 与 monorepo 根的 `engines.node` 均为 `>=22.0.0`，`.nvmrc` 锁定 `22`，CI `node-version: 22`。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（94 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 90 个，2026-09-04 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
+> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（127 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 123 个，2026-09-15 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
 >
 > v2.0 曾把 `@playwright/test`（`^1.62.0`）列入「补充依赖」、并写「Node 24+ 升级指引」，二者均与实际仓库不符（本仓库无 Playwright、CI 跑 Node 22），v2.1 已删除该依赖行与升级指引。关于 `unplugin`：6.2 的 Vite 插件是 Vite 原生插件对象（`{ name, buildStart() }`），全程未 import `unplugin`；若未来要让资源拷贝同时支持 Webpack，再按需引入。
 

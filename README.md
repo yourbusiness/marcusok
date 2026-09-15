@@ -22,17 +22,17 @@ Environment: Node >= 22.12 (the floor Vite 8 requires; the published `@marcusok/
 
 ## Tooling
 
-| Area               | Choice                           | Notes                                                                                                         |
-| ------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Package manager    | pnpm workspace                   | Hard links save disk, `workspace:*` protocol, strict dependency isolation                                     |
-| Build orchestrator | Turborepo                        | Parallel builds + local cache; `^build` automatically orders package dependencies                             |
-| Package bundler    | tsup                             | esbuild-driven; TS → ESM + DTS in one pass; ESM-only across the board                                         |
-| Language           | TypeScript 5.x                   | `moduleResolution: bundler`; `lib` includes both DOM and WebWorker                                            |
-| Code style         | ESLint 9 + Prettier              | flat config; `no-floating-promises` prevents missed awaits                                                    |
-| Commit convention  | Husky + lint-staged + commitlint | Conventional Commits, powering Changesets-generated changelogs                                                |
-| Versioning/release | Changesets                       | Independent per-package releases, auto-generated changelogs, prerelease support                               |
-| Testing            | Vitest                           | Native ESM, WASM-friendly                                                                                     |
-| CI/CD              | GitHub Actions                   | `ci.yml` (lint → typecheck → test → build) + `release.yml` (auto publish) + `deploy.yml` (docs site to Pages) |
+| Area               | Choice                           | Notes                                                                                                                                     |
+| ------------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Package manager    | pnpm workspace                   | Hard links save disk, `workspace:*` protocol, strict dependency isolation                                                                 |
+| Build orchestrator | Turborepo                        | Parallel builds + local cache; `^build` automatically orders package dependencies                                                         |
+| Package bundler    | tsup                             | esbuild-driven; TS → ESM + DTS in one pass; ESM-only across the board                                                                     |
+| Language           | TypeScript 5.x                   | `moduleResolution: bundler`; `lib` includes both DOM and WebWorker                                                                        |
+| Code style         | ESLint 9 + Prettier              | flat config; `no-floating-promises` prevents missed awaits                                                                                |
+| Commit convention  | Husky + lint-staged + commitlint | Conventional Commits, powering Changesets-generated changelogs                                                                            |
+| Versioning/release | Changesets                       | Independent per-package releases, auto-generated changelogs, prerelease support                                                           |
+| Testing            | Vitest                           | Native ESM, WASM-friendly                                                                                                                 |
+| CI/CD              | GitHub Actions                   | `ci.yml` (commitlint → format:check → lint → typecheck → test → build) + `release.yml` (auto publish) + `deploy.yml` (docs site to Pages) |
 
 ## Directory Layout
 

@@ -28,6 +28,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: CI only reads the repo. Without this block the workflow
+# inherits the repo's default token permissions (potentially read/write).
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -39,12 +44,22 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Lint commit messages
         if: github.event_name == 'pull_request'
         run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD
+      - name: Lint pushed commit messages (main)
+        if: github.event_name == 'push'
+        run: |
+          FROM="${{ github.event.before }}"
+          if git cat-file -e "$FROM" 2>/dev/null; then
+            pnpm exec commitlint --from "$FROM" --to HEAD
+          else
+            pnpm exec commitlint --from HEAD~1 --to HEAD
+          fi
+      - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -95,6 +110,17 @@ concurrency:
 - `cancel-in-progress: true` —— 如果"同一件事"正在跑，又来了一个更新的，那就**把正在跑的那个取消掉**，只跑最新的。
 
 效果：你在 PR 上狂 push 10 次，机器只会认真跑最后一次，前面的全被取消，既快又省钱。
+
+---
+
+## 五·五、`permissions:` —— 最小权限，只读不写
+
+```yaml
+permissions:
+  contents: read
+```
+
+这是**安全加固**的一小块。GitHub Actions 运行时手里有一把"钥匙"（`GITHUB_TOKEN`），默认这把钥匙的权限取决于仓库设置，有可能是"可读可写"。而 CI 这个质检员从头到尾只需要**读代码**，根本不需要写权限。`contents: read` 就是把钥匙权限收窄到"只能读仓库内容"——万一哪天某个步骤或依赖被投了毒，攻击者拿到的也只是一把读钥匙，改不了仓库。这是 GitHub 官方推荐的最小权限实践。
 
 ---
 
@@ -166,17 +192,16 @@ env:
 ```yaml
 - uses: actions/setup-node@v4
   with:
-    node-version: 22
+    node-version-file: .nvmrc
     cache: pnpm
 ```
 
-装 Node.js 运行环境，指定版本 22。这个数字和项目里多处保持一致：
+装 Node.js 运行环境。这里**故意不写死版本号**，而是用 `node-version-file: .nvmrc` 让 CI 直接读 [.nvmrc](../.nvmrc) 文件（里面写着 `22`）——版本号只有一处事实源，升级 Node 时只改 `.nvmrc` 一处，CI 自动跟着变。
 
-- [.nvmrc](../.nvmrc) 文件里写着 `22`。
-- [package.json](../package.json) 里 `"engines": { "node": ">=22.0.0" }`。
-- 包 [packages/excel-exporter/package.json](../packages/excel-exporter/package.json) 里同样 `"engines": { "node": ">=22.0.0" }`。
+版本要求和项目里几处保持一致：
 
-也就是说，**项目要求 Node 22 以上，CI 也老老实实用 22**。
+- 根 [package.json](../package.json) 里 `"engines": { "node": ">=22.12.0" }`——比 `.nvmrc` 更精确，因为项目用到的特性要求 22.12 以上。
+- 发布包 [packages/excel-exporter/package.json](../packages/excel-exporter/package.json) 的 engines 是 `>=22.0.0`——对外发布的库把门槛放得更宽，不强迫用户升级到 22.12。
 
 `cache: pnpm` 是加速用的：第一次跑的时候，它会把 pnpm 下载的依赖缓存起来；下次再跑，直接用缓存，省去重新下载的时间。缓存用 pnpm 自己的格式。
 
@@ -190,12 +215,23 @@ env:
 
 `--frozen-lockfile` 的意思是"**冻结锁定文件**"：只按照锁文件里记录的精确版本安装，**绝对不允许偷偷改版本**。如果有人忘了提交锁文件的更新，导致 lock 文件和 package.json 对不上，这一步会直接报错失败——这是好事，能防止"本地能跑、CI 跑不了"的玄学问题。
 
-### 步骤 5：检查提交信息（只在 PR 时）`Lint commit messages`
+### 步骤 5：检查提交信息 `Lint commit messages`
+
+提交信息的检查有**两步**，分别覆盖两种触发场景：
 
 ```yaml
 - name: Lint commit messages
   if: github.event_name == 'pull_request'
   run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD
+- name: Lint pushed commit messages (main)
+  if: github.event_name == 'push'
+  run: |
+    FROM="${{ github.event.before }}"
+    if git cat-file -e "$FROM" 2>/dev/null; then
+      pnpm exec commitlint --from "$FROM" --to HEAD
+    else
+      pnpm exec commitlint --from HEAD~1 --to HEAD
+    fi
 ```
 
 这一步检查的是**你写 commit（提交）时的那句话合不合格**，不是检查代码。
@@ -215,12 +251,22 @@ env:
 
 也就是 `类型: 描述` 的形式，类型必须是 `feat`/`fix`/`docs`/`chore` 等规定词。如果你写成"随便改了点东西"这种大白话，commitlint 就会让你挂掉。
 
-- `if: github.event_name == 'pull_request'` —— 这一步**只在 PR 时跑**，直接 push 到 main 时不跑。为什么？因为直接 push 到 main 的代码，往往是 PR 合并进来的（已经检查过了），或者像"自动发布"那种机器人提交，没必要再查。
-- `--from ${{ github.event.pull_request.base.sha }} --to HEAD` —— 检查范围是"从 PR 的起点，到最新提交"。这就是为什么步骤 1 必须用 `fetch-depth: 0`：没有完整历史，`--from` 那个老提交点就找不到。
+- 第一步 `if: github.event_name == 'pull_request'` —— 只在 **PR 场景**跑。`--from ${{ github.event.pull_request.base.sha }} --to HEAD` 检查范围是"从 PR 的起点，到最新提交"。这就是为什么步骤 1 必须用 `fetch-depth: 0`：没有完整历史，`--from` 那个老提交点就找不到。
+- 第二步 `if: github.event_name == 'push'` —— 只在**直接 push 到 main** 时跑。为什么要专门加这一步？因为本项目**直接在 main 上开发**（不建功能分支），如果只有 PR 场景的检查，直接 push 的提交就完全没人管，提交信息规范就全靠本地 husky 钩子自觉（而 `git commit --no-verify` 可以绕过它）。这一步用 `github.event.before`（这次 push 之前的提交点）作为检查起点，把本次 push 新增的每一个 commit 都查一遍；如果 `before` 找不到（比如 force push 重写了历史），就退化为只查最新一个提交（`HEAD~1` 到 `HEAD`）。该步骤由提交 `9d9339f`（2026-08-27）引入。
 
 > 顺带一提：本地你每次 commit 时，[.husky/commit-msg](../.husky/commit-msg) 也会触发 commitlint。所以同一条规则，本地和 CI 都在守。
 
-### 步骤 6：代码风格检查 `pnpm lint`
+### 步骤 6：格式检查 `pnpm format:check`
+
+```yaml
+- run: pnpm format:check
+```
+
+跑 [package.json](../package.json) 里的 `"format:check": "prettier --check \"**/*.{ts,tsx,mjs,js,json,md,yaml,yml,vue}\""`，用 **Prettier** 检查全仓文件的**排版格式**（缩进、引号、行宽、末尾换行这类"纯排版"问题）。仓库里没有 Prettier 配置文件，用的是它的默认规则。注意它和下一步 ESLint 的分工：Prettier 只管"长得整不整齐"，ESLint 管"写得对不对"。
+
+本地对应习惯是提交前跑 `pnpm format`（或靠编辑器保存时自动格式化）；如果忘了，CI 这一步会拦下来。
+
+### 步骤 7：代码风格检查 `pnpm lint`
 
 ```yaml
 - run: pnpm lint
@@ -236,7 +282,7 @@ env:
 
 可以理解为"检查你作文里有没有错别字和不合语法的句子"。
 
-### 步骤 7：类型检查 `pnpm typecheck`
+### 步骤 8：类型检查 `pnpm typecheck`
 
 ```yaml
 - run: pnpm typecheck
@@ -244,7 +290,7 @@ env:
 
 跑 `"typecheck": "turbo run typecheck"`，对应包里是 `tsc --noEmit`（TypeScript 编译器只检查、不输出文件）。它验证"类型对不对"——比如你把一个数字传给了一个要字符串的函数，它就会报错。这是 TypeScript 项目最关键的防线之一。类型规则在 [tsconfig.base.json](../tsconfig.base.json) 里，开了 `strict: true`（最严格）。
 
-### 步骤 8：跑测试 `pnpm test`
+### 步骤 9：跑测试 `pnpm test`
 
 ```yaml
 - run: pnpm test
@@ -280,7 +326,7 @@ describe.runIf(RUN_PERF)("performance ...", () => { ... });
 
 为什么要列出来？因为 Turborepo 是靠这些环境变量来决定**缓存能不能复用**的。把这些变量登记进去，Turborepo 才知道"换了 `RUN_PERF` 的值，缓存就得重新算"。git 历史里有一条提交 `87855d6 fix(turbo): declare RUN_PERF in globalEnv so CI can skip perf tests` 就是在修这个坑。
 
-### 步骤 9：构建 `pnpm build`
+### 步骤 10：构建 `pnpm build`
 
 ```yaml
 - run: pnpm build
@@ -288,7 +334,7 @@ describe.runIf(RUN_PERF)("performance ...", () => { ... });
 
 跑 `"build": "turbo run build"`，对应包里是 `tsup`（一个打包工具，配置在 [packages/excel-exporter/tsup.config.ts](../packages/excel-exporter/tsup.config.ts)）。它把 TypeScript 源码编译、打包成最终能被别人 `import` 用的 `dist/` 产物。
 
-这一步放在最后，因为构建最耗时，前面（lint/typecheck/test）如果有问题，早点失败、早点停下，省时间。
+这一步放在最后，因为构建最耗时，前面（format/lint/typecheck/test）如果有问题，早点失败、早点停下，省时间。
 
 > Turborepo 的智能之处（见 [turbo.json](../turbo.json)）：`build` 任务声明了 `"dependsOn": ["^build"]`，意思是"先把我依赖的包构建好，再构建我"；还声明了 `"outputs": ["dist/**"]`，让 Turborepo 知道构建产物在哪，可以缓存。工作区现有 excel-exporter / play / docs 多个包，docs 的构建要消费 excel-exporter 的 `dist/` 产物，`^build` 编排已经实际生效。
 
@@ -296,19 +342,20 @@ describe.runIf(RUN_PERF)("performance ...", () => { ... });
 
 ## 九、整体串起来：CI 在守护什么
 
-把九步连起来看，CI 其实是一道道**层层把关**的流水线：
+把十步连起来看，CI 其实是一道道**层层把关**的流水线：
 
-| 顺序 | 步骤                  | 守的是什么       | 对应项目文件                                                                      |
-| ---- | --------------------- | ---------------- | --------------------------------------------------------------------------------- |
-| 1    | checkout（拉全历史）  | 准备代码         | 整个仓库                                                                          |
-| 2    | 装 pnpm（自动读版本） | 工具版本一致     | [package.json](../package.json) 的 `packageManager`                               |
-| 3    | 装 Node 22 + 缓存     | 运行环境一致     | [.nvmrc](../.nvmrc)、`engines`                                                    |
-| 4    | install（冻结锁文件） | 依赖版本一致     | [pnpm-lock.yaml](../pnpm-lock.yaml)                                               |
-| 5    | commitlint（仅 PR）   | 提交信息规范     | [.commitlintrc.json](../.commitlintrc.json)                                       |
-| 6    | lint                  | 代码风格规范     | [eslint.config.mjs](../eslint.config.mjs)                                         |
-| 7    | typecheck             | 类型正确         | [tsconfig.base.json](../tsconfig.base.json)                                       |
-| 8    | test（跳过性能测试）  | 功能正确         | [packages/excel-exporter/src/**tests**](../packages/excel-exporter/src/__tests__) |
-| 9    | build                 | 能成功打包出产物 | [tsup.config.ts](../packages/excel-exporter/tsup.config.ts)                       |
+| 顺序 | 步骤                          | 守的是什么       | 对应项目文件                                                                      |
+| ---- | ----------------------------- | ---------------- | --------------------------------------------------------------------------------- |
+| 1    | checkout（拉全历史）          | 准备代码         | 整个仓库                                                                          |
+| 2    | 装 pnpm（自动读版本）         | 工具版本一致     | [package.json](../package.json) 的 `packageManager`                               |
+| 3    | 装 Node（读 .nvmrc）+ 缓存    | 运行环境一致     | [.nvmrc](../.nvmrc)、`engines`                                                    |
+| 4    | install（冻结锁文件）         | 依赖版本一致     | [pnpm-lock.yaml](../pnpm-lock.yaml)                                               |
+| 5    | commitlint（PR 和 push 都查） | 提交信息规范     | [.commitlintrc.json](../.commitlintrc.json)                                       |
+| 6    | format:check                  | 排版格式统一     | Prettier 默认规则（[package.json](../package.json) 的 format 脚本）               |
+| 7    | lint                          | 代码风格规范     | [eslint.config.mjs](../eslint.config.mjs)                                         |
+| 8    | typecheck                     | 类型正确         | [tsconfig.base.json](../tsconfig.base.json)                                       |
+| 9    | test（跳过性能测试）          | 功能正确         | [packages/excel-exporter/src/**tests**](../packages/excel-exporter/src/__tests__) |
+| 10   | build                         | 能成功打包出产物 | [tsup.config.ts](../packages/excel-exporter/tsup.config.ts)                       |
 
 任何一步失败，整条流水线就亮红灯，PR 上会出现一个红叉，提醒你"这次改动有问题，先别合并"。
 
@@ -318,11 +365,11 @@ describe.runIf(RUN_PERF)("performance ...", () => { ... });
 
 - **`uses:` vs `run:`**：`uses:` 是"调用别人写好的现成小工具"（比如 checkout、setup-node）；`run:` 是"直接在命令行敲一条命令"（比如 `pnpm test`）。
 - **`${{ }}` 这种写法**：这是 GitHub Actions 的"表达式"，用来读取上下文变量。比如 `${{ github.ref }}` 就是"当前分支或 PR 的名字"，`${{ github.event.pull_request.base.sha }}` 就是"PR 起点的 commit 编号"。
-- **为什么顺序是 lint → typecheck → test → build**：从快到慢、从便宜到贵。前面试错成本低，越往后越费时。
+- **为什么顺序是 format:check → lint → typecheck → test → build**：从快到慢、从便宜到贵。前面试错成本低，越往后越费时。
 - **`actions/checkout@v4` 里的 `@v4`**：是版本号，锁定用第 4 版，避免哪天工具升级了行为变了，CI 莫名其妙挂掉。
 
 ---
 
 ## 十一、一句话总结
 
-ci.yml 是这个项目的**自动质检员**：每当有人提 PR 或往 main 推代码，它就在一台干净的 Ubuntu 机器上，用和本地完全一致的 pnpm 9.12 + Node 22 环境，依次检查"提交信息规不规范、代码风格、类型、功能测试（性能测试跳过）、能否构建成功"，全部通过才放行；同一分支重复推还会自动取消旧的，省时省钱。
+ci.yml 是这个项目的**自动质检员**：每当有人提 PR 或往 main 推代码，它就在一台干净的 Ubuntu 机器上，用和本地完全一致的 pnpm 9.12 + Node 22（版本读 `.nvmrc`）环境，依次检查"提交信息规不规范（PR 和直接 push 都查）、排版格式、代码风格、类型、功能测试（性能测试跳过）、能否构建成功"，全部通过才放行；同一分支重复推还会自动取消旧的，省时省钱。

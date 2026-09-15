@@ -83,8 +83,10 @@ jobs:
           RUN_PERF: "0"
 
       - name: Build with VitePress
-        # turbo builds @marcusok/excel-exporter first (docs app depends on it),
-        # then the docs app copies wasm/worker into public/assets and builds.
+        # turbo builds @marcusok/excel-exporter first (the docs app reads its
+        # version and imports it in the live demo), then the docs app builds.
+        # wasm/worker assets need no copying: the package locates them via
+        # new URL(<file>, import.meta.url) and the bundler emits them as assets.
         run: pnpm exec turbo run build --filter=@marcusok/docs
 
       - name: Upload artifact

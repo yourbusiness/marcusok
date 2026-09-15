@@ -18,7 +18,7 @@
 
 1. `Workbook.toBuffer()` 在 ~5.5 万行开始出现超线性断崖（10 万行 17.5s），而 Fast stream 约 0.8s，因此 `STREAM_THRESHOLD = 50_000`；
 2. 浏览器 ≥ 20,000 行走 Worker 后，主线程只做一次结构化克隆（10 万行约 94ms），其余工作在 Worker 内完成；
-3. Stream 路径的代价是样式/布局特性缺失（v1），所以小文件默认走带完整样式的 Workbook 路径。
+3. Stream 路径的代价是样式/布局特性缺失，所以小文件默认走带完整样式的 Workbook 路径。
 
 ## 优化建议
 

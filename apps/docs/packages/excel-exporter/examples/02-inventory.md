@@ -67,7 +67,7 @@ const result = await exportExcel({
 
 ## Notes
 
-- The custom `lowStock` style (bold red + light red fill) highlights risk items — note that a column-level `style` applies to **every** data row in the column; per-row conditional styling is not supported in v1, so use the status column's enum labels to flag individual risk items;
+- The custom `lowStock` style (bold red + light red fill) highlights risk items — note that a column-level `style` applies to **every** data row in the column; per-row conditional styling is not supported, so use the status column's enum labels to flag individual risk items;
 - Column-level `style` applies to the whole data column — a good fit for status columns;
 - `merges` are positioned relative to the data area;
 - Small data (< 20,000 rows) stays on the styled `main` path with default `auto`.

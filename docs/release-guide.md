@@ -282,7 +282,7 @@ git commit -m "fix(excel-exporter): 修复了某个问题"
 - **commit-msg**：跑 `commitlint`，检查提交信息格式对不对。格式错了会报错、中止提交，改对再 commit。
 - **pre-push**：跑 `pnpm exec turbo run typecheck test build --force`，在 push 前全量重跑类型检查 / 单元测试 / 构建（带 `--force` 忽略 turbo 缓存，确保真的跑一遍）。**失败会中止 push**，和 CI 跑的是同一套。详见 2.6。
 
-> 这三个钩子只在本地拦你。CI 里设了 `HUSKY: "0"` 跳过 husky 钩子，但 CI workflow 里有独立的 commitlint 步骤（仅 PR 时跑，检查提交信息）和独立的 lint / typecheck / test / build 步骤——该查的 CI 自己查，只是不走 husky。
+> 这三个钩子只在本地拦你。CI 里设了 `HUSKY: "0"` 跳过 husky 钩子，但 CI workflow 里有独立的 commitlint 步骤（PR 和直接 push 到 main 两种场景都会检查提交信息）和独立的 format:check / lint / typecheck / test / build 步骤——该查的 CI 自己查，只是不走 husky。
 
 > **关于 pre-push 跳过性能测试**：pre-push 的 `test` 带了 `RUN_PERF=0`，和 CI 完全一致——会跳过 `performance.test.ts`（那套测试对并发负载敏感，pre-push 同时跑 typecheck+test+build 三个 turbo 任务争抢 CPU 时会 flaky，比如 10k 行基准在空载 109ms、并发时能飙到 318ms 超阈值）。性能基准只在你想跑时手动 `pnpm test`（不设 `RUN_PERF`）。
 
@@ -308,9 +308,9 @@ push 到 main 后，GitHub Actions 同时启动 CI 与 Release 两个 workflow�
 
 ### CI 流水线（`ci.yml`）——质量检查
 
-跑 `pnpm install` → `commitlint`（仅 PR 时）→ `lint` → `typecheck` → `test` → `build`。
+跑 `pnpm install` → `commitlint`（PR 与 push 两个入口各一步）→ `format:check` → `lint` → `typecheck` → `test` → `build`。
 
-- commitlint 这一步只在 **PR** 时跑，检查 PR 里所有提交信息格式；直接 push 到 main 不跑。
+- commitlint 在 **PR** 时检查 PR 里所有提交信息格式；**直接 push 到 main 时也会跑**（用本次 push 的 `before` 提交点作为检查起点，force push 等找不到起点时退化为只查最新一个提交）。
 - 失败了**只是亮红灯**，不会阻止发版（它和 Release 互不影响）。
 - 它的作用是让你在网页上一眼看到代码质量有没有问题。
 

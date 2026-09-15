@@ -18,7 +18,7 @@ Numbers below come from local measurements (real Chrome, 6 mixed-type columns); 
 
 1. `Workbook.toBuffer()` shows a superlinear cliff beyond ~55k rows (17.5s at 100k), while Fast stream stays at ~0.8s — hence `STREAM_THRESHOLD = 50_000`;
 2. In the browser, ≥ 20,000 rows run in a Worker; the main thread only does one structured clone (~94ms at 100k rows);
-3. Stream's cost is missing styles/layout (v1), so small files keep the fully-styled Workbook path.
+3. The stream path's cost is missing styles/layout, so small files keep the fully-styled Workbook path.
 
 ## Optimization tips
 

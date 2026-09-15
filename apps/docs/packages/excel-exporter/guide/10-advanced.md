@@ -14,7 +14,7 @@ await exportExcel({
 });
 ```
 
-Sheet names must satisfy ECMA-376 constraints: non-empty, ≤ 31 characters, must not contain `: \ / ? * [ ]`, and must not begin or end with an apostrophe. They must also be unique across `sheets` — a duplicate name fails the same way instead of producing a corrupt file or a silently renamed sheet. A violation never produces a corrupt file and never throws to the caller — the validation error is caught and routed through the fallback, which re-validates the same name, so the export finally resolves with `{ success: false, error }` (with a clear error message).
+Sheet names must satisfy ECMA-376 constraints: non-empty, ≤ 31 characters, must not contain `: \ / ? * [ ]`, and must not begin or end with an apostrophe. They must also be unique across `sheets` — a duplicate name fails the same way instead of producing a corrupt file or a silently renamed sheet. A violation never produces a corrupt file and never throws to the caller: input is validated up front, before any export route (or the fallback chain) runs, and the call resolves with `{ success: false, error }` carrying a clear message.
 
 ## Frozen rows
 
@@ -111,11 +111,11 @@ await exportExcel({
 
 Phase semantics:
 
-| Phase      | Description                                                                                                                                                                                                                                                                                                |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `init`     | WASM init; reported on every main-path export (~0ms once loaded); Node's main-thread stream path does not load WASM but still reports a single 0ms to keep the phase sequence stable; on Worker + Workbook only when the worker initializes; never on Worker + stream or the stream fallback (0ms instead) |
-| `build`    | Workbook construction (reported once per actual attempt, including fallback)                                                                                                                                                                                                                               |
-| `download` | Browser download trigger (absent with `download: false`; absent in Node)                                                                                                                                                                                                                                   |
+| Phase      | Description                                                                                                                                                                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init`     | WASM init; reported on every main-path export (~0ms once loaded); Node's main-thread stream path and the main-thread stream fallback do not load WASM but still report a single 0ms to keep the phase sequence stable; on Worker + Workbook only when the worker initializes; not reported on Worker + stream |
+| `build`    | Workbook construction (reported once per actual attempt, including fallback)                                                                                                                                                                                                                                  |
+| `download` | Browser download trigger (absent with `download: false`; absent in Node)                                                                                                                                                                                                                                      |
 
 > `onPhase` measures per-phase wall time only; `ExportResult.duration` always measures the whole export.
 

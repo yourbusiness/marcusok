@@ -17,7 +17,7 @@ Worker 路径行为：
 
 `fast-xlsx.ts` 使用 `fflate` 生成 minimal OOXML，10 万行约 0.8s（对比 Workbook 路径 17.5s）。`auto` 在 ≥ 5 万行时自动选择它。
 
-Stream 路径的已知限制（v1）：
+Stream 路径的已知限制：
 
 | 特性                      | Stream 路径                     |
 | ------------------------- | ------------------------------- |

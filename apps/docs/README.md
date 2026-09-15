@@ -9,14 +9,17 @@
 
 ```bash
 pnpm dev:docs      # 本地开发，端口 5174
-pnpm build:docs    # 构建（先构建 excel-exporter，再拷贝 wasm/worker 到 public/assets）
+pnpm build:docs    # 构建（turbo 先构建 excel-exporter，再构建文档站）
 pnpm preview:docs  # 本地预览构建产物
 pnpm test          # turbo 全仓测试（docs 执行 zh/en 页面镜像校验）
 pnpm typecheck     # turbo 全仓类型检查（docs 执行 vue-tsc --noEmit）
 ```
 
 > 注意：不要直接在本目录裸跑 `pnpm build`，它依赖 `@marcusok/excel-exporter` 的
-> `dist/` 产物与 `modern-xlsx` 的 wasm 资源，turbo 依赖图会保证顺序。
+> `dist/` 产物（registry 读取版本号、live demo import 包入口），turbo 依赖图会保证顺序。
+> wasm/worker 资产无需拷贝：包内通过 `new URL(<file>, import.meta.url)` 自动定位，
+> 由 VitePress 的构建按 hashed asset 输出（仅当未来某个包确需 public/ 拷贝时，
+> 才在 `.vitepress/registry.ts` 的 `runtimeAssets` 登记）。
 
 ## 目录约定
 
