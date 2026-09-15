@@ -42,7 +42,7 @@ cefad0e fix(excel-exporter): tighten exports and declare xlsx as optional peer d
 
 所以它们各自失败，根因很可能并不相同。下面分开讲。
 
-**CI** (`ci.yml`)：checkout → pnpm → node22 → `pnpm install --frozen-lockfile` → lint → typecheck → test → build（commitlint 只在 PR 时跑，直推 main 不跑）。
+**CI** (`ci.yml`)：checkout → pnpm → node22 → `pnpm install --frozen-lockfile` → lint → typecheck → test → build（commitlint 只在 PR 时跑，直推 main 不跑。注：此为 2026-07 排障时的状态；2026-08-27 起 ci.yml 已增加对直推 main 的提交逐条 lint，见提交 9d9339f 与 `docs/ci-workflow-analysis.md`）。
 
 **Release** (`release.yml`)：checkout → pnpm → node22 → install → `changesets/action`。
 

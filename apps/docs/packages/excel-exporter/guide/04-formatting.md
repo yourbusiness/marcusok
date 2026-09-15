@@ -56,7 +56,7 @@ columns: [
 }
 ```
 
-Signature: `(value: unknown, row: Record<string, unknown>) => string | number | boolean`. Functions cannot cross the structured-clone boundary, so behavior differs per path: the main path (browser < 20,000 rows / Node < 50,000 rows) and Node's stream path (≥ 50,000 rows, also main-thread) execute them normally; the browser worker path (auto ≥ 20,000 rows, or explicit `mode: "worker"` / `mode: "stream"`) **strips them with a `console.warn`** and exports the raw value (no error, no fallback to main). Convert to FormatSpec to keep formatting on the worker path.
+Signature: `(value: unknown, row: Record<string, unknown>) => string | number | boolean`. Functions cannot cross the structured-clone boundary, so behavior differs per path: the main path (browser < 20,000 rows / Node < 50,000 rows), Node's stream path (≥ 50,000 rows, also main-thread) and the main-thread retry after a worker failure (the original options keep the function — only the copy sent to the worker is stripped) execute them normally; the browser worker path (auto ≥ 20,000 rows, or explicit `mode: "worker"` / `mode: "stream"`) **strips them with a `console.warn`** and exports the raw value (no error, no fallback to main). Convert to FormatSpec to keep formatting on the worker path.
 
 ## Cross-path precision notes
 
@@ -69,5 +69,7 @@ Behavior differs slightly between paths — always set `decimals` explicitly:
 ## Dates
 
 `date` / `datetime` accept `Date` objects, parseable strings or timestamps. The Workbook path writes a serial + `numFormat`; Stream path (no `numFormat` support) emit readable strings per the pattern (`mm` resolves to minutes vs month by its context).
+
+**Pattern tokens (differ between paths)**: the stream path (≥ 50,000 rows, explicit `mode: "stream"`, or the fallback) parses only the six tokens `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss` (case-insensitive). The Workbook path hands the pattern to Excel as a `numFormat`, where any valid format code also renders (`yy`, single-letter `m`/`d`, `AM/PM`, quoted literals like `yyyy"年"`). Anything outside the six tokens is emitted **verbatim** on the stream path — `pattern: "yy-MM-dd"` exports `yy-01-05` above the threshold and a proper two-digit year below it. Stick to the six tokens for cross-threshold consistency.
 
 **Timezone convention (consistent across paths)**: `date` / `datetime` interpret and render values by their **UTC components** — the workbook serial comes from modern-xlsx's `dateToSerial` (UTC wall clock) and the stream strings use the same UTC components, so one input renders identically on every path in every timezone. ISO date strings (`"2026-07-01"`) parse as UTC midnight per ECMA-262 and fit this convention natively. Note that Dates constructed with local time (`new Date(year, month, day)`) carry UTC components that can fall on the previous day in non-UTC timezones (local midnight in UTC+8 = 16:00 UTC the day before). Prefer ISO strings or `Date.UTC(...)` for timezone-stable date columns.

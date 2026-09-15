@@ -42,7 +42,7 @@
 ### 2.3 需要提前说明的现状问题
 
 1. **git 远程地址已确认**：remote 为 `git@github.com:yourbusiness/marcusok.git`，`yourbusiness` 是真实的 GitHub owner（非占位符），站点已按 `https://yourbusiness.github.io/marcusok/` 部署上线。（规划时曾把它当作占位地址，后来确认即为真实仓库。）
-2. **根 README 存在编码问题**（GBK 内容被当作 UTF-8 显示为乱码）。公开文档站内容将全部新写（UTF-8），不直接复用 README 文本；README 修复可作为独立事项另行处理。
+2. **根 README 存在编码问题**（GBK 内容被当作 UTF-8 显示为乱码）。公开文档站内容将全部新写（UTF-8），不直接复用 README 文本；README 修复可作为独立事项另行处理。（注：根 README 已于其后修复为正常的 UTF-8 英文文档，本条为规划时快照。）
 3. GitHub Pages 需要仓库所有者先在仓库 Settings → Pages 中把 Source 设为 **GitHub Actions**；私有仓库的 Pages 服务需要付费计划（Pro/Team/Enterprise）。
 
 ## 3. 技术选型与依据

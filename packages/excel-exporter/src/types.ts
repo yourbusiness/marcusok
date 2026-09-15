@@ -71,6 +71,13 @@ export interface CellStyle {
  * ("2025-01-05") parse as UTC midnight per ECMA-262; prefer them (or
  * `Date.UTC(...)`) over locally-constructed Dates, whose UTC components can
  * fall on the previous day in non-UTC timezones.
+ *
+ * Pattern tokens: the stream path (>= 50,000 rows, explicit stream mode, or
+ * the fallback) parses only `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (case-insensitive;
+ * `mm` resolves to minutes vs month by context) and emits anything else
+ * verbatim, while the Workbook path hands the pattern to Excel as a numFormat
+ * where every valid format code renders. Stick to the six tokens for
+ * cross-threshold consistency.
  */
 export type FormatSpec =
   | { type: "enum"; map: Record<string, string>; fallback?: string }
@@ -172,11 +179,16 @@ export type ExportMode = "auto" | "main" | "worker" | "stream";
  *   `loader.ensureLoaded()`; worker mode measures the worker's `initWasm()`
  *   (only reported when the worker actually re-initializes, not when its WASM
  *   instance is already cached). Reported as a zero-duration phase by the
- *   WASM-free stream fallback.
+ *   WASM-free stream fallback and the main-thread stream routes. The browser
+ *   worker-stream route (stream engine inside a worker) uses no WASM and
+ *   reports no `"init"` at all.
  * - `"build"`: workbook construction. Covers the Workbook/stream builder.
- *   Each real build attempt reports its own `"build"` phase, so a
- *   degradation chain (e.g. failed worker build -> main-thread retry ->
- *   stream fallback) reports one phase per attempt.
+ *   Each main-thread build attempt reports its own `"build"` phase (in a
+ *   `finally`, so also when that attempt throws), so a degradation chain
+ *   (e.g. failed worker build -> main-thread retry -> stream fallback) reports
+ *   one phase per main-thread attempt. An attempt that fails *inside* the
+ *   worker reports no `"build"` phase — its failure surfaces only through the
+ *   retry's error.
  * - `"download"`: the synchronous browser download trigger
  *   (`triggerDownload`); only reported when `download !== false`. Not reported
  *   in Node (no `document`).
@@ -201,7 +213,8 @@ export interface ExportOptions {
    * Optional per-stage timing callback. Receives the phase name and its
    * wall-clock duration in ms (0 means the phase did no work, e.g. WASM was
    * already loaded). Useful for metrics/play panels; does not affect
-   * `ExportResult.duration` (which keeps measuring the whole export).
+   * `ExportResult.duration` (which measures the whole export on main-thread
+   * routes; the worker route's duration covers the in-worker time only).
    */
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   /** Trigger browser download (default true). Set false to only return a Blob. */

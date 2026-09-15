@@ -30,7 +30,7 @@ type FormatSpec =
 { type: "datetime", pattern: "yyyy-MM-dd HH:mm:ss" }
 ```
 
-接受 `Date` / 可解析字符串 / 时间戳。Workbook 路径写入 Excel 日期序列并自动注入 `numFormat`；Stream 路径输出 pattern 格式化字符串。统一按 **UTC 分量**解释（与 Workbook 序列的 `dateToSerial` 口径一致，跨路径/跨时区显示相同）；ISO 日期字符串按 ECMA-262 解析为 UTC 午夜，详见[值格式化的时区约定](/zh/packages/excel-exporter/guide/04-formatting)。
+接受 `Date` / 可解析字符串 / 时间戳。Workbook 路径写入 Excel 日期序列并自动注入 `numFormat`；Stream 路径输出 pattern 格式化字符串。统一按 **UTC 分量**解释（与 Workbook 序列的 `dateToSerial` 口径一致，跨路径/跨时区显示相同）；ISO 日期字符串按 ECMA-262 解析为 UTC 午夜，详见[值格式化的时区约定](/zh/packages/excel-exporter/guide/04-formatting)。pattern 支持的 token 跨路径有差异：Stream 路径只解析 `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss`，其余内容按字面输出；Workbook 路径可渲染任意合法 Excel 格式码——详见[值格式化的说明](/zh/packages/excel-exporter/guide/04-formatting)。
 
 ### number
 
@@ -62,6 +62,7 @@ format: (value, row) => string | number | boolean;
 
 - **main 路径**（auto 模式下浏览器 < 20,000 行 / Node < 50,000 行；或任意行数显式 `mode: "main"`）：函数正常执行；
 - **Node 的 stream 路径**（≥ 50,000 行）：同样在主线程执行，函数正常执行；
+- **worker 失败后的主线程重试**：函数正常执行——原始 options 里的函数仍在，被剥离的只是发给 worker 的副本；
 - **浏览器 worker 路径**（auto ≥ 20,000 行，或显式 `mode: "worker"` / `mode: "stream"`）：函数会被**剥离并打印 `console.warn`**，该列以原始值导出（不会报错，也不会回落到 main）。
 
 需要 worker 路径保留格式时，请改写为 FormatSpec。

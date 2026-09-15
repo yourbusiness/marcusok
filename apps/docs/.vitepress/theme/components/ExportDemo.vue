@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import { useData } from "vitepress";
 import type { ColumnConfig } from "@marcusok/excel-exporter";
 import {
@@ -36,6 +36,12 @@ const result = ref<{
   rowCount?: number;
 } | null>(null);
 const error = ref<string | null>(null);
+// VitePress SPA 导航离开后导出可能仍在进行；置位后回调不再触碰已卸载
+// 组件的响应式状态（与 play 侧 demo 的 cancelledRef 方案一致）。
+const disposed = ref(false);
+onUnmounted(() => {
+  disposed.value = true;
+});
 
 const statusText = computed(() =>
   isEn.value
@@ -118,14 +124,21 @@ async function run() {
         },
       ],
       mode: selectedMode.value,
-      onProgress: (p) => (progress.value = p),
-      onPhase: (phase, ms) => phases.value.push({ phase, ms }),
+      onProgress: (p) => {
+        if (!disposed.value) progress.value = p;
+      },
+      onPhase: (phase, ms) => {
+        if (!disposed.value) phases.value.push({ phase, ms });
+      },
     });
+    // A failed export still receives the trailing onProgress(1) (library
+    // contract), so the bar always completes; the failure itself is shown
+    // via `result.success: false` / the error block below.
     result.value = res;
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
-    exporting.value = false;
+    if (!disposed.value) exporting.value = false;
   }
 }
 </script>

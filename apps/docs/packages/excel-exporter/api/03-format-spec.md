@@ -30,7 +30,7 @@ Outputs the mapped label; unmapped values use `fallback`, or pass through when a
 { type: "datetime", pattern: "yyyy-MM-dd HH:mm:ss" }
 ```
 
-Accepts `Date` / parseable string / timestamp. The Workbook path writes an Excel date serial and auto-injects `numFormat`; the stream path outputs the pattern-formatted string. Values are interpreted by their **UTC components** (matching the workbook serial's `dateToSerial` convention, so all paths and timezones render the same); ISO date strings parse as UTC midnight per ECMA-262 — see the timezone note in [Value Formatting](/packages/excel-exporter/guide/04-formatting).
+Accepts `Date` / parseable string / timestamp. The Workbook path writes an Excel date serial and auto-injects `numFormat`; the stream path outputs the pattern-formatted string. Values are interpreted by their **UTC components** (matching the workbook serial's `dateToSerial` convention, so all paths and timezones render the same); ISO date strings parse as UTC midnight per ECMA-262 — see the timezone note in [Value Formatting](/packages/excel-exporter/guide/04-formatting). Pattern tokens differ between paths: the stream path parses only `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss` and emits anything else verbatim, while the Workbook path renders any valid Excel format code — see the note in [Value Formatting](/packages/excel-exporter/guide/04-formatting).
 
 ### number
 
@@ -62,6 +62,7 @@ Can access the whole row for conditional formatting. Functions cannot cross the 
 
 - **main path** (auto mode: browser < 20,000 rows / Node < 50,000 rows; or any size with explicit `mode: "main"`): executed normally;
 - **Node's stream path** (≥ 50,000 rows): also main-thread, executed normally;
+- **main-thread retry after a worker failure**: executed normally — the original options keep the function, only the copy sent to the worker is stripped;
 - **browser worker path** (auto ≥ 20,000 rows, or explicit `mode: "worker"` / `mode: "stream"`): functions are **stripped with a `console.warn`** and the column exports its raw value (no error, no fallback to main).
 
 Convert to FormatSpec to keep formatting on the worker path.

@@ -66,7 +66,7 @@ Rules:
 - Group header cells style via that column's `headerStyle`, leaf headers likewise (falling back to the sheet-level `headerStyle`);
 - Multi-row headers work on every path (main / worker / stream, including the stream fallback); merges survive on the stream and fallback paths too (styles excepted).
 
-Try it live: below is a mock preview of the `sales-grouped` dataset (two-level grouped header, matching the exported file's header structure); pick the `sales-grouped` dataset in the demo panel on the [package home](/packages/excel-exporter/) to export a real file with a multi-row header and data-area merges.
+Try it live: below is a mock preview of the `sales-grouped` dataset (two-level grouped header, matching the exported file's header structure); pick the `sales-grouped` dataset in the [playground](/play) demo panel to export a real file with a multi-row header and data-area merges.
 
 <MockPreview dataset="sales-grouped" :rows="5" />
 

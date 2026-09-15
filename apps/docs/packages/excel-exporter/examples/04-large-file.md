@@ -13,7 +13,7 @@ import { exportExcel } from "@marcusok/excel-exporter";
 
 // rows: sales data from your business layer, fields matching the columns
 // below (fetching is omitted here; the scenario uses 100k rows — the live
-// demo generates same-shaped mock data)
+// demo generates mock data for the same sales scenario, with more columns)
 
 const result = await exportExcel({
   filename: "large-export-100k",

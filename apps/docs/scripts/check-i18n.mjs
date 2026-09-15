@@ -100,8 +100,10 @@ for (const f of required) {
 // English page, so a missing /zh prefix fails the check. (Anchors, external
 // URLs and relative links are unaffected; there are no root-absolute images.)
 // stripCode runs first so fenced examples like `](/guide/)` inside code blocks
-// are not mistaken for real links. ----
-const SITE_LINK_RE = /\]\((\/[^)\s]*)\)/g;
+// are not mistaken for real links. The optional `(?:\s[^)]*)?` arm also
+// captures titled links — `[text](/path "title")` is valid Markdown and must
+// not silently escape the check just because the path is followed by a space. ----
+const SITE_LINK_RE = /\]\((\/[^)\s]*)(?:\s[^)]*)?\)/g;
 const linkErrors = [];
 for (const f of zh) {
   const content = stripCode(readFileSync(join(zhRoot, f), "utf8"));

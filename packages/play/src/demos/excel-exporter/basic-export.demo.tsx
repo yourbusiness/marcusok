@@ -187,12 +187,19 @@ export default function BasicExportDemo() {
   const [run, setRun] = useState<RunRecord | null>(null);
   const [runs, setRuns] = useState<RunRecord[]>(() => [...history]);
   const cancelledRef = useRef(false);
+  // 计时 interval 的句柄：卸载时要立即停表，不能等导出 promise settle
+  // （流式大导出可持续数十秒甚至到 worker 默认 120s 超时）。
+  const elapsedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     cancelledRef.current = false;
     return () => {
       // 卸载（导航离开/路由切换）后，异步导出不再触碰组件状态。
       cancelledRef.current = true;
+      if (elapsedTimerRef.current !== null) {
+        window.clearInterval(elapsedTimerRef.current);
+        elapsedTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -283,11 +290,15 @@ export default function BasicExportDemo() {
     setRun(null);
     setProgress({ percent: 0, phase: "初始化 WASM…", elapsedMs: 0 });
 
-    const tick = (): void =>
+    const tick = (): void => {
+      // 与下方 onProgress/onPhase 的卸载防御保持一致：卸载后不再 setState。
+      if (cancelledRef.current) return;
       setProgress((prev) =>
         prev ? { ...prev, elapsedMs: performance.now() - t0 } : prev,
       );
+    };
     const elapsedTimer = window.setInterval(tick, 100);
+    elapsedTimerRef.current = elapsedTimer;
     tick();
 
     try {
@@ -354,6 +365,7 @@ export default function BasicExportDemo() {
       });
     } finally {
       window.clearInterval(elapsedTimer);
+      elapsedTimerRef.current = null;
       if (!cancelledRef.current) {
         setRunning(false);
         setProgress(null);
@@ -568,8 +580,10 @@ export default function BasicExportDemo() {
               size="small"
               column={{ xs: 1, sm: 3 }}
               style={{ marginTop: 16 }}
-              items={run.phases.map((p) => ({
-                key: p.phase,
+              items={run.phases.map((p, i) => ({
+                // 降级链会重复上报同名 phase（worker 的 init + 主线程重试
+                // 的 init/build + 兜底的一轮），phase 名不能直接做 key。
+                key: `${p.phase}-${i}`,
                 label: PHASE_LABEL[p.phase],
                 children: formatDuration(p.durationMs),
               }))}

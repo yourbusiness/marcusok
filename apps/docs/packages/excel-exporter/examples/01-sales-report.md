@@ -13,7 +13,8 @@ import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
 
 // rows: sales data from your business layer, fields matching the columns
 // below (fetching is omitted here; the scenario uses 10k rows — the live
-// demo generates same-shaped mock data)
+// demo generates mock data for the same sales scenario, with a couple of
+// extra columns such as unitPrice)
 
 const result = await exportExcel({
   filename: "sales-report-2026-07",

@@ -476,7 +476,7 @@ GitHub Actions 的免费 runner 是"共享电脑"——同一台机器上跑着�
 
 用"绝对时间"做断言（`期望耗时 < 1500ms`）在这种环境下必然时好时坏（flake）。所以本项目的做法：性能测试在 CI 上跳过（`RUN_PERF=0`），只在本地当"回归看门狗"用。
 
-顺带一提：[turbo.json](/turbo.json) 的 `globalEnv` 里还声明了 `PERF_TIGHT`。历史上它和 `RUN_PERF` 是两个不同的本地开关——`RUN_PERF=0` 管"跑不跑"（CI 用，跳过 perf），`PERF_TIGHT=1` 管"严不严"（本地用，当时可把 `SLACK` 余量从 1.5 倍收紧到 1.0 倍）。该机制现已移除：`performance.test.ts` 里 `SLACK` 恒为 1.0，设 `PERF_TIGHT` 不再产生任何效果，turbo.json 里的声明属于残留。
+顺带一提：历史上 `PERF_TIGHT` 和 `RUN_PERF` 是两个不同的本地开关——`RUN_PERF=0` 管"跑不跑"（CI 用，跳过 perf），`PERF_TIGHT=1` 管"严不严"（本地用，当时可把 `SLACK` 余量从 1.5 倍收紧到 1.0 倍）。该机制已彻底移除：`performance.test.ts` 里 `SLACK` 恒为 1.0（本地阈值即产品 SLA，无环境宽限），设 `PERF_TIGHT` 不再产生任何效果，[turbo.json](/turbo.json) `globalEnv` 里的残留声明也已随之删除（现行声明只有 `NODE_ENV` / `CI` / `RUN_PERF` / `DOCS_BASE`）。
 
 ## 5.3 为什么环境变量要"层层放行"
 

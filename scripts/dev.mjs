@@ -6,7 +6,8 @@
  * 断开信号传递，导致 vite / vitepress / tsup watch 等子进程残留并占用端口。
  *
  * 方案：由本脚本直接以 node 拉起各 dev 进程（不再经过 cmd 包装），收到 SIGINT/SIGTERM
- * 或自身退出时，用 `taskkill /PID <pid> /T /F` 按进程树强杀全部子进程。
+ * 或自身退出时按进程树强杀全部子进程：Windows 用 `taskkill /PID <pid> /T /F`，
+ * POSIX 用进程组信号（子进程以 detached 启动、自成组长，负 pid 一次杀整组）。
  *
  * 用法：
  *   node scripts/dev.mjs            # 启动全部服务
@@ -64,10 +65,16 @@ function killTree(pid) {
     if (process.platform === "win32") {
       execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
     } else {
+      // 子进程以 detached: true 启动、自成进程组组长（见 spawnTask），孙进程
+      // 默认同组；负 pid 一次信号杀整组，与 Windows 的 taskkill /T 对齐。
       try {
-        process.kill(pid, "SIGTERM");
+        process.kill(-pid, "SIGTERM");
       } catch {
-        /* 已退出 */
+        try {
+          process.kill(pid, "SIGTERM");
+        } catch {
+          /* 已退出 */
+        }
       }
     }
   } catch {
@@ -97,12 +104,25 @@ process.on("exit", () => killAll());
 function pipeWithPrefix(child, tag, color) {
   const reset = "\x1b[0m";
   const prefix = `${color}[${tag}]${reset} `;
+  // 每个 stream 一份待拼接的半行：chunk 边界可能落在行中间，逐 chunk 直接
+  // 加前缀会把一行拆成多个带前缀的"行"；攒到下一个 \n 再整体输出。\r 刷新式
+  // 输出（进度条等）在两个 \n 之间原样透传，由终端自行刷新。
+  const pending = new Map();
   const write = (stream, chunk) => {
-    const lines = chunk.toString().split("\n");
+    const text = (pending.get(stream) ?? "") + chunk.toString();
+    const lines = text.split("\n");
+    pending.set(stream, lines.pop() ?? "");
     for (const line of lines) stream.write(line ? prefix + line + "\n" : "\n");
   };
   child.stdout.on("data", (c) => write(process.stdout, c));
   child.stderr.on("data", (c) => write(process.stderr, c));
+  // 子进程退出时 flush 末尾不带换行的残行，避免丢最后一行日志。
+  child.on("exit", () => {
+    for (const [stream, rest] of pending) {
+      if (rest) stream.write(prefix + rest + "\n");
+      pending.set(stream, "");
+    }
+  });
 }
 
 function spawnTask(key) {
@@ -112,6 +132,10 @@ function spawnTask(key) {
     cwd: path.join(root, task.cwd),
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, FORCE_COLOR: "1" },
+    // POSIX 下让子进程自成进程组（组长 = 自身 pid），killTree 才能用 -pid
+    // 一次杀掉整组（覆盖孙进程，如 esbuild 服务进程）；Windows 的 detached
+    // 语义不同（新开控制台），必须保持关闭。
+    detached: process.platform !== "win32",
   });
   children.add(child);
   pipeWithPrefix(child, key, task.color);

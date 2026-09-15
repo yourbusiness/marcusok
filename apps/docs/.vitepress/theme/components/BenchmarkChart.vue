@@ -86,10 +86,12 @@ const series = computed<ComputedSeries[]>(() =>
       // out of the SVG entirely for max values in ~[10^k*0.67, 10^k*1.5]).
       const scaleMax = Math.max(maxVal, tickValues[tickValues.length - 1] ?? 0);
       // Guard: maxLog <= 0 means all values are 0 or 1 -- clamp to 1 so
-      // barH never produces Infinity/NaN.
+      // barH never produces Infinity/NaN. Values in (0, 1) are also clamped
+      // to zero height: log10 is negative there and a negative rect height is
+      // invalid SVG (registry-validate only rejects v <= 0, not v < 1).
       const maxLog = Math.max(Math.log10(scaleMax), 1);
       const barH = (v: number) =>
-        v > 0 ? (Math.log10(v) / maxLog) * plotH : 0;
+        v >= 1 ? (Math.log10(v) / maxLog) * plotH : 0;
       const groupW = (W - padL - 20) / data.length;
       const groupX = (i: number) => padL + groupW * i + groupW / 2;
       const seriesCount = defs.length;

@@ -28,12 +28,12 @@ A column with `children` is a group: no data cells, header rows only. Header row
 
 ## MergeRange
 
-| Field     | Type     | Description                    |
-| --------- | -------- | ------------------------------ |
-| `row`     | `number` | Start row (0 = first data row) |
-| `col`     | `number` | Start column                   |
-| `rowspan` | `number` | Row span                       |
-| `colspan` | `number` | Column span                    |
+| Field     | Type     | Description                     |
+| --------- | -------- | ------------------------------- |
+| `row`     | `number` | Start row (0 = first data row)  |
+| `col`     | `number` | Start column (0 = first column) |
+| `rowspan` | `number` | Row span                        |
+| `colspan` | `number` | Column span                     |
 
 ## CellStyle
 
