@@ -49,8 +49,8 @@ const statusText = computed(() =>
         run: "Export Excel",
         running: "Exporting…",
         progress: "Progress",
-        phases: "Phase timings",
-        result: "Result",
+        phases: "Phase timings:",
+        result: "Result:",
         hint: "auto picks the best path in-browser. Try main with 100,000 rows to see why.",
         dataset: "Dataset",
         mode: "Mode",
@@ -63,8 +63,8 @@ const statusText = computed(() =>
         run: "导出 Excel",
         running: "导出中…",
         progress: "进度",
-        phases: "阶段耗时",
-        result: "结果",
+        phases: "阶段耗时：",
+        result: "结果：",
         hint: "auto 会在浏览器内自动选择最优路径；可以试试 main + 10 万行，看看为什么需要 auto。",
         dataset: "数据集",
         mode: "模式",
@@ -180,7 +180,7 @@ async function run() {
     </div>
 
     <div v-if="result" class="demo-panel__result">
-      <strong>{{ statusText.result }}：</strong>
+      <strong>{{ statusText.result }}</strong>
       <code>{{ result.success ? statusText.ok : statusText.fail }}</code>
       ·
       <code>{{ statusText.engine }}: {{ result.engine }}</code>
@@ -193,7 +193,7 @@ async function run() {
     </div>
 
     <div v-if="phases.length" class="demo-panel__result">
-      <strong>{{ statusText.phases }}：</strong>
+      <strong>{{ statusText.phases }}</strong>
       <code v-for="(p, i) in phases" :key="i">
         {{ p.phase }} {{ p.ms.toFixed(1) }}ms{{
           i < phases.length - 1 ? " → " : ""

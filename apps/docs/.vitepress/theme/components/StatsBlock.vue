@@ -17,12 +17,21 @@ const rootRef = ref<HTMLElement | null>(null);
 let raf = 0;
 let io: IntersectionObserver | null = null;
 
+// Skip the count-up animation entirely when the user asked for reduced
+// motion: fill the final values immediately (same as the no-IO fallback).
+function fillFinal(): void {
+  for (const s of targets.value) {
+    display.value[s.key] = s.value.toFixed(s.decimals);
+  }
+}
+
 onMounted(() => {
   const el = rootRef.value;
-  if (!el || typeof IntersectionObserver === "undefined") {
-    for (const s of targets.value) {
-      display.value[s.key] = s.value.toFixed(s.decimals);
-    }
+  const reducedMotion =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!el || typeof IntersectionObserver === "undefined" || reducedMotion) {
+    fillFinal();
     return;
   }
   io = new IntersectionObserver(

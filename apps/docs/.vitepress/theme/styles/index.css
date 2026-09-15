@@ -11,8 +11,6 @@
     #8b5cf6 50%,
     #ec4899 100%
   );
-  --vp-home-hero-name-width: 100%;
-  --vp-custom-block-tip-border: #5b7cfa;
 }
 
 /* ------------------------- brand tokens (dark) ------------------------- */
@@ -24,6 +22,16 @@
 }
 
 /* ------------------------------ hero polish ------------------------------ */
+
+/*
+ * Every custom component below (cards, stats, demo panels, charts) renders
+ * inside VitePress' `.vp-doc` content wrapper -- on doc pages AND under the
+ * home layout (VPHomeContent root is `.vp-doc.container`). The theme's
+ * element rules (`.vp-doc a`, `.vp-doc p`, `.vp-doc ul`, `.vp-doc h3`,
+ * `.vp-doc :not(pre) > code`; specificity 0-1-1 / 0-1-2) beat single-class
+ * selectors (0-1-0), so component styles are prefixed with `.vp-doc` to win
+ * the cascade without !important.
+ */
 .VPHero .name {
   background-size: 200% auto;
   animation: hero-gradient 8s ease-in-out infinite alternate;
@@ -38,9 +46,10 @@
   }
 }
 
-.VPHero .image-bg {
-  filter: blur(24px);
-  opacity: 0.55;
+@media (prefers-reduced-motion: reduce) {
+  .VPHero .name {
+    animation: none;
+  }
 }
 
 .VPHome {
@@ -53,29 +62,15 @@
     transparent;
 }
 
-/* ------------------------- feature cards ------------------------- */
-.VPHero .VPFeature {
-  transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease,
-    border-color 0.25s ease;
-}
-
-.VPHero .VPFeature:hover {
-  transform: translateY(-4px);
-  border-color: var(--vp-c-brand-1);
-  box-shadow: 0 12px 32px -12px rgba(91, 124, 250, 0.35);
-}
-
 /* ------------------------- highlight cards ------------------------- */
-.highlight-grid {
+.vp-doc .highlight-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
   margin: 20px 0 32px;
 }
 
-.highlight-card {
+.vp-doc .highlight-card {
   padding: 20px 22px;
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
@@ -86,23 +81,24 @@
     box-shadow 0.22s ease;
 }
 
-.highlight-card:hover {
+.vp-doc .highlight-card:hover {
   transform: translateY(-4px);
   border-color: var(--vp-c-brand-1);
   box-shadow: 0 14px 34px -14px rgba(91, 124, 250, 0.4);
 }
 
-.highlight-card__icon {
+.vp-doc .highlight-card__icon {
   font-size: 1.8rem;
   line-height: 1;
 }
 
-.highlight-card__title {
+.vp-doc .highlight-card__title {
   margin: 10px 0 6px;
   font-size: 1rem;
+  line-height: 1.4;
 }
 
-.highlight-card__details {
+.vp-doc .highlight-card__details {
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.6;
@@ -110,59 +106,65 @@
 }
 
 /* --------------------------- package cards --------------------------- */
-.package-grid {
+.vp-doc .package-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
   margin: 20px 0 32px;
 }
 
-.package-card {
+/* Anchors inside .vp-doc get `color: brand + underline` (and brand-2 on
+ * hover) from the theme; card text must keep its own colors and no
+ * underline in both states. */
+.vp-doc .package-card {
   display: block;
   padding: 20px 22px;
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
   background: var(--vp-c-bg-soft);
+  color: inherit;
+  text-decoration: none;
   transition:
     transform 0.22s ease,
     border-color 0.22s ease,
     box-shadow 0.22s ease;
 }
 
-.package-card:hover {
+.vp-doc .package-card:hover {
   transform: translateY(-4px);
   border-color: var(--vp-c-brand-1);
   box-shadow: 0 14px 34px -14px rgba(91, 124, 250, 0.4);
+  color: inherit;
   text-decoration: none;
 }
 
-.package-card__head {
+.vp-doc .package-card__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.package-card__name {
+.vp-doc .package-card__name {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--vp-c-brand-1);
 }
 
-.package-card__version {
+.vp-doc .package-card__version {
   margin: 8px 0 6px;
   font-size: 0.8rem;
   color: var(--vp-c-text-2);
 }
 
-.package-card__tagline {
+.vp-doc .package-card__tagline {
   margin: 0 0 12px;
   font-size: 0.92rem;
   line-height: 1.6;
   color: var(--vp-c-text-1);
 }
 
-.package-card__keywords {
+.vp-doc .package-card__keywords {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -171,7 +173,8 @@
   list-style: none;
 }
 
-.package-card__keywords li {
+.vp-doc .package-card__keywords li {
+  margin: 0;
   padding: 2px 10px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -179,52 +182,67 @@
   color: var(--vp-c-brand-1);
 }
 
-.badge {
+.vp-doc .badge {
   padding: 2px 10px;
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 600;
 }
 
-.badge--stable {
+/* Text colors meet WCAG AA (>= 4.5:1) in both modes: darker shades on the
+ * tinted light-mode background, lighter shades on the dark background. */
+.vp-doc .badge--stable {
   background: rgba(34, 197, 94, 0.14);
-  color: #16a34a;
+  color: #15803d;
 }
 
-.badge--beta {
+.dark .vp-doc .badge--stable {
+  color: #4ade80;
+}
+
+.vp-doc .badge--beta {
   background: rgba(245, 158, 11, 0.14);
-  color: #d97706;
+  color: #b45309;
 }
 
-.badge--alpha {
+.dark .vp-doc .badge--beta {
+  color: #fbbf24;
+}
+
+.vp-doc .badge--alpha {
   background: rgba(239, 68, 68, 0.14);
   color: #dc2626;
 }
 
+.dark .vp-doc .badge--alpha {
+  color: #f87171;
+}
+
 /* ----------------------------- stats block ----------------------------- */
-.stats-grid {
+.vp-doc .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 14px;
   margin: 28px 0 36px;
 }
 
-.stat-card {
+.vp-doc .stat-card {
   padding: 18px 16px;
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
   text-align: center;
   background: var(--vp-c-bg-soft);
   color: inherit;
-  text-decoration: none !important;
+  text-decoration: none;
 }
 
-.stat-card:hover {
-  text-decoration: none !important;
+.vp-doc .stat-card:hover {
+  color: inherit;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.stat-card__value {
+.vp-doc .stat-card__value {
   font-size: 1.7rem;
   font-weight: 700;
   background: linear-gradient(120deg, #5b7cfa, #8b5cf6);
@@ -233,14 +251,14 @@
   color: transparent;
 }
 
-.stat-card__label {
+.vp-doc .stat-card__label {
   margin-top: 4px;
   font-size: 0.82rem;
   color: var(--vp-c-text-2);
 }
 
 /* --------------------------- benchmark chart --------------------------- */
-.benchmark-chart {
+.vp-doc .benchmark-chart {
   margin: 20px 0 28px;
   padding: 18px;
   border: 1px solid var(--vp-c-divider);
@@ -248,26 +266,35 @@
   background: var(--vp-c-bg-soft);
 }
 
-.benchmark-chart svg text {
+/* Fixed-size SVG (width=620 attribute) would overflow narrow viewports;
+ * scale it down with the viewBox. display:block also removes the inline
+ * baseline gap below the SVG. */
+.vp-doc .benchmark-chart svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.vp-doc .benchmark-chart svg text {
   font-size: 11px;
   fill: var(--vp-c-text-2);
 }
 
-.benchmark-chart__caption {
+.vp-doc .benchmark-chart__caption {
   margin: 10px 0 0;
   font-size: 0.8rem;
   line-height: 1.7;
   color: var(--vp-c-text-2);
 }
 
-.benchmark-chart__legend-item {
+.vp-doc .benchmark-chart__legend-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-right: 14px;
 }
 
-.benchmark-chart__swatch {
+.vp-doc .benchmark-chart__swatch {
   display: inline-block;
   width: 10px;
   height: 10px;
@@ -275,7 +302,7 @@
 }
 
 /* ------------------------------ demo panel ------------------------------ */
-.demo-panel {
+.vp-doc .demo-panel {
   margin: 20px 0 32px;
   padding: 20px;
   border: 1px solid var(--vp-c-divider);
@@ -283,15 +310,15 @@
   background: var(--vp-c-bg-soft);
 }
 
-.demo-panel__controls {
+.vp-doc .demo-panel__controls {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
 }
 
-.demo-panel select,
-.demo-panel button {
+.vp-doc .demo-panel select,
+.vp-doc .demo-panel button {
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid var(--vp-c-divider);
@@ -301,12 +328,12 @@
   cursor: pointer;
 }
 
-.demo-panel button:disabled {
+.vp-doc .demo-panel button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-.demo-panel .progress {
+.vp-doc .demo-panel .progress {
   height: 8px;
   margin: 14px 0 10px;
   border-radius: 999px;
@@ -314,7 +341,7 @@
   overflow: hidden;
 }
 
-.demo-panel .progress__bar {
+.vp-doc .demo-panel .progress__bar {
   height: 100%;
   width: 0;
   border-radius: 999px;
@@ -322,17 +349,17 @@
   transition: width 0.15s ease;
 }
 
-.demo-panel__result {
+.vp-doc .demo-panel__result {
   margin-top: 12px;
   font-size: 0.88rem;
   color: var(--vp-c-text-2);
 }
 
-.demo-panel__result code {
+.vp-doc .demo-panel__result code {
   color: var(--vp-c-brand-1);
 }
 
-.demo-panel__error {
+.vp-doc .demo-panel__error {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 8px;
@@ -341,12 +368,16 @@
   color: #dc2626;
 }
 
+.dark .vp-doc .demo-panel__error {
+  color: #f87171;
+}
+
 /* ---------------------------- mock preview ---------------------------- */
-.mock-preview {
+.vp-doc .mock-preview {
   margin: 16px 0 24px;
 }
 
-.mock-preview__toolbar {
+.vp-doc .mock-preview__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -354,7 +385,7 @@
   margin-bottom: 8px;
 }
 
-.mock-preview__toolbar button {
+.vp-doc .mock-preview__toolbar button {
   padding: 4px 12px;
   border-radius: 8px;
   border: 1px solid var(--vp-c-divider);
@@ -364,7 +395,7 @@
   cursor: pointer;
 }
 
-.mock-preview table {
+.vp-doc .mock-preview table {
   width: 100%;
   font-size: 0.82rem;
 }
