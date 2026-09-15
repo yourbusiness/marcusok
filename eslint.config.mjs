@@ -8,8 +8,6 @@ export default tseslint.config(
       "**/dist/**",
       "**/node_modules/**",
       "**/coverage/**",
-      "**/.mxlsx-*/**",
-      "**/e2e-check/**",
       "apps/docs/.vitepress/cache/**",
       // Node scripts/config without tsconfig coverage (linted by their own
       // package scopes / run as tests, not by the root type-aware config).

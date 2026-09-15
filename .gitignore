@@ -5,12 +5,13 @@ coverage/
 .DS_Store
 .turbo/
 *.tsbuildinfo
-.e2e/
-e2e-output.xlsx
 
 # docs site (apps/docs)
 apps/docs/.vitepress/cache/
 apps/docs/.vitepress/config.ts.timestamp-*.mjs
-apps/docs/public/assets/modern_xlsx_wasm_bg.wasm
-apps/docs/public/assets/export.worker.js
 
+CLAUDE.md
+AGENTS.md
+
+.claude
+.codex
