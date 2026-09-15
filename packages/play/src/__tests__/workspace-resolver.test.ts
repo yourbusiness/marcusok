@@ -125,11 +125,13 @@ describe("resolvePkgDir", () => {
   });
 
   it("locates a workspace dependency at its monorepo source directory", () => {
-    // Fresh checkouts run this test BEFORE the workspace package's first
-    // build (turbo's test task has no ^build dependency), so "exports"."."
-    // may point at a dist/index.js that does not exist yet — the fixture
-    // below covers that fallback branch; with dist present the main-entry
-    // branch resolves. Either way the root must be the source directory.
+    // "exports"."." may point at a dist/index.js that does not exist yet
+    // when vitest runs without a prior build. Through turbo this cannot
+    // happen (test declares dependsOn ["build"], and play's build pulls in
+    // the workspace package's ^build first), but a direct vitest run can
+    // hit it — the fixture below covers that fallback branch; with dist
+    // present the main-entry branch resolves. Either way the root must be
+    // the source directory.
     const dir = resolvePkgDir("@marcusok/excel-exporter", playDir);
     expect(dir).toBe(exporterDir);
   });

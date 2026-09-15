@@ -51,7 +51,10 @@ export function formatThroughput(
   ) {
     return "-";
   }
-  return `${Math.round((rows / ms) * 1000).toLocaleString()} 行/s`;
+  // Fixed locale: an argument-less toLocaleString() groups digits by host
+  // locale (e.g. "20.000" under de-DE), which would make the unit test's
+  // "20,000 行/s" assertion fail on such machines.
+  return `${Math.round((rows / ms) * 1000).toLocaleString("en-US")} 行/s`;
 }
 
 /** bytes / second, e.g. "1.50 MB/s". */
