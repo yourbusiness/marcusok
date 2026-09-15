@@ -277,3 +277,77 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
     }
   });
 });
+
+describe("download trigger isolation", () => {
+  // A throwing download trigger (e.g. a sandboxed DOM) must not turn an
+  // already-successful build into a degradation-chain rebuild: the Blob is
+  // already in the result. Applies to both routes that call triggerDownload.
+  const throwingDocument = {
+    createElement: () => {
+      throw new Error("sandboxed DOM");
+    },
+  };
+  const oneSheet = [
+    { name: "S", columns: [{ key: "x", header: "X" }], data: [{ x: 1 }] },
+  ];
+
+  it("main route: a throwing download trigger keeps the successful result", async () => {
+    vi.stubGlobal("document", throwingDocument);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const phases: string[] = [];
+    try {
+      const r = await exportExcel({
+        filename: "download-throws-main",
+        // download defaults to true; document is stubbed, so the trigger runs
+        mode: "main",
+        sheets: oneSheet,
+        onPhase: (p) => phases.push(p),
+      });
+      expect(r.success).toBe(true);
+      expect(r.mode).toBe("main"); // no degradation/rebuild
+      expect(r.error).toBeUndefined();
+      expect(r.blob).toBeDefined();
+      // The "download" phase is still reported (via finally).
+      expect(phases).toContain("download");
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("download trigger failed"),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      warn.mockRestore();
+    }
+  });
+
+  it("worker route: a throwing download trigger does not enter the main-thread retry", async () => {
+    stubBrowserWorkerEnv();
+    vi.stubGlobal("document", throwingDocument);
+    vi.mocked(exportInWorker).mockResolvedValue({
+      success: true,
+      blob: new Blob(["x"]),
+      engine: "modern-xlsx",
+      mode: "worker",
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const r = await exportExcel({
+        filename: "download-throws-worker",
+        mode: "worker",
+        sheets: oneSheet,
+      });
+      expect(r.success).toBe(true);
+      // Pre-fix the throw landed in the worker branch's catch, triggering a
+      // full main-thread rebuild (mode would come back "main").
+      expect(r.mode).toBe("worker");
+      // Exactly one warning (the download note); a retry would have logged
+      // its own "Worker path failed" warning first.
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("download trigger failed"),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      warn.mockRestore();
+      vi.mocked(exportInWorker).mockReset();
+    }
+  });
+});

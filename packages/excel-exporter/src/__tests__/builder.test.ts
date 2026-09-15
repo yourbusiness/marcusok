@@ -323,4 +323,35 @@ describe("WorkbookBuilder round-trip", () => {
     const fontCount = (stylesXml.match(/<font[ >]/g) ?? []).length;
     expect(fontCount).toBeLessThan(6);
   });
+
+  it("renders a null data row as an empty row instead of throwing", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "NullRow",
+      columns: [
+        { key: "a", header: "A" },
+        { key: "b", header: "B", format: { type: "number", decimals: 1 } },
+      ],
+      data: [null, { a: "x", b: 2 }] as unknown as Record<string, unknown>[],
+    });
+    const bytes = await builder.toBuffer();
+    const wb = await readBuffer(bytes);
+    const ws = wb.getSheet("NullRow")!;
+    expect(ws.cell("A3").value).toBe("x");
+    expect(String(ws.cell("B3").value)).toBe("2");
+  });
+
+  it("accepts a column style whose border object has no sides defined", async () => {
+    // buildStyleIndex must not forward an all-undefined border spec to
+    // modern-xlsx; the style simply has no border effect.
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "EmptyBorder",
+      columns: [{ key: "a", header: "A", style: { border: {} } }],
+      data: [{ a: 1 }],
+    });
+    const bytes = await builder.toBuffer();
+    const wb = await readBuffer(bytes);
+    expect(wb.getSheet("EmptyBorder")!.cell("A2").value).toBe(1);
+  });
 });

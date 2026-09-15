@@ -39,12 +39,12 @@ export function buildStyleIndex(wb: Workbook, style: CellStyle): number {
   }
 
   if (style.border) {
-    builder.border({
-      top: style.border.top,
-      bottom: style.border.bottom,
-      left: style.border.left,
-      right: style.border.right,
-    });
+    const { top, bottom, left, right } = style.border;
+    // Skip the call when no side is defined: passing an all-undefined object
+    // would rely on modern-xlsx tolerating empty border specs (unverified).
+    if (top || bottom || left || right) {
+      builder.border({ top, bottom, left, right });
+    }
   }
 
   if (style.numFormat) {

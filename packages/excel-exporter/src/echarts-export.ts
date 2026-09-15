@@ -151,6 +151,16 @@ function buildCategorySheet(
     };
   }
 
+  // Wide layout keys rows by `categoryHeader` plus the internal `__series_N`
+  // keys; a user-supplied categoryHeader equal to one of those would be
+  // silently overwritten by series data. Reject the collision up front
+  // (long/item layouts are already guarded by assertDistinctHeaders).
+  if (series.some((_, i) => `__series_${i}` === categoryHeader)) {
+    throw new Error(
+      `[excel-exporter] categoryHeader "${categoryHeader}" collides with the internal series keys (__series_N) in wide layout; choose a different categoryHeader.`,
+    );
+  }
+
   const columns: ColumnConfig[] = [
     { key: categoryHeader, header: categoryHeader },
     ...series.map((s, i) => ({

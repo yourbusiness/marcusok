@@ -27,6 +27,26 @@ const XLSX_MIME =
 const STREAM_THRESHOLD = 50_000; // Workbook.toBuffer cliff starts ~55k rows
 const WORKER_THRESHOLD = 20_000; // main-mode sync work is acceptable below this
 
+/**
+ * Fire-and-forget browser download. The export itself has already succeeded
+ * at this point, so a trigger failure (e.g. a sandboxed DOM throwing on
+ * a.click()) must not push the caller into the degradation chain and rebuild
+ * the whole workbook — the Blob is already in the result. The "download"
+ * phase is reported either way.
+ */
+function triggerDownloadIsolated(options: ExportOptions, blob: Blob): void {
+  const downloadStart = performance.now();
+  try {
+    triggerDownload(blob, options.filename);
+  } catch (e) {
+    console.warn(
+      `[excel-exporter] download trigger failed; the Blob is still returned in the result. Reason: ${(e as Error).message}`,
+    );
+  } finally {
+    options.onPhase?.("download", performance.now() - downloadStart);
+  }
+}
+
 type PickedMode = { mode: ExportMode; workerMode?: "workbook" | "stream" };
 
 /**
@@ -82,16 +102,36 @@ function validateInput(options: ExportOptions): void {
   // An empty sheets array is not a build error on the stream path (fast-xlsx
   // would zip a zero-sheet workbook Excel flags as corrupt while reporting
   // success), so reject it here like every other structural input error.
+  // The same guard covers a missing/non-array `sheets`, which the caller's
+  // totalRows reduce could otherwise hit first with a raw TypeError.
   if (!Array.isArray(options.sheets) || options.sheets.length === 0) {
     throw new Error("[excel-exporter] at least one sheet is required");
   }
   const seen = new Set<string>();
   for (const sheet of options.sheets) {
+    // A null/primitive entry would fail on `sheet.name` with a raw TypeError;
+    // give it the same clear treatment as the other structural guards below.
+    if (sheet === null || typeof sheet !== "object") {
+      throw new Error("[excel-exporter] each sheet must be an object");
+    }
     validateSheetName(sheet.name);
     if (seen.has(sheet.name)) {
       throw new Error(`[excel-exporter] duplicate sheet name "${sheet.name}"`);
     }
     seen.add(sheet.name);
+    // Guard the two arrays the build paths index into; without these, a sheet
+    // missing `columns`/`data` fails downstream with a raw TypeError instead
+    // of a clear, actionable message.
+    if (!Array.isArray(sheet.columns)) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" must have a columns array`,
+      );
+    }
+    if (!Array.isArray(sheet.data)) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" must have a data array`,
+      );
+    }
     const { leaves } = flattenColumnTree(sheet.columns);
     validateMerges(sheet, leaves.length);
   }
@@ -121,7 +161,6 @@ export async function exportExcel(
   options: ExportOptions,
 ): Promise<ExportResult> {
   const start = performance.now();
-  const totalRows = options.sheets.reduce((s, sh) => s + sh.data.length, 0);
 
   // Leading 0 fires exactly once here, on every route (the stream fallback
   // included), so consumers always see the documented 0 -> ... -> 1 pair.
@@ -130,6 +169,12 @@ export async function exportExcel(
   // Invalid input fails here on every route (same messages as before; the
   // build paths keep their own checks for direct callers). The trailing 1 is
   // still emitted so the 0 -> 1 progress contract holds for failed exports.
+  //
+  // Validation runs BEFORE totalRows is computed: reduce()ing a non-array
+  // `sheets` (or a sheet without a `data` array) would throw a raw TypeError
+  // that rejects the promise, bypassing the structured { success: false }
+  // contract — validateInput guards those shapes first, so the computation
+  // below only sees well-formed input.
   try {
     validateInput(options);
   } catch (e) {
@@ -140,6 +185,8 @@ export async function exportExcel(
       duration: performance.now() - start,
     };
   }
+
+  const totalRows = options.sheets.reduce((s, sh) => s + sh.data.length, 0);
 
   const picked = pickMode(options, totalRows);
   const needsWasm = picked.workerMode !== "stream";
@@ -203,9 +250,7 @@ export async function exportExcel(
     // Node has no document: triggerDownload would be a no-op, so neither the
     // click nor the "download" phase is reported (matches ExportPhase docs).
     if (options.download !== false && typeof document !== "undefined") {
-      const downloadStart = performance.now();
-      triggerDownload(result.blob!, options.filename);
-      options.onPhase?.("download", performance.now() - downloadStart);
+      triggerDownloadIsolated(options, result.blob!);
     }
     return result;
   };
@@ -301,9 +346,7 @@ export async function exportExcel(
       // contract) -- emitting it here too duplicated the trailing 1.
       options.onProgress?.(1);
       if (options.download !== false) {
-        const downloadStart = performance.now();
-        triggerDownload(result.blob!, options.filename);
-        options.onPhase?.("download", performance.now() - downloadStart);
+        triggerDownloadIsolated(options, result.blob!);
       }
       return result;
     }

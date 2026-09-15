@@ -280,4 +280,18 @@ describe("echartsToSheet header collisions", () => {
       }),
     ).toThrow(/duplicate header "数值"/);
   });
+
+  it("rejects a categoryHeader colliding with the internal __series_N keys (wide layout)", () => {
+    // Wide layout keys rows by categoryHeader plus internal __series_N keys;
+    // a collision would silently overwrite the category column with series data.
+    expect(() =>
+      echartsToSheet({
+        categoryHeader: "__series_0",
+        option: {
+          xAxis: { data: ["A"] },
+          series: [{ name: "S1", data: [1] }],
+        },
+      }),
+    ).toThrow(/collides with the internal series keys/);
+  });
 });

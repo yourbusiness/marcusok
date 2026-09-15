@@ -17,6 +17,9 @@ interface WorkerResponse {
   engine?: "modern-xlsx";
   error?: string;
   progress?: number;
+  /** Phase-timing message (init/build), sent before the final response. */
+  phase?: "init" | "build";
+  duration?: number;
 }
 
 // Track WASM initialization by the string form of the URL. modern-xlsx's

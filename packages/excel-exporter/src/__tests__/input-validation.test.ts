@@ -218,6 +218,63 @@ describe("empty sheets array", () => {
   });
 });
 
+describe("structurally malformed sheets input", () => {
+  // Pre-fix, `totalRows` was reduce()d before validateInput ran, so these
+  // shapes rejected the promise with a raw TypeError instead of resolving
+  // with the documented { success: false, error }.
+  it("non-array `sheets` resolves with a structured failure (no throw)", async () => {
+    const onProgress = vi.fn();
+    const r = await exportExcel({
+      filename: "no-sheets",
+      download: false,
+      onProgress,
+      sheets: undefined as unknown as SheetConfig[],
+    });
+    expect(r.success).toBe(false);
+    expect(r.blob).toBeUndefined();
+    expect(r.error?.message).toMatch(/at least one sheet/);
+    // The 0 -> 1 progress contract holds for failed exports too.
+    expect(onProgress.mock.calls).toEqual([[0], [1]]);
+  });
+
+  it("a sheet without a columns array fails with a clear error", async () => {
+    const r = await exportExcel({
+      filename: "no-columns",
+      download: false,
+      mode: "main",
+      sheets: [{ name: "S", data: [] } as unknown as SheetConfig],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(/sheet "S" must have a columns array/);
+  });
+
+  it("a sheet without a data array fails with a clear error", async () => {
+    const r = await exportExcel({
+      filename: "no-data",
+      download: false,
+      mode: "main",
+      sheets: [
+        {
+          name: "S",
+          columns: [{ key: "a", header: "A" }],
+        } as unknown as SheetConfig,
+      ],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(/sheet "S" must have a data array/);
+  });
+
+  it("a null sheet entry fails with a clear error (no raw TypeError)", async () => {
+    const r = await exportExcel({
+      filename: "null-sheet",
+      download: false,
+      sheets: [null as unknown as SheetConfig],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(/each sheet must be an object/);
+  });
+});
+
 describe("duplicate sheet names", () => {
   it("stream path rejects duplicates before writing any XML", async () => {
     await expect(

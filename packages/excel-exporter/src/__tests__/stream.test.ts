@@ -165,4 +165,59 @@ describe("exportAsStream round-trip", () => {
     expect(sst).toContain('count="8"');
     expect(sst).toContain('uniqueCount="6"');
   });
+
+  it("skips empty cells instead of interning empty strings into sharedStrings", async () => {
+    const { bytes } = await exportAsStream([
+      {
+        name: "S",
+        columns: [
+          { key: "a", header: "A" },
+          { key: "b", header: "B" },
+        ],
+        // `b` missing on every row: previously each missing field interned ""
+        // and emitted a shared-string cell reference.
+        data: [{ a: "x" }, { a: "y" }],
+      },
+    ]);
+    const files = unzipSync(bytes);
+    const sst = strFromU8(files["xl/sharedStrings.xml"]);
+    // Only the two headers and the two values are interned; no "" entry.
+    expect(sst).toContain('uniqueCount="4"');
+    expect(sst).not.toContain('<t xml:space="preserve"></t>');
+    // No <c> element is emitted for the empty B-column cells.
+    const sheetXml = strFromU8(files["xl/worksheets/sheet1.xml"]);
+    expect(sheetXml).not.toContain('r="B2"');
+    expect(sheetXml).not.toContain('r="B3"');
+    // Round-trip still reads correctly.
+    const wb = await readBuffer(bytes);
+    const ws = wb.getSheet("S")!;
+    expect(ws.cell("A2").value).toBe("x");
+    expect(ws.rowCount).toBe(3);
+  });
+
+  it("renders a null data row as an empty row instead of throwing", async () => {
+    const { bytes, rowCount } = await exportAsStream([
+      {
+        name: "S",
+        columns: [
+          { key: "a", header: "A" },
+          // number/date specs read row[key] directly in displayValue — the
+          // null-row guard must cover them too.
+          { key: "b", header: "B", format: { type: "number" } },
+          { key: "c", header: "C", format: { type: "date" } },
+        ],
+        data: [
+          null,
+          { a: "x", b: 2, c: new Date(Date.UTC(2025, 0, 5)) },
+        ] as unknown as Record<string, unknown>[],
+      },
+    ]);
+    expect(rowCount).toBe(2);
+    const wb = await readBuffer(bytes);
+    const ws = wb.getSheet("S")!;
+    expect(ws.rowCount).toBe(3); // header + 2 data rows
+    expect(ws.cell("A3").value).toBe("x");
+    expect(String(ws.cell("B3").value)).toBe("2");
+    expect(ws.cell("C3").value).toBe("2025-01-05");
+  });
 });

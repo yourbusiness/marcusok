@@ -152,11 +152,13 @@ function buildWorksheetXml(
     const rowNumber = headerRowCount + 1 + rowIndex;
     out.push(`<row r="${rowNumber}">`);
     for (let colIndex = 0; colIndex < leaves.length; colIndex++) {
-      appendCell(
-        out,
-        `${letters[colIndex]}${rowNumber}`,
-        displayValue(leaves[colIndex], item),
-        (s) => stringTable!.intern(s),
+      const v = displayValue(leaves[colIndex], item);
+      // Skip empty cells: null/missing fields normalize to "" (see toStr), and
+      // interning every "" would cost an sst entry plus a cell reference per
+      // empty field. A missing <c> element reads as an empty cell in Excel.
+      if (v === "") continue;
+      appendCell(out, `${letters[colIndex]}${rowNumber}`, v, (s) =>
+        stringTable!.intern(s),
       );
     }
     out.push(`</row>`);

@@ -161,7 +161,11 @@ export function displayValue(
         spec.type === "datetime"
           ? (spec.pattern ?? DEFAULT_DATETIME_PATTERN)
           : (spec.pattern ?? DEFAULT_DATE_PATTERN);
-      return formatDateByPattern(row[col.key ?? ""], pattern);
+      // row may be null on pathological input; reads as all-fields-missing.
+      return formatDateByPattern(
+        row == null ? undefined : row[col.key ?? ""],
+        pattern,
+      );
     }
     if (spec.type === "number") {
       // The stream path has no numFormat support, so the configured
@@ -169,7 +173,7 @@ export function displayValue(
       // path keeps full precision and renders decimals via numFormat instead.
       // null/undefined render as an empty cell, mirroring applyFormat (never
       // Number(null) === 0).
-      const raw = row[col.key ?? ""];
+      const raw = row == null ? undefined : row[col.key ?? ""];
       if (raw == null) return "";
       const n = Number(raw);
       if (!Number.isFinite(n)) return toStr(raw);
@@ -197,7 +201,9 @@ export function resolveCellFormat(
 ): unknown {
   // `col.key` is optional at the type level (group columns omit it); callers
   // pass flattened leaves, whose keys are validated by flattenColumnTree.
-  const raw = item[col.key ?? ""];
+  // A null/primitive row (pathological input) reads as all-fields-missing
+  // instead of throwing a raw TypeError on property access.
+  const raw = item == null ? undefined : item[col.key ?? ""];
   if (!col.format) return raw ?? "";
   if (typeof col.format === "function") return col.format(raw, item);
   return applyFormat(raw, col.format);
