@@ -140,9 +140,12 @@ in the component's `useEffect` cleanup, which runs automatically on navigation
   source resolution works even when the export key differs from the source file
   name) → `dist/<sub>` build output. So subpaths get HMR too; subpaths that use
   `dist/` artifacts (like workers) require an upstream build.
-- Third-party subpaths not exposed via `exports` (e.g. `modern-xlsx/wasm/*`):
-  add a `{ pkg, dir, excludeFromOptimizeDeps }` entry to `externalOverrides` in
-  `vite.config.ts` and the resolver rewrites it to the physical file.
+- Third-party subpaths not exposed via `exports`: add a
+  `{ pkg, dir, excludeFromOptimizeDeps }` entry to `externalOverrides` in
+  `vite.config.ts` and the resolver rewrites it to the physical file. The list
+  is currently empty — `@marcusok/excel-exporter` >= 2.0 re-publishes its
+  wasm/worker under its own `exports` map (`@marcusok/excel-exporter/dist/*`),
+  so no third-party override is needed.
 - The pure-function resolution/alias logic lives in
   `src/vite/workspace-resolver.ts` with unit-test coverage
   (`src/__tests__/workspace-resolver.test.ts`).
@@ -182,8 +185,10 @@ the upstream package and refresh the page manually.
   versions don't rewrite the lockfile and produce huge diffs.
 - play uses Vite 8, which requires Node >= 22.12 (declared in play's
   `package.json` `engines`); the local Node 22.22.2 satisfies this.
-- vitest 4.1.x aligns with vite 8 (peer supports `^6 || ^7 || ^8`); the repo
-  carries a single vite major version.
+- vitest 4.1.x aligns with vite 8 (peer supports `^6 || ^7 || ^8`). Note the
+  repo carries two vite majors: play and the root toolchain use vite 8, while
+  the docs site's vitepress 1.6 brings its own vite 5 — the two never meet in
+  one build.
 
 ## HMR
 

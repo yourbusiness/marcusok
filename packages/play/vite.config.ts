@@ -7,7 +7,6 @@ import {
   isFile,
   matchExportTarget,
   readExportsMap,
-  resolvePkgDir,
   srcCandidatesFromDistTarget,
   type SourcePackage,
 } from "./src/vite/workspace-resolver.ts";
@@ -82,21 +81,15 @@ for (const name of declaredDeps) {
  * file on disk if it exists.
  *
  * To support a new third-party subpath, add an entry here; resolver logic
- * doesn't need to change.
+ * doesn't need to change. Currently empty: @marcusok/excel-exporter >= 2.0
+ * re-publishes its runtime assets under its own exports map
+ * (`@marcusok/excel-exporter/dist/*`), so no third-party override is needed.
  */
 const externalOverrides: {
   pkg: string;
   dir: string;
   excludeFromOptimizeDeps?: boolean;
-}[] = [
-  // modern-xlsx ships WASM under ./wasm/ but its "exports" map omits that
-  // subpath, so `modern-xlsx/wasm/*.wasm?url` 500s on export-map resolution.
-  {
-    pkg: "modern-xlsx",
-    dir: resolvePkgDir("modern-xlsx", rootDir),
-    excludeFromOptimizeDeps: true,
-  },
-];
+}[] = [];
 
 // Fail loud, symmetric with the @marcusok/* check above: an entry whose dir
 // cannot be resolved would otherwise be skipped silently and its subpath
