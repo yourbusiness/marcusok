@@ -65,7 +65,7 @@ await exportExcel({
 
 Two files ship alongside the code and are located automatically:
 
-- **`modern-xlsx.wasm`** (1.9MB, the style engine) — needed on every route except an explicit `mode: "stream"`, whose pure-JS fast stream needs no WASM at all.
+- **`modern-xlsx.wasm`** (1.9MB, the style engine) — needed by the styled routes (main / worker + Workbook); the Fast stream routes (explicit `mode: "stream"`, or auto/Node ≥ 50,000 rows) do not use WASM at all.
 - **`export.worker.js`** (self-contained, zero imports of its own) — needed only when exports actually enter a Worker (auto mode with ≥ 20,000 rows, or an explicit `mode: "worker"` / `mode: "stream"`).
 
 Both default to `new URL(<file>, import.meta.url)` relative to the package entry:
@@ -171,7 +171,7 @@ When the browser Worker route fails (missing/404 worker asset, WASM init error i
 
 - `exportExcel(options)` — unified entry with auto routing.
 - `configureWasm(opts)` — optional overrides for `wasmUrl`/`workerUrl`/`timeoutMs`/`maxRetries`/`workerTimeoutMs` (see [How assets resolve](#how-assets-resolve-zero-configuration)). Note: changing `wasmUrl` after a _successful_ load does not reload WASM on a thread that already initialized it (modern-xlsx's `initWasm` is idempotent — first successful init wins); the new URL takes effect only in a fresh JS realm (page reload / a worker created after `terminateWorker()`), and a console warning is printed when this applies.
-- `onPhase(phase, durationMs)` (an `exportExcel` option) — per-phase timing callback: `init` (WASM init) / `build` (workbook build) / `download` (trigger download); reports elapsed milliseconds once per phase for metrics breakdowns, without affecting the `duration` in the returned result.
+- `onPhase(phase, durationMs)` (an `exportExcel` option) — per-phase timing callback: `init` (WASM init) / `build` (workbook build) / `download` (trigger download); reports elapsed milliseconds per phase — note that each real build attempt reports its own `build` phase, so a degradation chain (failed worker build → main-thread retry → stream fallback) reports one `build` per attempt (see `ExportPhase` in [`src/types.ts`](./src/types.ts)). Does not affect the `duration` in the returned result.
 - `WorkbookBuilder` — batch builder (<50k rows, full styling).
 - `exportAsStream(sheets)` — large-file export (>=50k rows).
 - `exportTable(options)` — convenience export for common table data, supporting both AntD `title`/`dataIndex` and Element Plus `label`/`prop` column naming.

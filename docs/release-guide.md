@@ -211,7 +211,7 @@ npm 页面会渲染包里打进来的 README，并显示 package.json 里的 `re
 
 ## 2.2 本地跑质量检查（提交前必做）
 
-> **先看这里：哪些已经自动跑了**。pre-commit 钩子会在你 commit 时自动对改动文件跑 `eslint --fix` + `prettier --write`（见 2.3）；pre-push 钩子会在你 push 时自动跑 `typecheck` + `test` + `build`（见 2.6）。也就是说**格式、类型、测试、构建日常已经被钩子兜底**。本节的手动命令主要用于：① 钩子之前的主动验证；② 想精确复现 CI 行为（钩子的 `test` 设了 `RUN_PERF=0` 跳过性能基准，见下方说明）；③ 钩子被绕过时（如 `--no-verify`）。
+> **先看这里：哪些已经自动跑了**。pre-commit 钩子会在你 commit 时自动对改动文件跑 `eslint --fix` + `prettier --write`（见 2.5）；pre-push 钩子会在你 push 时自动跑 `typecheck` + `test` + `build`（见 2.5）。也就是说**格式、类型、测试、构建日常已经被钩子兜底**。本节的手动命令主要用于：① 钩子之前的主动验证；② 想精确复现 CI 行为（钩子的 `test` 设了 `RUN_PERF=0` 跳过性能基准，见下方说明）；③ 钩子被绕过时（如 `--no-verify`）。
 
 ```bash
 pnpm lint        # 代码风格检查（ESLint）
@@ -292,7 +292,7 @@ git commit -m "fix(excel-exporter): 修复了某个问题"
 git push origin main
 ```
 
-push 前会先触发 **pre-push 钩子**（见 2.3）：全量跑 `typecheck` + `test`(`RUN_PERF=0`) + `build`（带 `--force`）。**任何一项失败都会中止 push**，报 `husky - pre-push script failed` + `error: failed to push some refs`。这时按报错修好代码，重新 push 即可（钩子不会改你的代码，只拦）。
+push 前会先触发 **pre-push 钩子**（见 2.5）：全量跑 `typecheck` + `test`(`RUN_PERF=0`) + `build`（带 `--force`）。**任何一项失败都会中止 push**，报 `husky - pre-push script failed` + `error: failed to push some refs`。这时按报错修好代码，重新 push 即可（钩子不会改你的代码，只拦）。
 
 > 如果确实需要绕过（极少，比如临时推一个明知测试会挂的 WIP 分支）：`git push origin main --no-verify`。但**别对 main 用**——main 上 CI 和发版都指望这些检查通过，绕过去等于把问题推给流水线。
 

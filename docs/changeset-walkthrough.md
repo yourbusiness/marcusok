@@ -93,7 +93,7 @@ Changesets 在本项目里不是一个单独的命令，而是横跨好几个文
 turbo run lint typecheck test build && changeset publish
 ```
 
-前半段是质量门禁：turbo 跑 lint / typecheck / test / build（lint、typecheck、build 在 turbo.json 里都声明了 `"dependsOn": ["^build"]`，会先构建被依赖的包再执行；test 无此声明）。后半段 `&&` 表示**全过才发**——turbo 整体退出码非 0 时 changeset publish 不会执行。`changeset publish` 真正发包时，会先查 npm registry，只有本地版本比线上新的包才调 `npm publish`，已发布的跳过（幂等）。
+前半段是质量门禁：turbo 跑 lint / typecheck / test / build（lint、typecheck、build 在 turbo.json 里都声明了 `dependsOn: ["^build"]`，会先构建被依赖的包再执行；test 声明的是 `dependsOn: ["build"]`——先构建本包自身再跑，因为 Node 自动初始化的回退候选 `../dist/modern-xlsx.wasm` 依赖构建产物存在）。后半段 `&&` 表示**全过才发**——turbo 整体退出码非 0 时 changeset publish 不会执行。`changeset publish` 真正发包时，会先查 npm registry，只有本地版本比线上新的包才调 `npm publish`，已发布的跳过（幂等）。
 
 > 为什么门禁放在 publish 这一步、而不是 version 那一步？因为 version PR 只改版本号和 CHANGELOG，不涉及代码能不能编译；真正的代码质量把关放在发包前最合理，避免「版本号已经发出去，但代码其实是坏的」。
 
@@ -184,10 +184,10 @@ Changesets 不是无脑发所有包，有两道筛选：
 `packages/excel-exporter/package.json` 的 `files` 字段决定了发包内容：
 
 ```json
-"files": ["dist", "README.md", "LICENSE"]
+"files": ["dist", "README.md", "CHANGELOG.md", "LICENSE"]
 ```
 
-只发构建产物 `dist/`、README、LICENSE。源码 `src/` 不发。所以发包前必须先 `build`（这正是 `release` 脚本里 turbo 跑 build 的原因之一）。
+只发构建产物 `dist/`、README、CHANGELOG、LICENSE。源码 `src/` 不发。所以发包前必须先 `build`（这正是 `release` 脚本里 turbo 跑 build 的原因之一）。
 
 ---
 

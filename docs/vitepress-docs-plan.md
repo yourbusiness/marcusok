@@ -26,17 +26,17 @@
 | CI/CD     | `.github/workflows/ci.yml`（lint/typecheck/test/build）、`release.yml`（changesets 发布 npm）       |
 | 内部文档  | 根目录 `docs/` 存放设计/流程文档（excel-export-design.md 等），属于内部文档，与公开文档站**不混用** |
 
-> 注：上表为 2026-08-03 规划时的快照。此后 workspace 已加入 `apps/*`，excel-exporter 已发布到 1.0.x，CI/CD 增加了 `deploy.yml`（文档站部署）。
+> 注：上表为 2026-08-03 规划时的快照。此后 workspace 已加入 `apps/*`，excel-exporter 已发布到 2.x（当前 2.1.1），CI/CD 增加了 `deploy.yml`（文档站部署）。
 
 ### 2.2 excel-exporter 公开 API（文档站内容来源）
 
 已从 `packages/excel-exporter/src/` 核实，公开面包括：
 
-- 入口：`exportExcel(options)`、`configureWasm()`、`WorkbookBuilder`、`exportAsStream`
-- 类型：`ExportOptions`、`SheetConfig`、`ColumnConfig`、`CellStyle`、`FormatSpec`、`ExportMode`、`ExportResult`
+- 入口：`exportExcel(options)`、`exportTable()`、`exportEcharts()`、`configureWasm()`、`getWasmLoader()`、`WorkbookBuilder`、`exportAsStream`；子路径 `./worker-utils` 另行导出 `exportInWorker` / `terminateWorker`
+- 类型：`ExportOptions`、`SheetConfig`、`ColumnConfig`、`CellStyle`、`FormatSpec`、`ExportMode`、`ExportPhase`、`ExportResult`
 - 样式：`StylePresets`（header / currency / percent / date / datetime / dataRow / danger，共 7 种）
-- 能力：自动模式路由（< 20,000 行 main；≥ 20,000 行 Worker+Workbook；≥ 50,000 行 Worker+Stream；早期阈值曾是 500 行，后在 0c0fbd5 调整为 20,000）、进度回调 `onProgress`、阶段回调 `onPhase`、SheetJS 降级兜底
-- 依赖约定：`modern-xlsx` 为必装 peerDep，`xlsx` 为可选兜底；浏览器需静态部署 `modern-xlsx.wasm` 与 `export.worker.js`
+- 能力：自动模式路由（< 20,000 行 main；≥ 20,000 行 Worker+Workbook；≥ 50,000 行 Worker+Stream；早期阈值曾是 500 行，后在 0c0fbd5 调整为 20,000）、进度回调 `onProgress`、阶段回调 `onPhase`、多级降级（Worker 失败 → 主线程重试 → 纯 JS 快速流）
+- 依赖约定：**零运行时依赖**（modern-xlsx JS 胶水与 fflate 在构建期打包进产物，2.0.0 起）；`modern-xlsx.wasm` 与 `export.worker.js` 随包发布，由 bundler 的 `new URL(<file>, import.meta.url)` 资产化自动定位，无需静态部署；SheetJS 兜底已在 2.0.0 移除（终局兜底为纯 JS 快速流）
 - 性能数据：README/设计文档中有真实基准（1 万行 ~120ms / 5 万行 ~400ms / 10 万行 ~780ms，Chrome 实测口径见 README；规划早期引用过 StreamingXlsxWriter 时代的 109/618/1,548ms，已被 fast-xlsx 实测取代）
 
 ### 2.3 需要提前说明的现状问题
@@ -83,7 +83,7 @@ configure-pages@v4 / upload-pages-artifact@v3 / deploy-pages@v4（实测各 Acti
 - 文档站提供 `dev / build / preview` 脚本并接入 turbo：根 `pnpm build` 会一并构建文档站，**CI 每次 PR 都会验证文档可构建**，提前发现问题；
 - 文档站输出目录是 `.vitepress/dist`（不符合根 turbo 的 `dist/**` 输出规则），因此在 `apps/docs/turbo.json` 用 `{"extends": ["//"]}` 覆写 `build.outputs` 为 `[".vitepress/dist/**"]`；
 - 根 package.json 增加 `dev:docs` / `build:docs` 便捷脚本（`turbo run ... --filter=@marcusok/docs`）；
-- 文档站 v1 曾计划不接入 lint/typecheck（构建校验兜底）；现已补齐——`apps/docs` 提供 `lint`（eslint + check-i18n）与 `typecheck`（vue-tsc）脚本，根工具链也已加入 vue-eslint-parser / vue-tsc。
+- 文档站 v1 曾计划不接入 lint/typecheck（构建校验兜底）；现已补齐——`apps/docs` 提供 `lint`（eslint + check-i18n）与 `typecheck`（vue-tsc）脚本，vue-eslint-parser / vue-tsc / eslint-plugin-vue 由 `apps/docs` 自带（不依赖根工具链）。
 
 ## 4. 目录结构
 
@@ -99,7 +99,7 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 │     ├─ index.ts                        # 扩展默认主题（布局插槽、全局组件）
 │     ├─ components/                     # 自定义 Vue 组件（见 §6）
 │     └─ styles/                         # 品牌色、暗色/亮色变量、动画
-├─ public/assets/                        # 构建时从 excel-exporter 拷贝 wasm/worker（live demo 用）
+├─ public/                              # 静态资源（favicon/logo 等）。实际落地：wasm/worker 由 bundler 资产化自动定位（registry 的 runtimeAssets 机制保留但当前未使用），无需拷入 public/
 ├─ index.md                              # 首页：Hero + 包卡片 + 特性区（由 registry 驱动）
 ├─ guide/                                # 生态级指南：介绍、快速上手、浏览器/Node 环境配置、FAQ
 ├─ packages/
@@ -109,8 +109,8 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 │     ├─ examples/                       # 使用案例：销售报表、库存导出、多 Sheet 报表等（mock 数据 + 代码 + 可交互 demo）
 │     └─ api/                            # API 参考：exportExcel、类型、StylePresets、FormatSpec、回调
 └─ src/
-   ├─ mock/                              # ★ 确定性 mock 数据生成器（见 §7）
-   └─ utils/                             # 公共小工具（数字格式化、种子 PRNG 等）
+   ├─ demos/excel-exporter/datasets.ts  # ★ 确定性 mock 数据集（见 §7；实际落地为此路径，规划时为 src/mock/）
+   └─ utils/                             # 公共小工具（种子 PRNG 等）
 ```
 
 ### 新增包的约定（可拓展性核心）
@@ -120,13 +120,15 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 3. 侧边栏、顶部导航、首页包卡片**全部由 registry 自动生成**，无需再改三处；
 4. 包版本号在构建期从 `packages/<name>/package.json` 读取，**不手工硬编码**，发版后文档自动同步。
 
-## 5. 内容规划（第一版，中文）
+## 5. 内容规划（第一版）
+
+> 注：以下为规划时的小节清单，按当时的依赖模型（peerDep 必装、静态部署 wasm/worker、SheetJS 兜底）编写；实际落地时 excel-exporter 已是 2.x（零运行时依赖、资产自动定位、纯 JS 快速流兜底），相关页面内容以最终实现为准。
 
 ### 5.1 生态级页面
 
 - 首页：Hero（项目名 + 一句话定位 + 双 CTA）+ 包卡片网格 + 能力亮点 + 数据统计；
 - `guide/getting-started.md`：环境要求（Node 22 / pnpm 9）、整体上手流程、常用命令；
-- `guide/deployment.md`：消费方如何在自己的项目里接入各包（Vite / 非打包工具两种路径）；
+- `guide/deployment.md`：消费方如何在自己的项目里接入各包（Vite / 非打包工具两种路径）——**未实施**：接入指引最终落在各包自己的 `guide/02-installation.md`（见 apps/docs/packages/excel-exporter/guide/）；
 - `guide/faq.md`：常见问题（WASM 404、Worker URL、peerDep 说明等）。
 
 ### 5.2 excel-exporter 内容（第一版主体）
@@ -176,20 +178,21 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 
 ### 8.1 新增 `.github/workflows/deploy.yml`
 
-参照 VitePress 官方 GitHub Pages 示例（含 cache、configure-pages、upload-pages-artifact、deploy-pages），按仓库约定调整：
+参照 VitePress 官方 GitHub Pages 示例（含 cache、configure-pages、upload-pages-artifact、deploy-pages），按仓库约定调整。实际落地（见 `.github/workflows/deploy.yml`）：
 
-- checkout@v4 / pnpm/action-setup@v4 / setup-node@v4（node 22, cache: pnpm，与 ci.yml 一致）；
-- `pnpm install --frozen-lockfile`；
+- checkout@v4（fetch-depth: 0）/ pnpm/action-setup@v4 / setup-node@v4（node-version-file: .nvmrc，cache: pnpm，与 ci.yml 一致）；
+- `actions/cache@v4` 缓存 `apps/docs/.vitepress/cache`（key 只哈希源码，排除生成物）；
+- `configure-pages@v6`；`pnpm install --frozen-lockfile`；
+- 部署前质量门禁：`pnpm lint` / `pnpm typecheck` / `RUN_PERF=0 pnpm test`（该工作流与 CI 并行运行、无法 `needs` CI，故重跑一遍非构建检查作为上线门禁）；
 - `pnpm exec turbo run build --filter=@marcusok/docs`；
-- 上传 `apps/docs/.vitepress/dist`；
-- Pages 专用 Actions 版本按官方示例选取（实施时以官方 deploy 文档最新示例为准，当前为 configure-pages@v4 / upload-pages-artifact@v3 / deploy-pages@v4；实测最新 major 为 v6/v5/v5）。
+- 上传 `apps/docs/.vitepress/dist`（`upload-pages-artifact@v5`）→ `deploy-pages@v5`。
 
 ### 8.2 一次性前置条件（实施前清单，落地时均已处理）
 
 1. GitHub 仓库地址已确认：remote 即 `yourbusiness/marcusok`（`yourbusiness` 为真实 owner），`base` 已据此配置；
 2. 仓库 Settings → Pages → Build and deployment → Source = **GitHub Actions**；
 3. 如为私有仓库，确认 GitHub 计划支持 Pages；
-4. 确认文档语言：建议**中文优先**（与现有 README 语言一致），VitePress 天然支持 i18n，后续可加英文；
+4. 确认文档语言：建议**中文优先**（与现有 README 语言一致），VitePress 天然支持 i18n，后续可加英文——**最终决策相反**：落地为英文默认（en-US）+ 中文镜像（`apps/docs/zh/`），与"用户可见文档用英文"的仓库约定一致；
 5. 确认选型：**VitePress 1.6.4 stable**（推荐，理由见 §3.1）。
 
 ## 9. 实施里程碑
@@ -203,9 +206,9 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 
 ## 10. 风险与权衡
 
-| 风险/权衡                     | 说明                                                                                 | 应对                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| 2.0 仍是 alpha                | 生产站点选 stable 1.6.4，短期不追新                                                  | 2.0 stable 后评估升级                                          |
-| live demo 引入构建依赖        | 文档站 build 依赖 excel-exporter 先构建（turbo `^build` 自动排序）；dev 下同样先构建 | 已由 turbo 依赖图保证；CI 每次 PR 验证                         |
-| eslint/typecheck 未覆盖文档站 | 文档站代码质量检查弱于 packages                                                      | v1 用构建校验兜底；如需补齐再引入 vue-eslint-parser / tsc 项目 |
-| base 与仓库名耦合             | 改名/换仓库会导致静态资源 404                                                        | base 由单一常量管理 + 环境变量覆盖，换域名时一行切换           |
+| 风险/权衡                     | 说明                                                                                                                | 应对                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 2.0 仍是 alpha                | 生产站点选 stable 1.6.4，短期不追新                                                                                 | 2.0 stable 后评估升级                                |
+| live demo 引入构建依赖        | 文档站 build 依赖 excel-exporter 先构建（turbo `^build` 自动排序）；dev 下同样先构建                                | 已由 turbo 依赖图保证；CI 每次 PR 验证               |
+| eslint/typecheck 未覆盖文档站 | 文档站代码质量检查弱于 packages（**已消解**：apps/docs 已自带 lint/typecheck/test 脚本，deploy.yml 部署前重跑门禁） | 已补齐，见 §3.3                                      |
+| base 与仓库名耦合             | 改名/换仓库会导致静态资源 404                                                                                       | base 由单一常量管理 + 环境变量覆盖，换域名时一行切换 |

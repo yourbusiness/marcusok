@@ -240,7 +240,7 @@ registry-url: https://registry.npmjs.org
 
 不要以为这是理论，本项目已经实打实发布过了。看 git 历史：
 
-- **git tag（版本标签）**：`@marcusok/excel-exporter@0.1.1`、`@marcusok/excel-exporter@0.1.2`（写作本文时只有这两个；此后随每次发布累积，现已到 1.0.3）。这些 tag 正是 `changeset publish` 自动打的。
+- **git tag（版本标签）**：`@marcusok/excel-exporter@0.1.1`、`@marcusok/excel-exporter@0.1.2`（写作本文时只有这两个；此后随每次发布累积，现已到 2.1.1）。这些 tag 正是 `changeset publish` 自动打的。
 - **真实的发布提交**：`3a5782f chore: release packages`，作者署名是 `github-actions[bot]`（机器人），正好对应 release.yml 里的 `commit: "chore: release packages"`。这条提交做的事，和 changeset 文档描述的一模一样：
   - 删掉了 `.changeset/solid-worlds-design.md`（消化掉那张小纸条）。
   - 更新了 [packages/excel-exporter/CHANGELOG.md](../packages/excel-exporter/CHANGELOG.md)（追加 0.1.2 的更新记录）。

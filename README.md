@@ -46,7 +46,7 @@ marcusok/
 │   │   └── dist/               # tsup build output
 │   └── play/                   # Local integration sandbox (React 19 + antd 6, private package)
 ├── docs/                       # Design documents
-│   └── excel-export-design.md  # Excel export core design doc (~170k chars)
+│   └── excel-export-design.md  # Excel export core design doc (~210k chars)
 ├── scripts/                    # Repo-level scripts (dev.mjs unified dev launcher)
 ├── .changeset/                 # Changesets config
 ├── .github/workflows/          # CI/CD

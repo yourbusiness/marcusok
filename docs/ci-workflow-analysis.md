@@ -8,7 +8,7 @@
 
 在看 workflow 之前，先把这个项目是什么搞清楚，否则后面看不懂。
 
-1. **这是一个 monorepo（大仓库）**：名字叫 `marcusok`，里面目前只装了一个真正的工具包 `@marcusok/excel-exporter`（一个用 Rust+WASM 加速的 Excel 导出库）。证据见 [pnpm-workspace.yaml](../pnpm-workspace.yaml)，里面写着 `packages/*`，意思是"packages 文件夹下的每一个子文件夹，都是一个独立的包"。
+1. **这是一个 monorepo（大仓库）**：名字叫 `marcusok`，里面目前只装了一个真正的工具包 `@marcusok/excel-exporter`（一个用 Rust+WASM 加速的 Excel 导出库），外加 play（演示）与 docs（文档站）两个私有应用。证据见 [pnpm-workspace.yaml](../pnpm-workspace.yaml)，里面写着 `packages/*` 和 `apps/*`，意思是"这两个文件夹下的每一个子文件夹，都是一个独立的包"。
 2. **它是用 pnpm + Turborepo 管理的**：根目录 [package.json](../package.json) 里 `"packageManager": "pnpm@9.12.0"`，并且所有命令（build/test/lint/typecheck）都是通过 `turbo run xxx` 来跑的（见 [turbo.json](../turbo.json)）。
 3. **它最终会发布到 npm**：包名是 `@marcusok/excel-exporter`，当前版本号见 [packages/excel-exporter/package.json](../packages/excel-exporter/package.json)（会随发版不断变化，本文不写死）。
 
@@ -298,7 +298,7 @@ env:
     RUN_PERF: "0"
 ```
 
-跑 `"test": "turbo run test"`，最终用 **vitest** 跑所有测试（excel-exporter 的测试在 [packages/excel-exporter/src/**tests**](../packages/excel-exporter/src/__tests__) 下，比如 builder、format、stream、fallback、routing 等；play 与 apps/docs 也各有测试任务）。
+跑 `"test": "turbo run test"`，最终用 **vitest** 跑所有测试（excel-exporter 的测试在 [packages/excel-exporter/src/**tests**](../packages/excel-exporter/src/__tests__) 下，比如 builder、format、stream、stream-fallback、input-validation、routing、worker-timeout 等；play 与 apps/docs 也各有测试任务）。
 
 重点是这个环境变量 **`RUN_PERF: "0"`**，它的来龙去脉很有意思，是项目踩过坑后加的：
 

@@ -57,8 +57,12 @@ export interface CellStyle {
 
 /**
  * Worker-compatible, data-describing format spec. Functions cannot cross the
- * structured-clone boundary into a Web Worker, so worker/stream mode accepts
- * FormatSpec only. Function form works in `main` mode (browser <20,000 rows / Node).
+ * structured-clone boundary into a Web Worker, so routes that enter a worker
+ * (browser >=20,000 rows in auto mode, or an explicit worker/stream mode in a
+ * browser) strip function-form formats with a console warning — use FormatSpec
+ * there. Main-thread routes execute the function form: `main` mode (browser
+ * <20,000 rows / Node), the Node main-thread stream (auto >=50,000 rows), and
+ * main-thread retries after a worker failure.
  *
  * Date semantics: `date`/`datetime` interpret values by their **UTC
  * components**. The workbook path serializes via modern-xlsx's `dateToSerial`
@@ -97,7 +101,8 @@ export interface ColumnConfig {
   /** Style applied to this column's header cell(s). Takes precedence over SheetConfig.headerStyle. */
   headerStyle?: CellStyle;
   /**
-   * Value formatter: FormatSpec (worker-compatible) or function (main/Node only).
+   * Value formatter: FormatSpec (worker-compatible) or function (main-thread
+   * routes only; stripped with a warning on worker routes — see FormatSpec).
    *
    * Cross-path precision: a `{ type: "number" }` spec without `decimals`
    * defaults to 0, but only the stream path (>= STREAM_THRESHOLD, 50,000 rows)
