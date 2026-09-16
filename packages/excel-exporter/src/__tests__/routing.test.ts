@@ -52,6 +52,28 @@ describe("exportExcel mode routing (Node environment)", () => {
     expect(r.mode).toBe("stream");
   });
 
+  it("stream route with a whole-thousand row count emits the trailing 1 exactly once", async () => {
+    // 整千总数时末个 checkpoint 的值恰为 1；修复前它与 exportExcel 的
+    // terminal 1 连发两次。序列应为 [0, 0.5, 1]（2000 行），1 只出现一次。
+    const progress: number[] = [];
+    const r = await exportExcel({
+      filename: "routing-stream-progress",
+      download: false,
+      mode: "stream",
+      sheets: [
+        {
+          name: "S",
+          columns: [{ key: "id", header: "ID" }],
+          data: Array.from({ length: 2000 }, (_, i) => ({ id: i })),
+        },
+      ],
+      onProgress: (p) => progress.push(p),
+    });
+    expect(r.success).toBe(true);
+    expect(r.mode).toBe("stream");
+    expect(progress).toEqual([0, 0.5, 1]);
+  });
+
   it("emits the documented 0 -> 1 onProgress pair even on the stream fallback", async () => {
     // Force the early-bail fallback (WASM reported unsupported). The fallback
     // itself never reports progress; exportExcel must still open and close

@@ -176,7 +176,8 @@ export function a1Range(
   }`;
 }
 
-function columnName(index: number): string {
+/** 0-based column index -> A1 letters (0 -> "A", 25 -> "Z", 26 -> "AA"). */
+export function columnName(index: number): string {
   let n = index;
   let name = "";
   do {

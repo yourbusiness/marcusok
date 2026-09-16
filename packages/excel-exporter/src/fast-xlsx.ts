@@ -5,7 +5,12 @@ import {
   validateSheetName,
   validateMerges,
 } from "./format-utils";
-import { flattenColumnTree, a1Range, someColumn } from "./column-tree";
+import {
+  flattenColumnTree,
+  a1Range,
+  someColumn,
+  columnName,
+} from "./column-tree";
 
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 const MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -76,16 +81,6 @@ function escapeXml(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
-function columnName(index: number): string {
-  let n = index;
-  let name = "";
-  do {
-    name = String.fromCharCode(65 + (n % 26)) + name;
-    n = Math.floor(n / 26) - 1;
-  } while (n >= 0);
-  return name;
-}
-
 function stringifyCell(value: unknown): string | number | boolean {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return value;
@@ -112,12 +107,15 @@ function appendCell(
   out.push(`<c r="${ref}" t="s"><v>${intern(value)}</v></c>`);
 }
 
+// stringTable/totalExpected/processedRows 由 exportFastXlsx 的唯一调用点
+// 必传（模块私有，无其他调用方）；仅 onProgress 可选，避免"声明可选、
+// 实现用非空断言"的签名与实现不一致。
 function buildWorksheetXml(
   config: SheetConfig,
+  stringTable: SharedStringTable,
+  totalExpected: number,
+  processedRows: { count: number },
   onProgress?: (progress: number) => void,
-  totalExpected?: number,
-  processedRows?: { count: number },
-  stringTable?: SharedStringTable,
 ): string {
   validateSheetName(config.name);
   const { leaves, headerGrid, headerMerges, headerRowCount } =
@@ -140,7 +138,7 @@ function buildWorksheetXml(
         out,
         `${letters[colIndex]}${rowNumber}`,
         stringifyCell(value),
-        (s) => stringTable!.intern(s),
+        (s) => stringTable.intern(s),
       );
     }
     out.push(`</row>`);
@@ -158,13 +156,21 @@ function buildWorksheetXml(
       // empty field. A missing <c> element reads as an empty cell in Excel.
       if (v === "") continue;
       appendCell(out, `${letters[colIndex]}${rowNumber}`, v, (s) =>
-        stringTable!.intern(s),
+        stringTable.intern(s),
       );
     }
     out.push(`</row>`);
-    processedRows!.count++;
-    if (onProgress && totalExpected && processedRows!.count % 1000 === 0) {
-      onProgress(processedRows!.count / totalExpected);
+    processedRows.count++;
+    // 钳制最后一批：总行数为 1000 整数倍时，末个 checkpoint 的值恰为 1，
+    // 会与 exportExcel 的 terminal 1 重复（onProgress 的 1 须只出现一次，
+    // 见 types.ts 契约）——到齐终点时跳过，把 1 留给 terminal。
+    if (
+      onProgress &&
+      totalExpected > 0 &&
+      processedRows.count % 1000 === 0 &&
+      processedRows.count < totalExpected
+    ) {
+      onProgress(processedRows.count / totalExpected);
     }
   }
 
@@ -257,10 +263,10 @@ export function exportFastXlsx(
     worksheetXmls.push(
       buildWorksheetXml(
         config,
-        onProgress,
+        stringTable,
         totalExpected,
         processed,
-        stringTable,
+        onProgress,
       ),
     );
     workbookSheets.push(
@@ -324,8 +330,9 @@ export function exportFastXlsx(
   }
 
   const bytes = zipSync(files, { level: 1 });
-  // No trailing onProgress(1) here: every 1,000-row checkpoint reports the
-  // final position, and exportExcel emits the single terminal 1 for all paths
-  // (emitting it here too duplicated the last callback on stream routes).
+  // No trailing onProgress(1) here: exportExcel emits the single terminal 1
+  // for all paths. The 1,000-row checkpoints are additionally clamped below 1
+  // (the final-row checkpoint is skipped), so a whole-thousand row count never
+  // yields a duplicate 1 ahead of the terminal one.
   return { bytes, rowCount: processed.count };
 }

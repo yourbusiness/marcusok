@@ -82,8 +82,9 @@ export class WasmLoader {
    * only picked up after the in-flight fetch rejects (modern-xlsx clears its
    * promise on rejection), and never if it eventually succeeds. The new URL
    * genuinely takes effect only in a fresh JS realm (a page reload, or a
-   * worker created after terminateWorker()). updateOptions warns when any
-   * part of this caveat applies.
+   * worker created after terminateWorker() — exported from the
+   * `@marcusok/excel-exporter/worker-utils` subpath, not the main entry).
+   * updateOptions warns when any part of this caveat applies.
    */
   updateOptions(opts: LoaderOptions): void {
     // 按 String 归一化比较：URL 对象经结构化克隆/重复构造后是全新引用，
@@ -104,7 +105,8 @@ export class WasmLoader {
           "URL is picked up only by the next fresh initWasm call after the in-flight " +
           "one settles (or never, if it already succeeded). The new URL genuinely takes " +
           "effect only in a fresh JS realm (reload the page, or terminateWorker() before " +
-          "the next export so a new worker is created).",
+          "the next export so a new worker is created — import it from " +
+          "@marcusok/excel-exporter/worker-utils).",
       );
     }
     this.opts = { ...this.opts, ...opts };
@@ -253,7 +255,8 @@ export function getWasmLoader(): WasmLoader {
  * fetch is still in flight cannot redirect that fetch — modern-xlsx's
  * `initWasm` is idempotent and keeps the first successfully loaded module
  * (see WasmLoader.updateOptions). The new URL takes effect in a fresh JS
- * realm only (page reload / a worker created after `terminateWorker()`), and
+ * realm only (page reload / a worker created after `terminateWorker()`,
+ * exported from the `@marcusok/excel-exporter/worker-utils` subpath), and
  * updateOptions prints a warning when the caveat applies.
  */
 export function configureWasm(opts: LoaderOptions): void {

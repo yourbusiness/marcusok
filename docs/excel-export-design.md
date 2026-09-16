@@ -26,6 +26,8 @@
 
 > 🔄 **v2.13（梳理修复：降级链防护缺口 + 数值字段跨路径校验 + wasm-loader 状态机，2026-09-16）**：① **代码修复六处**——`index.ts` Node stream 路由（无 `window` 的 `mode:"stream"` / auto ≥50k）build 期抛错改为直接失败（原走 `finishWithStream` 对同一输入重跑一遍确定性失败的 fast stream，全量构建白跑两遍；与 worker 链 `retryOnMainThread` 的既有防护对齐）；`validateInput` 补数值字段前置校验（`width` 有限非负——0 合法为隐藏列、`freezeRows` 非负整数、`format.decimals` 0–100 整数、`padding.length` 0–10000 整数），修复跨路径分裂（原 Workbook 路径以晦涩 serde 错误失败并整份降级无样式 stream，stream 路径却静默忽略或抛 `toFixed` RangeError，同一输入在 50k 阈值上下行为相反）；`table-export.ts` 的 `toColumnConfig` 在转换阶段做环检测（原 `exportTable` 循环 `children` 先于 `flattenColumnTree` 的 `assertAcyclic` 无限递归，用户拿到栈溢出而非清晰错误）；`wasm-loader.ts` 状态写入收敛到 `ensureLoaded` 的 promise 身份校验处（原 `loadWithRetry` 每个 attempt 无条件写 `loading`，被取代的旧加载会把新加载的 `ready` 覆盖掉且无人写回，`isReady()` 误报）、`wasmUrl` 比较按 `String` 归一化（URL 对象同地址不再被 `!==` 误判为变更而反复 reset；与 `export.worker.ts` 的 `loadedWasmKey` 归一化对齐）、caveat/警告补“初始化进行中”档（modern-xlsx `initPromise` in-flight 期间换 URL/重试拿到同一 pending promise）、非 Error rejection 的消息 `String()` 兜底；`export.worker.ts` 的 `error` 字段同样兜底非 Error throw。`types.ts` 注释修正两处（worker 路由 `duration` 实际含主线程序列化与 worker 往返，非“仅 worker 内”；`autoFilter` 实际范围是末表头行+数据行，非“header range”字面义）。② **工程**——`copy-wasm` 自 `build` 脚本后置移入 tsup 主配置 `onSuccess`（`build` 简化为 `tsup`）：主配置 `clean:true` 在 dev watch 首次构建清空 dist 后无 copy 步骤回补，开着 `pnpm dev` 时 `dist/modern-xlsx.wasm` 缺失连坐 Node 自动初始化与集成测试；onSuccess 对一次性构建与每次 watch 重建均生效。③ **测试**——新增 `export-worker.test.ts` 直接驱动 worker 消息协议（此前 worker 链仅测超时一支：成功路径、init 幂等（loadedWasmKey 字符串归一化）、transfer、错误字符串化均零覆盖，两端 `WorkerResponse` 形状不同仅靠约定对齐）；A1/A3/A4/A5/A6/A9 各配回归用例。④ **快照同步**——4.2（2.1.4；`build` 简化）、4.3（onSuccess）、4.4（types.ts 注释）、4.5（wasm-loader 全量）、4.9（export.worker）、4.10（index.ts 全量）、3.3（`preview:docs` 滞留行——该行 2026-08-04 起即与 v2.11“已对齐”声明矛盾）。⑤ **文档站同步**——guide/08（zh/en）补 Node stream 终局语义与新校验清单、api/02（width/freezeRows 校验语义）、api/03（decimals 0–100）、guide/05（zh/en）补 `headerStyle` 交叉引用；zh 镜像漂移修复（zh/09 删除 en 侧不存在的独立句、en/10 补 zh 侧已有的 3 行表头结构示意表）。
 
+> 🔄 **v2.14（梳理修复：进度契约边界 + 文档口径收敛 + 工程门补齐，2026-09-16）**：① **代码**——`fast-xlsx.ts` 进度 checkpoint 钳制：总行数为 1000 整数倍时末个 checkpoint 值恰为 1，与 `exportExcel` 的 terminal 1 连发两次（`onProgress` 契约承诺 1 只出现一次），改为到齐终点时跳过该 checkpoint，把 1 留给 terminal（新增回归用例 2 个：引擎层 + 入口层，153 全量 / CI 实跑 149）；`types.ts` 注释两处——pattern-token 段 "emits anything else verbatim" 精确化（超集 token 非原样透传：`mmm` 的 `mm` 前缀被解析、残留 `m` 原样输出，`"mmm"` → `"09m"`，而 Workbook 路径 numFormat 渲染月份缩写）、`onProgress` 段补钳制说明；`wasm-loader.ts` 三处 `terminateWorker()` 提及补导入路径（`@marcusok/excel-exporter/worker-utils` 子路径，不在主入口——运行时警告原先让用户调用一个主入口拿不到的函数）；`fast-xlsx.ts` 内部清理（`buildWorksheetXml` 参数必传化，消除"声明可选、实现非空断言"；`columnName` 去重，复用 `column-tree.ts` 导出）。② **文档口径**——worker 路由 `duration` 旧口径三处收敛（v2.13 改了 4.4 快照但漏改 4.14 正文与文档站 guide/10 zh/en："只覆盖 Worker 内耗时"→ 主线程从 `exportInWorker` 起表、含序列化与 Worker 往返、直到 Blob 构造）；文档站 zh/09 章节顺序对齐 en（"配合框架"与"显式初始化"互换回正、打包器注意事项归位显式初始化小节）；api/01（zh/en）补 `exportTable`（默认 sheet 名/`freezeRows` 等透传）与 `exportEcharts`（`layout` 选项、空 `xAxis.data` 走 item 布局、默认 sheet 名）细节；7.1 表补 v2.13 新增的 `export-worker.test.ts`（现行 15 个测试文件）；附录 F 计数更新（153/149）。③ **工程**——deploy.yml 质量门补 `format:check`（与 ci.yml 对齐，否则仅格式违规的提交在 CI 标红的同时文档站照常部署）并补 `.nvmrc`/`.npmrc` 触发路径；根 `release` 脚本补 `format:check` 前置；play 补 `@types/node` devDependency（`vite.config.ts`/`workspace-resolver.ts` 用 `node:` 模块，原先靠根目录 `@types` 泄漏过检）；`scripts/dev.mjs` 构建阶段的 turbo 子进程纳入 `children` 清理集合（Ctrl+C 由本脚本按进程树强杀，兑现头注释承诺）+ `main()` 失败兜底为友好中文错误（原以 unhandled rejection 裸栈崩溃）；`.prettierignore` 去除 `.turbo` 重复行；3.5 快照补齐 `.npmrc` 的 NOTE 注释行。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -347,6 +349,9 @@ strict-peer-dependencies=true
 auto-install-peers=true
 ; do not fail install on engine mismatch: modern-xlsx@1.2.0 declares engines.node>=24
 ; but its runtime target is the browser and all tests pass on Node 22 (see README).
+; NOTE: pnpm's engine check is one global switch - this also stops pnpm from
+; enforcing the repo's own engines.node>=22.12 (a local Node 22.0-22.11 only
+; fails later, in tooling). CI is unaffected (setup-node picks the latest 22.x).
 engine-strict=false
 ```
 
@@ -691,7 +696,7 @@ packages/excel-exporter/
 │   ├── style-utils.ts          # CellStyle → StyleBuilder 转换
 │   ├── style-presets.ts        # 业务预设样式（header/currency/date/percent …）
 │   ├── download.ts             # Blob 下载工具（triggerDownload / toBlobPart）
-│   └── __tests__/              # 14 个测试文件 + setup.ts（清单见 7.1）
+│   └── __tests__/              # 15 个测试文件 + setup.ts（清单见 7.1）
 ├── scripts/copy-wasm.mjs       # 构建后置：把 modern-xlsx.wasm 转发进 dist（2.0 起）
 ├── tsup.config.ts
 ├── tsconfig.json
@@ -1014,10 +1019,12 @@ export interface CellStyle {
  *
  * Pattern tokens: the stream path (>= 50,000 rows, explicit stream mode, or
  * the fallback) parses only `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (case-insensitive;
- * `mm` resolves to minutes vs month by context) and emits anything else
- * verbatim, while the Workbook path hands the pattern to Excel as a numFormat
- * where every valid format code renders. Stick to the six tokens for
- * cross-threshold consistency.
+ * `mm` resolves to minutes vs month by context) and emits the remaining
+ * characters verbatim, while the Workbook path hands the pattern to Excel as a
+ * numFormat where every valid format code renders. Superset tokens are not
+ * passed through: `mmm` parses its `mm` prefix and emits a stray `m`
+ * (`"mmm"` -> `"09m"`), while Excel's numFormat renders the month
+ * abbreviation. Stick to the six tokens for cross-threshold consistency.
  */
 export type FormatSpec =
   | { type: "enum"; map: Record<string, string>; fallback?: string }
@@ -1612,7 +1619,9 @@ export class WasmLoader {
    * only picked up after the in-flight fetch rejects (modern-xlsx clears its
    * promise on rejection), and never if it eventually succeeds. The new URL
    * genuinely takes effect only in a fresh JS realm (a page reload, or a
-   * worker created after terminateWorker()). updateOptions warns when any
+   * worker created after terminateWorker() — exported from the
+   * `@marcusok/excel-exporter/worker-utils` subpath, not the main entry).
+   * updateOptions warns when any
    * part of this caveat applies.
    */
   updateOptions(opts: LoaderOptions): void {
@@ -1634,7 +1643,8 @@ export class WasmLoader {
           "URL is picked up only by the next fresh initWasm call after the in-flight " +
           "one settles (or never, if it already succeeded). The new URL genuinely takes " +
           "effect only in a fresh JS realm (reload the page, or terminateWorker() before " +
-          "the next export so a new worker is created).",
+          "the next export so a new worker is created — import it from " +
+          "@marcusok/excel-exporter/worker-utils).",
       );
     }
     this.opts = { ...this.opts, ...opts };
@@ -1783,7 +1793,8 @@ export function getWasmLoader(): WasmLoader {
  * fetch is still in flight cannot redirect that fetch — modern-xlsx's
  * `initWasm` is idempotent and keeps the first successfully loaded module
  * (see WasmLoader.updateOptions). The new URL takes effect in a fresh JS
- * realm only (page reload / a worker created after `terminateWorker()`), and
+ * realm only (page reload / a worker created after `terminateWorker()`,
+ * exported from the `@marcusok/excel-exporter/worker-utils` subpath), and
  * updateOptions prints a warning when the caveat applies.
  */
 export function configureWasm(opts: LoaderOptions): void {
@@ -2218,9 +2229,17 @@ function buildWorksheetXml(
       );
     }
     out.push(`</row>`);
-    processedRows!.count++;
-    if (onProgress && totalExpected && processedRows!.count % 1000 === 0) {
-      onProgress(processedRows!.count / totalExpected);
+    processedRows.count++;
+    // 钳制最后一批：总行数为 1000 整数倍时，末个 checkpoint 的值恰为 1，
+    // 会与 exportExcel 的 terminal 1 重复（onProgress 的 1 须只出现一次，
+    // 见 types.ts 契约）——到齐终点时跳过，把 1 留给 terminal。
+    if (
+      onProgress &&
+      totalExpected > 0 &&
+      processedRows.count % 1000 === 0 &&
+      processedRows.count < totalExpected
+    ) {
+      onProgress(processedRows.count / totalExpected);
     }
   }
 
@@ -3555,7 +3574,8 @@ export function toBlobPart(bytes: Uint8Array): BlobPart {
 - `download`：`triggerDownload` 的同步开销，仅 `download !== false` 且浏览器环境时上报。
 
 该回调不影响 `ExportResult.duration`（主线程路由为整次导出总耗时；worker 路由的
-duration 只覆盖 Worker 内耗时——见 4.4 `onPhase` JSDoc）。实现位置：
+duration 在主线程从调用 `exportInWorker` 起表——含 postMessage 前的序列化与 Worker
+往返，直到 Blob 构造完成——比纯 Worker 内构建耗时更宽，见 4.4 `onPhase` JSDoc）。实现位置：
 主线程路径在 `index.ts` 打点；worker 路径由 `export.worker.ts` 测量、经 phase 消息
 回传后由 `worker-exporter.ts` 转发；终局兜底沿用 `runOnMainThread` 的打点
 （`fallback.ts` 已随 2.0 移除，纯 JS 兜底在 `index.ts` 的 `finishWithStream` 编排）。
@@ -3841,24 +3861,25 @@ await exportExcel({
 
 ### 7.1 单元测试（Vitest）
 
-（v2.7 注：下表按现行 `src/__tests__/` 实际文件对齐；旧表列有 `style-utils` 行但仓库并无该测试文件。v2.10 再次对齐：`fallback.test.ts` 已随 SheetJS 兜底移除，现行 14 个测试文件如下。）
+（v2.7 注：下表按现行 `src/__tests__/` 实际文件对齐；旧表列有 `style-utils` 行但仓库并无该测试文件。v2.10 再次对齐：`fallback.test.ts` 已随 SheetJS 兜底移除。v2.14 对齐：补入 v2.13 新增的 `export-worker.test.ts`，现行 15 个测试文件如下。）
 
-| 测试文件                                 | 重点                                                                                                    |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `format.test.ts`                         | applyFormat/displayValue/FormatSpec 各类型；日期 UTC 口径跨路径一致                                     |
-| `wasm-loader.test.ts`                    | error 态重试、URL 变更语义、超时重试（vi.mock 注入 modern-xlsx）                                        |
-| `wasm-node-auto-init.test.ts`（+集成版） | Node 自动同步初始化：单测 mock node:fs；集成版跑真实 wasm 零配置导出                                    |
-| `builder.test.ts`                        | Workbook 路径：多行分组表头/合并/冻结/筛选、样式去重、跨路径值归一、空行渲染、空 border 容错            |
-| `column-tree.test.ts`                    | 列树扁平化：分组表头网格/表头合并、循环与重复引用检测                                                   |
-| `stream.test.ts`                         | fast-xlsx 数据完整性、UTC 日期 pattern、sharedStrings count/uniqueCount 规范                            |
-| `stream-fallback.test.ts`                | WASM 不可用终局兜底：降级软标记、0→1 进度契约、特性丢弃警告、多行表头/合并保留                          |
-| `input-validation.test.ts`               | 前置校验：merges 越界/重叠、表名规则、空 sheets、结构非法输入——全路径同错同文案                         |
-| `worker-timeout.test.ts`                 | Worker 超时：终止坏实例并弃缓存、兄弟请求连带拒绝、postMessage 同步异常即时清理、自定义 workerTimeoutMs |
-| `adapters.test.ts`                       | table/echarts 适配器归一化与真实导出                                                                    |
-| `routing.test.ts`                        | pickMode 路由阈值、降级链 onProgress 契约、下载触发隔离                                                 |
-| `phases.test.ts`                         | onPhase 阶段序列（init/build，Node 不报 download）                                                      |
-| `performance.test.ts`                    | 性能基准（1万/5万/10万 + format 开销；CI 以 RUN_PERF=0 跳过）                                           |
-| `setup.ts`                               | Node WASM 引导（initWasmSync）+ makeData / fourCols                                                     |
+| 测试文件                                 | 重点                                                                                                                        |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `format.test.ts`                         | applyFormat/displayValue/FormatSpec 各类型；日期 UTC 口径跨路径一致                                                         |
+| `wasm-loader.test.ts`                    | error 态重试、URL 变更语义、超时重试（vi.mock 注入 modern-xlsx）                                                            |
+| `wasm-node-auto-init.test.ts`（+集成版） | Node 自动同步初始化：单测 mock node:fs；集成版跑真实 wasm 零配置导出                                                        |
+| `builder.test.ts`                        | Workbook 路径：多行分组表头/合并/冻结/筛选、样式去重、跨路径值归一、空行渲染、空 border 容错                                |
+| `column-tree.test.ts`                    | 列树扁平化：分组表头网格/表头合并、循环与重复引用检测                                                                       |
+| `stream.test.ts`                         | fast-xlsx 数据完整性、UTC 日期 pattern、sharedStrings count/uniqueCount 规范                                                |
+| `stream-fallback.test.ts`                | WASM 不可用终局兜底：降级软标记、0→1 进度契约、特性丢弃警告、多行表头/合并保留                                              |
+| `input-validation.test.ts`               | 前置校验：merges 越界/重叠、表名规则、空 sheets、结构非法输入——全路径同错同文案                                             |
+| `worker-timeout.test.ts`                 | Worker 超时：终止坏实例并弃缓存、兄弟请求连带拒绝、postMessage 同步异常即时清理、自定义 workerTimeoutMs                     |
+| `export-worker.test.ts`                  | Worker 消息协议：成功路径与字节 transfer、init 幂等（URL 字符串归一键）、stream 免 init 转发逐行进度、非 Error 抛出字符串化 |
+| `adapters.test.ts`                       | table/echarts 适配器归一化与真实导出                                                                                        |
+| `routing.test.ts`                        | pickMode 路由阈值、降级链 onProgress 契约、下载触发隔离                                                                     |
+| `phases.test.ts`                         | onPhase 阶段序列（init/build，Node 不报 download）                                                                          |
+| `performance.test.ts`                    | 性能基准（1万/5万/10万 + format 开销；CI 以 RUN_PERF=0 跳过）                                                               |
+| `setup.ts`                               | Node WASM 引导（initWasmSync）+ makeData / fourCols                                                                         |
 
 ### 7.2 性能基准测试（关键验收）
 
@@ -4238,7 +4259,7 @@ const blob = new Blob([bytes], {
 
 ### 附录 F · Node 版本与补充依赖（v2.1 重写）
 
-> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（134 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 130 个，2026-09-16 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
+> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（153 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 149 个，2026-09-16 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
 >
 > v2.0 曾把 `@playwright/test`（`^1.62.0`）列入「补充依赖」、并写「Node 24+ 升级指引」，二者均与实际仓库不符（本仓库无 Playwright、CI 跑 Node 22），v2.1 已删除该依赖行与升级指引。关于 `unplugin`：6.2 的 Vite 插件是 Vite 原生插件对象（`{ name, buildStart() }`），全程未 import `unplugin`；若未来要让资源拷贝同时支持 Webpack，再按需引入。
 

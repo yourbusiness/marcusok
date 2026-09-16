@@ -189,10 +189,15 @@ async function main() {
       cwd: root,
       stdio: "inherit",
     });
+    // 构建阶段的 Ctrl+C 也走本脚本的进程树强杀（头注释的承诺）：构建子
+    // 进程加入清理集合，正常结束后移出（对已退出 pid 调 kill 也无害，
+    // 但保持集合只含活进程更清晰）。
+    children.add(build);
+    build.on("exit", (code) => {
+      children.delete(build);
+      code === 0 ? resolve() : reject(new Error(`构建失败 (code ${code})`));
+    });
     build.on("error", reject);
-    build.on("exit", (code) =>
-      code === 0 ? resolve() : reject(new Error(`构建失败 (code ${code})`)),
-    );
   }).catch((err) => {
     console.error(err.message);
     process.exit(1);
@@ -204,4 +209,11 @@ async function main() {
   for (const key of keys) spawnTask(key);
 }
 
-main();
+// resolveBin 在 main() 内同步抛错（未 install / bin 缺失时 require2.resolve
+// 抛 ENOENT）——没有这层 catch 会以 unhandled rejection 裸栈崩溃，而不是
+// 脚本其余路径那样的友好中文提示。
+main().catch((err) => {
+  console.error(`[dev] 启动失败: ${err.message}`);
+  console.error("若提示找不到模块，请先在仓库根目录执行 pnpm install。");
+  process.exit(1);
+});

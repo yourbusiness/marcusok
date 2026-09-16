@@ -125,7 +125,7 @@ Phase semantics:
 | `build`    | Workbook construction (reported once per actual attempt, including fallback)                                                                                                                                                                                                                                  |
 | `download` | Browser download trigger (absent with `download: false`; absent in Node)                                                                                                                                                                                                                                      |
 
-> `onPhase` measures per-phase wall time only; `ExportResult.duration` measures the whole export on main-thread routes (the worker route's duration covers the in-worker time only).
+> `onPhase` measures per-phase wall time only; `ExportResult.duration` measures the whole export on main-thread routes. On the worker route it is measured on the main thread from the call into the worker — including the pre-post serialization and the worker round-trip, through Blob construction — so it is wider than the pure in-worker build time.
 
 ## Disable auto download
 

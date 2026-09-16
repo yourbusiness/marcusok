@@ -82,8 +82,10 @@ for (const name of declaredDeps) {
  *
  * To support a new third-party subpath, add an entry here; resolver logic
  * doesn't need to change. Currently empty: @marcusok/excel-exporter >= 2.0
- * re-publishes its runtime assets under its own exports map
- * (`@marcusok/excel-exporter/dist/*`), so no third-party override is needed.
+ * re-publishes its runtime assets under its own exports map (the explicit
+ * `./dist/export.worker.js` and `./dist/modern-xlsx.wasm` entries — there is
+ * no `./dist/*` wildcard, so a *new* dist asset must be added to the exports
+ * map first), so no third-party override is needed.
  */
 const externalOverrides: {
   pkg: string;

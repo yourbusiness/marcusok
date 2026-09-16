@@ -10,6 +10,8 @@ on:
       # so trigger on the whole packages/ tree instead of a per-package list.
       - "packages/**"
       - ".github/workflows/deploy.yml"
+      - ".nvmrc" # Node version changes must rebuild the site
+      - ".npmrc" # install behavior (engine-strict etc.) affects the build
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "package.json"
@@ -72,7 +74,10 @@ jobs:
       # on pushes to main (cross-workflow `needs` is not possible), so without
       # these steps a commit that fails lint/typecheck/test would still go live
       # whenever it only breaks non-build checks. Re-running the same suite
-      # here makes the deployment itself the gate.
+      # here makes the deployment itself the gate — format:check included, or
+      # a formatting-only violation would deploy while CI is red.
+      - name: Format check
+        run: pnpm format:check
       - name: Lint
         run: pnpm lint
       - name: Typecheck

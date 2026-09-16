@@ -74,10 +74,12 @@ export interface CellStyle {
  *
  * Pattern tokens: the stream path (>= 50,000 rows, explicit stream mode, or
  * the fallback) parses only `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (case-insensitive;
- * `mm` resolves to minutes vs month by context) and emits anything else
- * verbatim, while the Workbook path hands the pattern to Excel as a numFormat
- * where every valid format code renders. Stick to the six tokens for
- * cross-threshold consistency.
+ * `mm` resolves to minutes vs month by context) and emits the remaining
+ * characters verbatim, while the Workbook path hands the pattern to Excel as a
+ * numFormat where every valid format code renders. Superset tokens are not
+ * passed through: `mmm` parses its `mm` prefix and emits a stray `m`
+ * (`"mmm"` -> `"09m"`), while Excel's numFormat renders the month
+ * abbreviation. Stick to the six tokens for cross-threshold consistency.
  */
 export type FormatSpec =
   | { type: "enum"; map: Record<string, string>; fallback?: string }
@@ -211,7 +213,8 @@ export interface ExportOptions {
    * exactly once by `exportExcel` itself, on every route — including the
    * stream fallback and exports that ultimately fail — so a progress UI can
    * always be closed on the final 1. The stream path additionally reports
-   * intermediate values every 1,000 rows.
+   * intermediate values every 1,000 rows; the checkpoint that would land on
+   * the final row is skipped, so the trailing 1 is never duplicated.
    */
   onProgress?: (progress: number) => void;
   /**

@@ -9,6 +9,5 @@ dist/
 coverage/
 node_modules/
 .turbo/
-.turbo
 apps/docs/.vitepress/cache/
 apps/docs/.vitepress/dist/

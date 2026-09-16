@@ -124,7 +124,7 @@ await exportExcel({
 | `build`    | 工作簿构建（按实际构建次数报告，含兜底重试——失败后走流式兜底会再报告一次）                                                                                                                                            |
 | `download` | 浏览器触发下载（`download: false` 时不报告；Node 下无此阶段）                                                                                                                                                         |
 
-> `onPhase` 只反映各阶段耗时，不影响 `ExportResult.duration`（主线程路由为整次导出总耗时；worker 路由的 duration 只覆盖 Worker 内耗时）。
+> `onPhase` 只反映各阶段耗时，不影响 `ExportResult.duration`（主线程路由为整次导出总耗时；worker 路由的 duration 在主线程从调用 `exportInWorker` 起表，含 postMessage 前的序列化与 Worker 往返，直到 Blob 构造完成，因此比纯 Worker 内构建耗时更宽）。
 
 ## 关闭自动下载
 

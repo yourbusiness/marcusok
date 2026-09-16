@@ -22,7 +22,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,mjs,js,json,md,yaml,yml,vue}\"",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo run lint typecheck test build && changeset publish",
+    "release": "pnpm format:check && turbo run lint typecheck test build && changeset publish",
     "prepare": "husky"
   },
   "devDependencies": {

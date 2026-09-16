@@ -32,18 +32,6 @@ if (result.success && result.blob) {
 }
 ```
 
-## 显式初始化（可选）
-
-希望把一次性的同步读取+编译从首个请求提前到进程启动期，在服务流量前 await 一次加载器：
-
-```ts
-import { getWasmLoader } from "@marcusok/excel-exporter";
-
-await getWasmLoader().ensureLoaded(); // 一次性读取并编译随包发布的 wasm
-```
-
-> 不要用单独安装的 `modern-xlsx` 的 `initWasmSync` 来预热：引擎已打包进 `@marcusok/excel-exporter`，外部副本是另一个模块实例，预热不到打包内的这一份。
-
 ## 配合框架（如 Next.js Route Handler）
 
 ```ts
@@ -69,8 +57,20 @@ export async function GET() {
 }
 ```
 
+## 显式初始化（可选）
+
+希望把一次性的同步读取+编译从首个请求提前到进程启动期，在服务流量前 await 一次加载器：
+
+```ts
+import { getWasmLoader } from "@marcusok/excel-exporter";
+
+await getWasmLoader().ensureLoaded(); // 一次性读取并编译随包发布的 wasm
+```
+
+> 不要用单独安装的 `modern-xlsx` 的 `initWasmSync` 来预热：引擎已打包进 `@marcusok/excel-exporter`，外部副本是另一个模块实例，预热不到打包内的这一份。
+
+> 注意：自动初始化依赖运行时能从磁盘定位安装目录里的 wasm。若你的打包/部署形态不满足这一点（例如依赖被内联进产物且资产未随行输出），自动定位失败时不会报错，而是走降级链（无样式流式兜底，console 有 `[excel-exporter]` 前缀警告）；此时保持本包 external（Node 服务端构建的默认行为）、`configureWasm({ wasmUrl })` 指向 HTTP 地址，或把资产拷贝到产物可读的位置即可。
+
 ## 性能提示
 
 服务端大文件（≥ 5 万行）会自动走 stream 路径；由于没有 Worker，Fast stream 占用当前线程约 0.8s，适合放在异步任务/队列中，避免阻塞请求线程。
-
-> 注意：自动初始化依赖运行时能从磁盘定位安装目录里的 wasm。若你的打包/部署形态不满足这一点（例如依赖被内联进产物且资产未随行输出），自动定位失败时不会报错，而是走降级链（无样式流式兜底，console 有 `[excel-exporter]` 前缀警告）；此时保持本包 external（Node 服务端构建的默认行为）、`configureWasm({ wasmUrl })` 指向 HTTP 地址，或把资产拷贝到产物可读的位置即可。

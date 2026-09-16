@@ -195,6 +195,25 @@ describe("exportAsStream round-trip", () => {
     expect(ws.rowCount).toBe(3);
   });
 
+  it("clamps the final checkpoint below 1 on whole-thousand row counts", async () => {
+    // 整千总数时末个 checkpoint 的值恰为 1，会与 exportExcel 的 terminal 1
+    // 重复（onProgress 的 1 必须只出现一次，见 types.ts 契约）——到齐
+    // 终点时跳过该 checkpoint，把 1 留给 terminal。
+    const progress: number[] = [];
+    await exportAsStream(
+      [
+        {
+          name: "S",
+          columns: [{ key: "a", header: "A" }],
+          data: Array.from({ length: 2000 }, (_, i) => ({ a: i })),
+        },
+      ],
+      (p) => progress.push(p),
+    );
+    // 1000 行的 checkpoint 正常上报；2000 行（终点）的不再报。
+    expect(progress).toEqual([0.5]);
+  });
+
   it("renders a null data row as an empty row instead of throwing", async () => {
     const { bytes, rowCount } = await exportAsStream([
       {
