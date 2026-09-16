@@ -11,6 +11,23 @@
     #8b5cf6 50%,
     #ec4899 100%
   );
+  /* Hero image glare (vitepress.dev-style): the blurred gradient sits behind
+   * the logo via VitePress' native --vp-home-hero-image-* hooks. */
+  --vp-home-hero-image-background-image: linear-gradient(
+    135deg,
+    rgba(91, 124, 250, 0.5) 0%,
+    rgba(139, 92, 246, 0.45) 50%,
+    rgba(236, 72, 153, 0.4) 100%
+  );
+  --vp-home-hero-image-filter: blur(44px);
+  /* Faint grid lines behind the hero, faded out with a radial mask below. */
+  --vp-home-grid-line: rgba(91, 124, 250, 0.07);
+}
+
+@media (min-width: 960px) {
+  :root {
+    --vp-home-hero-image-filter: blur(72px);
+  }
 }
 
 /* ------------------------- brand tokens (dark) ------------------------- */
@@ -19,6 +36,7 @@
   --vp-c-brand-2: #93a9ff;
   --vp-c-brand-3: #5b7cfa;
   --vp-c-brand-soft: rgba(124, 150, 255, 0.16);
+  --vp-home-grid-line: rgba(124, 150, 255, 0.05);
 }
 
 /* ------------------------------ hero polish ------------------------------ */
@@ -46,10 +64,56 @@
   }
 }
 
+/* Glare layer: slowly drift the blurred gradient behind the logo. */
+.VPHero .image-mask {
+  animation: hero-glow 9s ease-in-out infinite alternate;
+}
+
+@keyframes hero-glow {
+  from {
+    transform: rotate(-8deg) scale(1);
+  }
+  to {
+    transform: rotate(10deg) scale(1.12);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .VPHero .name {
+  .VPHero .name,
+  .VPHero .image-mask {
     animation: none;
   }
+}
+
+/* Grid backdrop confined to the hero, faded out towards the bottom. The grid
+ * lives on a pseudo-element so the radial mask fades ONLY the grid: masking
+ * .VPHero itself would clip its text and buttons (mask applies to the whole
+ * element render, children included). */
+.VPHome .VPHero {
+  position: relative;
+  isolation: isolate;
+}
+
+.VPHome .VPHero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--vp-home-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--vp-home-grid-line) 1px, transparent 1px);
+  background-size: 42px 42px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 90% 100% at 50% 0%,
+    #000 25%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(
+    ellipse 90% 100% at 50% 0%,
+    #000 25%,
+    transparent 78%
+  );
+  pointer-events: none;
 }
 
 .VPHome {
@@ -62,6 +126,118 @@
     transparent;
 }
 
+/* Brand action button: add a soft glow on hover (default theme only swaps
+ * background shade). */
+.VPHero .action.brand {
+  transition: box-shadow 0.25s ease;
+}
+
+.VPHero .action.brand:hover {
+  box-shadow: 0 10px 30px -10px rgba(91, 124, 250, 0.6);
+}
+
+/* ------------------------- nav frosted glass ------------------------- */
+/* Translucent top bar + backdrop blur: scrolled content glides under it
+ * instead of being hidden by an opaque strip. The rgba surface keeps text
+ * contrast in both modes; browsers without backdrop-filter just get the tint. */
+:root {
+  --vp-nav-bg-color: rgba(255, 255, 255, 0.72);
+}
+
+.dark {
+  --vp-nav-bg-color: rgba(22, 22, 26, 0.72);
+}
+
+.VPNavBar {
+  background-color: var(--vp-nav-bg-color);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+}
+
+/* ------------------- dark/light toggle reveal ------------------- */
+/* setupAppearanceTransition() (theme/index.ts) animates
+ * ::view-transition-new(root) with a circular clip; suppress the default
+ * cross-fade so only that clip plays. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* --------------------------- install command --------------------------- */
+.vp-doc .install-command {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 28px;
+  padding: 7px 8px 7px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  background: var(--vp-c-bg-soft);
+  transition: border-color 0.22s ease;
+}
+
+.vp-doc .install-command:hover {
+  border-color: var(--vp-c-brand-1);
+}
+
+/* Same specificity as the theme's `.vp-doc :not(pre) > code`; wins by source
+ * order (custom CSS loads after the default theme styles). */
+.vp-doc .install-command code {
+  padding: 0;
+  background: transparent;
+  font-size: 0.86rem;
+  color: var(--vp-c-text-1);
+  white-space: nowrap;
+}
+
+.vp-doc .install-command__dollar {
+  margin-right: 4px;
+  color: var(--vp-c-text-3);
+}
+
+.vp-doc .install-command__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.vp-doc .install-command__copy:hover {
+  color: var(--vp-c-brand-2);
+}
+
+.vp-doc .install-command__copy svg {
+  flex: none;
+}
+
+/* Narrow screens: shrink the mono text and go icon-only on the copy button
+ * so the nowrap command never overflows the pill. */
+@media (max-width: 480px) {
+  .vp-doc .install-command {
+    gap: 7px;
+    padding: 6px 7px 6px 12px;
+  }
+
+  .vp-doc .install-command code {
+    font-size: 0.76rem;
+  }
+
+  .vp-doc .install-command__copy span {
+    display: none;
+  }
+}
+
 /* ------------------------- highlight cards ------------------------- */
 .vp-doc .highlight-grid {
   display: grid;
@@ -71,6 +247,7 @@
 }
 
 .vp-doc .highlight-card {
+  position: relative;
   padding: 20px 22px;
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
@@ -81,15 +258,57 @@
     box-shadow 0.22s ease;
 }
 
+/* Gradient border on hover: a ring pseudo-element masked to its own padding
+ * box (the standard gradient-border technique), faded in on hover. */
+.vp-doc .highlight-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #5b7cfa, #8b5cf6 55%, #ec4899);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
 .vp-doc .highlight-card:hover {
   transform: translateY(-4px);
-  border-color: var(--vp-c-brand-1);
   box-shadow: 0 14px 34px -14px rgba(91, 124, 250, 0.4);
 }
 
+.vp-doc .highlight-card:hover::before {
+  opacity: 0.8;
+}
+
 .vp-doc .highlight-card__icon {
-  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: linear-gradient(
+    135deg,
+    var(--vp-c-brand-soft),
+    rgba(139, 92, 246, 0.14)
+  );
+  color: var(--vp-c-brand-1);
+  font-size: 1.3rem; /* fallback when the icon stays a raw emoji */
   line-height: 1;
+}
+
+.vp-doc .highlight-card__icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .vp-doc .highlight-card__title {
@@ -117,6 +336,7 @@
  * hover) from the theme; card text must keep its own colors and no
  * underline in both states. */
 .vp-doc .package-card {
+  position: relative;
   display: block;
   padding: 20px 22px;
   border: 1px solid var(--vp-c-divider);
@@ -130,12 +350,36 @@
     box-shadow 0.22s ease;
 }
 
+/* Gradient hover border — same ring technique as .highlight-card. */
+.vp-doc .package-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #5b7cfa, #8b5cf6 55%, #ec4899);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
 .vp-doc .package-card:hover {
   transform: translateY(-4px);
-  border-color: var(--vp-c-brand-1);
   box-shadow: 0 14px 34px -14px rgba(91, 124, 250, 0.4);
   color: inherit;
   text-decoration: none;
+}
+
+.vp-doc .package-card:hover::before {
+  opacity: 0.8;
 }
 
 .vp-doc .package-card__head {
@@ -145,8 +389,13 @@
   gap: 10px;
 }
 
-.vp-doc .package-card__name {
-  font-size: 0.95rem;
+/* Chip-styled package name. `.vp-doc .package-card code` specificity ties
+ * with the theme's `.vp-doc :not(pre) > code` and wins by source order. */
+.vp-doc .package-card code.package-card__name {
+  padding: 3px 10px;
+  border-radius: 7px;
+  background: var(--vp-c-brand-soft);
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--vp-c-brand-1);
 }
@@ -219,32 +468,40 @@
 }
 
 /* ----------------------------- stats block ----------------------------- */
+/* Borderless number strip (GitHub/Linear-style): big gradient digits with a
+ * muted label, soft background only on hover for the linked variants. */
 .vp-doc .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 14px;
+  gap: 10px;
   margin: 28px 0 36px;
 }
 
 .vp-doc .stat-card {
-  padding: 18px 16px;
-  border: 1px solid var(--vp-c-divider);
+  padding: 14px 12px;
   border-radius: 12px;
   text-align: center;
-  background: var(--vp-c-bg-soft);
   color: inherit;
   text-decoration: none;
+  transition: background 0.22s ease;
 }
 
 .vp-doc .stat-card:hover {
   color: inherit;
   text-decoration: none;
   cursor: pointer;
+  background: var(--vp-c-bg-soft);
 }
 
 .vp-doc .stat-card__value {
-  font-size: 1.7rem;
+  font-size: 2.3rem;
+  /* VitePress sets a FIXED `line-height: 24px` on <body>; without this
+   * override the 2.3rem glyphs overflow the 24px element box and, with
+   * background-clip:text + transparent color, the parts outside the box
+   * render blank — digits looked sliced at top and bottom. */
+  line-height: 1.3;
   font-weight: 700;
+  letter-spacing: -0.02em;
   background: linear-gradient(120deg, #5b7cfa, #8b5cf6);
   -webkit-background-clip: text;
   background-clip: text;
@@ -252,7 +509,7 @@
 }
 
 .vp-doc .stat-card__label {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 0.82rem;
   color: var(--vp-c-text-2);
 }

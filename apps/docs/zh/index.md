@@ -4,7 +4,10 @@ layout: home
 hero:
   name: "MarcusOK"
   text: "后台业务前端公共库"
-  tagline: 面向后台业务的声明式、可组合的 TypeScript 库集合。当前核心是 modern-xlsx 与自研 Fast stream 组成的 Excel 导出引擎。
+  tagline: 声明式、可组合的 TypeScript 库集合，10 万行 Excel 导出不到 1 秒。
+  image:
+    src: /logo.svg
+    alt: MarcusOK logo
   actions:
     - theme: brand
       text: 快速开始
@@ -13,6 +16,8 @@ hero:
       text: 在线演示
       link: /zh/play
 ---
+
+<InstallCommand />
 
 ## 生态亮点
 

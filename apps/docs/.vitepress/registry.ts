@@ -19,6 +19,8 @@ export interface HomeStat {
 
 /** One feature card on the home page highlights section. */
 export interface PackageHighlight {
+  /** Icon key from the home highlights icon set (see PackageHighlights.vue);
+   *  unrecognized values render as the raw string (emoji fallback). */
   icon: string;
   title: LocalizedText;
   details: LocalizedText;
@@ -240,7 +242,7 @@ export const packages: PackageEntry[] = [
     ],
     highlights: [
       {
-        icon: "🚀",
+        icon: "zap",
         title: { zh: "性能", en: "Performance" },
         details: {
           zh: "Fast stream 核心，10 万行导出约 0.8s（本机实测）；Worker 多线程避免长时间占用主线程。",
@@ -248,7 +250,7 @@ export const packages: PackageEntry[] = [
         },
       },
       {
-        icon: "📝",
+        icon: "pen",
         title: { zh: "声明式", en: "Declarative" },
         details: {
           zh: "用配置描述列、样式与格式，一行代码完成导出，不必手写单元格与样式对象。",
@@ -256,7 +258,7 @@ export const packages: PackageEntry[] = [
         },
       },
       {
-        icon: "🧭",
+        icon: "route",
         title: { zh: "自动路由", en: "Auto Routing" },
         details: {
           zh: "自动模式根据数据量选择最优路径，数据量变化时业务代码零改动。",
@@ -264,7 +266,7 @@ export const packages: PackageEntry[] = [
         },
       },
       {
-        icon: "🛡️",
+        icon: "shield",
         title: { zh: "多级兜底", en: "Layered Fallbacks" },
         details: {
           zh: "环境不支持或 WASM 加载失败时自动降级到无样式纯 JS 快速流，多数异常下仍能拿到导出文件。",

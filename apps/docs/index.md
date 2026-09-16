@@ -4,7 +4,10 @@ layout: home
 hero:
   name: "MarcusOK"
   text: "Frontend libraries for admin products"
-  tagline: Declarative, composable TypeScript libraries for admin products. The flagship package is an Excel export engine powered by modern-xlsx and a custom Fast stream writer.
+  tagline: Declarative, composable TypeScript libraries. Export 100k rows to Excel in under a second.
+  image:
+    src: /logo.svg
+    alt: MarcusOK logo
   actions:
     - theme: brand
       text: Get Started
@@ -13,6 +16,8 @@ hero:
       text: Play
       link: /play
 ---
+
+<InstallCommand />
 
 ## Ecosystem Highlights
 
