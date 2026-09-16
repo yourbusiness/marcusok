@@ -14,7 +14,7 @@
     "dev:play": "node scripts/dev.mjs play",
     "dev:docs": "node scripts/dev.mjs docs",
     "build:docs": "turbo run build --filter=@marcusok/docs",
-    "preview:docs": "pnpm --filter @marcusok/docs preview",
+    "preview:docs": "node scripts/dev.mjs preview-docs",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

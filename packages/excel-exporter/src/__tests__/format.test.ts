@@ -6,6 +6,7 @@ import {
   formatDateByPattern,
   displayValue,
   validateSheetName,
+  toStr,
 } from "../format-utils";
 import { serialToDate } from "modern-xlsx";
 import type { ColumnConfig } from "../types";
@@ -19,6 +20,24 @@ describe("applyFormat", () => {
     };
     expect(applyFormat("paid", spec)).toBe("Paid");
     expect(applyFormat("unknown", spec)).toBe("?");
+  });
+
+  it("enum: prototype-chain keys do not bypass the fallback", () => {
+    // "constructor"/"toString"/... used to resolve Object.prototype members
+    // (non-nullish) and skip the fallback, writing "function Object() {...}"
+    // into the cell. Own-property lookup keeps the fallback semantics.
+    const spec = {
+      type: "enum" as const,
+      map: { paid: "Paid" },
+      fallback: "?",
+    };
+    expect(applyFormat("constructor", spec)).toBe("?");
+    expect(applyFormat("toString", spec)).toBe("?");
+    expect(applyFormat("__proto__", spec)).toBe("?");
+    // Without a fallback the raw value is kept, still never a prototype member.
+    expect(applyFormat("hasOwnProperty", { type: "enum", map: {} })).toBe(
+      "hasOwnProperty",
+    );
   });
 
   it("number: returns a typed number; grouping/precision are left to numFormat", () => {
@@ -238,6 +257,21 @@ describe("displayValue (stream number-decimals baking)", () => {
         { n: undefined },
       ),
     ).toBe("");
+  });
+});
+
+describe("toStr / Invalid Date", () => {
+  it("stringifies an Invalid Date instead of throwing RangeError", () => {
+    // toISOString() throws on NaN times; one bad cell must not fail the
+    // whole export (mirrors toJsDate's NaN guard on the parsing side).
+    expect(toStr(new Date(NaN))).toBe("Invalid Date");
+    // Same guard through the stream path's value resolver (no format)...
+    expect(displayValue({ key: "d", header: "D" }, { d: new Date(NaN) })).toBe(
+      "Invalid Date",
+    );
+    // ...and through a date spec whose value does not parse to a real date.
+    expect(applyFormat(new Date(NaN), { type: "date" })).toBe("Invalid Date");
+    expect(applyFormat("not a date", { type: "datetime" })).toBe("not a date");
   });
 });
 

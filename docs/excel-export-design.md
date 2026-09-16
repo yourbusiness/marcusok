@@ -22,6 +22,8 @@
 
 > 🔄 **v2.11（快照失同步修复，2026-09-16）**：修复 v2.10 遗漏的快照漂移——① 3.2 目录树对齐现行仓库结构（补 deploy.yml / pre-push / play / apps/docs / scripts，移除未落地的 admin-a、_shared 预留）；② 3.3 根 package.json 快照对齐提交 a1aaa29（tsup / vite / vitest / eslint-plugin-vue / vue-eslint-parser / vue-tsc 已随根级死依赖清理下沉子包）；③ 3.8 eslint 快照对齐现行 ignores 清单与 reactHooks / reactRefresh 配置块；④ 3.9 lintstaged 快照对齐三段式现行配置；⑤ 4.2 版本快照 2.1.1 → 2.1.3；⑥ 4.4 types.ts 快照补 2.1.2/2.1.3 新增的 FormatSpec pattern-token 段与 ExportPhase 精确语义；⑦ 4.13 download.ts 快照补 2.1.3 的 `.xlsx` 后缀大小写不敏感修复；⑧ 4.14 / 5.4 / 7.3 / 九风险表 / 附录 C 清除以现行口吻描述 SheetJS 兜底的残留（终局兜底自 2.0.0 起为纯 JS fast stream，`engine` 恒为 `'modern-xlsx'`，`fallback.ts` 已删除）；⑨ 2.1 表 modern-xlsx 运行时要求与 3.3 注对齐（engines 声明 >=24，本仓库以 Node 22 实测全绿）。
 
+> 🔄 **v2.12（梳理修复 + 快照再对齐，2026-09-16）**：① 代码修复四处——`format-utils.ts` 的 `toStr` 对 Invalid Date 防御（原 `toISOString()` 抛 RangeError 使四条导出路径整体失败，现写 `"Invalid Date"` 可见字符串，与 `toJsDate` 的 NaN 防御对齐）、enum map 改 `Object.hasOwn` 自有属性查找（`"constructor"`/`"__proto__"` 等原型链键原会绕过 fallback 写出 `function Object() {...}` 文本）；`echarts-export.ts` 识别对象形式散点数据 `{ value: [x, y] }`（原静默落入 name/value 分支、坐标被 stringify 成 `"[1,2]"` 文本，与顶层数组形式的混排显式拒绝自相矛盾）；`index.ts` 的 `validateInput` 补 filename 非空前置校验（原 JS 调用者漏传时浏览器路径 `success:true` 但永不下载、warn 只报晦涩 TypeError）；`download.ts` 的 `triggerDownload` 以 try/finally 保证异常路径也调度 `revokeObjectURL`（沙箱 DOM 抛错时 objectURL 原会泄漏并保活整个 Blob）。新增回归用例 7 个（134 全量 / CI 实跑 130）。② 快照同步——4.4（types.ts filename 注释 + format-utils 修复段）、4.8（fast-xlsx.ts 整体刷新至现行：v2.6 后该快照停留在多级表头与合并落地之前，`merges` 仍在 skipped 清单、表头仍是单行写法）、4.10（index.ts filename 校验）、4.13（download.ts try/finally）；4.7 补【历史】标注（快照自 v1.1.0 多级表头改造起停留旧版，v2.9 已注声明、本次补齐标签）。③ 5.3 stream 限制注修正——现行 fast-xlsx 支持多行表头与数据区 `merges`（输出 `<mergeCells>`），`width`/`style`/`headerStyle`/`freezeRows`/`autoFilter` 仍为 warn 后丢弃。④ 文档站同步——guide/10（zh/en）`ExportResult.duration` 描述补 worker 路由例外（2.1.3 源码注释已改、两侧漏同步）；api/01（zh/en）与包 README 补散点两种写法（`[x,y]` / `{ value: [x,y] }`）。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -1128,6 +1130,7 @@ export type ExportPhase = "init" | "build" | "download";
 /** Export options. */
 export interface ExportOptions {
   sheets: SheetConfig[];
+  /** Download file name; `.xlsx` appended unless already present. Validated as a non-empty string at export time. */
   filename: string;
   /** Mode selection: auto = auto-decide by row count (default). */
   mode?: ExportMode;
@@ -1143,7 +1146,8 @@ export interface ExportOptions {
    * Optional per-stage timing callback. Receives the phase name and its
    * wall-clock duration in ms (0 means the phase did no work, e.g. WASM was
    * already loaded). Useful for metrics/play panels; does not affect
-   * `ExportResult.duration` (which keeps measuring the whole export).
+   * `ExportResult.duration` (which measures the whole export on main-thread
+   * routes; the worker route's duration covers the in-worker time only).
    */
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   /** Trigger browser download (default true). Set false to only return a Blob. */
@@ -1184,11 +1188,15 @@ export const DEFAULT_DATETIME_PATTERN = "yyyy-MM-dd HH:mm";
 
 /** Safely stringify any value to a string (objects -> JSON, null/undef -> '').
  *  Symbols/functions are not JSON-serializable (JSON.stringify returns
- *  undefined for them); String() them so the cell never receives a non-string. */
+ *  undefined for them); String() them so the cell never receives a non-string.
+ *  Invalid Dates stringify as "Invalid Date" — toISOString() would throw a
+ *  RangeError and fail the whole export over one bad cell (see toJsDate for
+ *  the same NaN guard on the parsing side). */
 export function toStr(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date)
+    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
   if (
     typeof value === "number" ||
     typeof value === "boolean" ||
@@ -1206,8 +1214,16 @@ export function toStr(value: unknown): string {
  */
 export function applyFormat(value: unknown, spec: FormatSpec): string | number {
   switch (spec.type) {
-    case "enum":
-      return spec.map[toStr(value)] ?? spec.fallback ?? toStr(value);
+    case "enum": {
+      // Own-property lookup: a plain `spec.map[key]` walks the prototype
+      // chain, so values like "constructor" / "toString" / "__proto__" that
+      // the map does not define would find Object.prototype members (non-
+      // nullish) and bypass the fallback, writing "function Object() {...}"
+      // into the cell instead of the configured fallback text.
+      const key = toStr(value);
+      const mapped = Object.hasOwn(spec.map, key) ? spec.map[key] : undefined;
+      return mapped ?? spec.fallback ?? key;
+    }
     case "date": {
       const d = toJsDate(value);
       return d === null ? toStr(value) : dateToSerial(d);
@@ -1809,7 +1825,7 @@ export function buildStyleIndex(wb: Workbook, style: CellStyle): number {
 
 > 📌 `StyleBuilder` 的链式方法（`font`/`fill`/`alignment`/`border`/`numberFormat`）均返回 `this` 且**原地修改**内部字段（源码核实：`font(){ Object.assign(this.fontData, opts); return this; }`，`fill`/`alignment` 同理）。因此直接 `builder.font({...})` 即可，**无需** `builder = builder.xxx()` 重新赋值（早期版本这样写并附了「TS 推断为子类型」的理由，该理由不成立——类型签名就是 `: this`，TS 推断即 `StyleBuilder` 本身，已修正）。`build(wb.styles)` 返回的是写入 `cellXfs` 数组后的 **0-based 索引**。
 
-### 4.7 工作簿构建器（`workbook-builder.ts`）— 批量写入主路径
+### 4.7 工作簿构建器（`workbook-builder.ts`）— 批量写入主路径【历史】
 
 这是性能达标的核心：**所有数据走 `aoaToSheet`（array of arrays）批量写入，绝不逐格赋值**。
 
@@ -2002,7 +2018,12 @@ export async function exportAsStream(
 ```ts
 import { strToU8, zipSync } from "fflate";
 import type { SheetConfig } from "./types";
-import { displayValue, validateSheetName } from "./format-utils";
+import {
+  displayValue,
+  validateSheetName,
+  validateMerges,
+} from "./format-utils";
+import { flattenColumnTree, a1Range, someColumn } from "./column-tree";
 
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 const MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2117,31 +2138,45 @@ function buildWorksheetXml(
   stringTable?: SharedStringTable,
 ): string {
   validateSheetName(config.name);
-  const cols = config.columns.map((c, i) => ({
-    col: c,
-    letter: columnName(i),
-  }));
+  const { leaves, headerGrid, headerMerges, headerRowCount } =
+    flattenColumnTree(config.columns);
+  // Reject invalid user merges before any XML is built: a reversed or
+  // out-of-bounds range would otherwise zip a workbook Excel flags as corrupt.
+  validateMerges(config, leaves.length);
+  const letters = leaves.map((_, i) => columnName(i));
   const out: string[] = [];
 
-  // Header row.
-  out.push(`<row r="1">`);
-  for (const { col, letter } of cols) {
-    appendCell(out, `${letter}1`, stringifyCell(col.header), (value) =>
-      stringTable!.intern(value),
-    );
-  }
-  out.push(`</row>`);
-
-  for (let rowIndex = 0; rowIndex < config.data.length; rowIndex++) {
-    const item = config.data[rowIndex];
-    const rowNumber = rowIndex + 2;
+  // Header rows (1..headerRowCount); cells covered by a header merge are skipped.
+  for (let rowIndex = 0; rowIndex < headerRowCount; rowIndex++) {
+    const rowNumber = rowIndex + 1;
     out.push(`<row r="${rowNumber}">`);
-    for (const { col, letter } of cols) {
+    const gridRow = headerGrid[rowIndex];
+    for (let colIndex = 0; colIndex < letters.length; colIndex++) {
+      const value = gridRow[colIndex];
+      if (value == null) continue;
       appendCell(
         out,
-        `${letter}${rowNumber}`,
-        displayValue(col, item),
-        (value) => stringTable!.intern(value),
+        `${letters[colIndex]}${rowNumber}`,
+        stringifyCell(value),
+        (s) => stringTable!.intern(s),
+      );
+    }
+    out.push(`</row>`);
+  }
+
+  // Data rows start after the header block.
+  for (let rowIndex = 0; rowIndex < config.data.length; rowIndex++) {
+    const item = config.data[rowIndex];
+    const rowNumber = headerRowCount + 1 + rowIndex;
+    out.push(`<row r="${rowNumber}">`);
+    for (let colIndex = 0; colIndex < leaves.length; colIndex++) {
+      const v = displayValue(leaves[colIndex], item);
+      // Skip empty cells: null/missing fields normalize to "" (see toStr), and
+      // interning every "" would cost an sst entry plus a cell reference per
+      // empty field. A missing <c> element reads as an empty cell in Excel.
+      if (v === "") continue;
+      appendCell(out, `${letters[colIndex]}${rowNumber}`, v, (s) =>
+        stringTable!.intern(s),
       );
     }
     out.push(`</row>`);
@@ -2151,11 +2186,26 @@ function buildWorksheetXml(
     }
   }
 
+  // Header merges (already sheet-relative) + data merges (data-relative, offset
+  // by headerRowCount). `merges` is not in the skipped list: multi-row headers
+  // and merges are the feature this path now supports.
+  const merges = [
+    ...headerMerges.map((m) => a1Range(m.row, m.col, m.rowSpan, m.colSpan)),
+    ...(config.merges ?? []).map((m) =>
+      a1Range(headerRowCount + m.row, m.col, m.rowspan, m.colspan),
+    ),
+  ];
+  const mergeXml = merges.length
+    ? `<mergeCells count="${merges.length}">${merges
+        .map((ref) => `<mergeCell ref="${ref}"/>`)
+        .join("")}</mergeCells>`
+    : "";
+
   return (
     XML_DECL +
     `<worksheet xmlns="${MAIN_NS}"><sheetData>${out.join(
       "",
-    )}</sheetData></worksheet>`
+    )}</sheetData>${mergeXml}</worksheet>`
   );
 }
 
@@ -2181,23 +2231,39 @@ export function exportFastXlsx(
   const contentOverrides: string[] = [];
   const stringTable = createSharedStringTable();
 
+  // A zero-sheet workbook violates ECMA-376 (Excel flags it as corrupt);
+  // reject before building anything, same as the duplicate-name guard below
+  // and the pre-flight check in exportExcel.
+  if (sheets.length === 0) {
+    throw new Error("[excel-exporter] at least one sheet is required");
+  }
+
+  // Duplicate sheet names violate ECMA-376 uniqueness and yield a workbook
+  // Excel flags as corrupt; reject before building anything.
+  const seenSheetNames = new Set<string>();
+
   sheets.forEach((config, index) => {
     const sheetNumber = index + 1;
+    if (seenSheetNames.has(config.name)) {
+      throw new Error(`[excel-exporter] duplicate sheet name "${config.name}"`);
+    }
+    seenSheetNames.add(config.name);
     const skipped: string[] = [];
-    if (config.columns.some((c) => c.width !== undefined))
+    // someColumn walks the whole tree: width/style/headerStyle may sit on
+    // nested nodes, and a top-level-only scan would drop them silently.
+    if (someColumn(config.columns, (c) => c.width !== undefined))
       skipped.push("width");
     if (
       config.headerStyle !== undefined ||
-      config.columns.some((c) => c.headerStyle !== undefined)
+      someColumn(config.columns, (c) => c.headerStyle !== undefined)
     )
       skipped.push("headerStyle");
     // Data-cell styles are dropped just like layout features; warn so the
     // degradation is visible instead of silent (headerStyle above already did).
-    if (config.columns.some((c) => c.style !== undefined))
+    if (someColumn(config.columns, (c) => c.style !== undefined))
       skipped.push("style");
     if (config.freezeRows) skipped.push("freezeRows");
     if (config.autoFilter) skipped.push("autoFilter");
-    if (config.merges?.length) skipped.push("merges");
     if (skipped.length) {
       console.warn(
         "[excel-exporter] stream mode: features not supported (" +
@@ -2851,6 +2917,13 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
  * (WASM unavailable, build errors) still degrade to the stream as before.
  */
 function validateInput(options: ExportOptions): void {
+  // Guard the other core input alongside the sheets checks below: without it,
+  // a JS caller omitting `filename` only fails inside triggerDownload with a
+  // masked TypeError (caught as a cryptic warning), leaving success:true and
+  // no file on disk. Fail fast with the structured { success: false } instead.
+  if (typeof options.filename !== "string" || options.filename.length === 0) {
+    throw new Error("[excel-exporter] filename must be a non-empty string");
+  }
   // An empty sheets array is not a build error on the stream path (fast-xlsx
   // would zip a zero-sheet workbook Excel flags as corrupt while reporting
   // success), so reject it here like every other structural input error.
@@ -3327,15 +3400,23 @@ export async function exportWithSheetJS(
 export function triggerDownload(blob: Blob, filename: string): void {
   if (typeof document === "undefined") return;
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.toLowerCase().endsWith(".xlsx")
-    ? filename
-    : `${filename}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Release the objectURL on every path: a sandboxed DOM can throw between
+  // createObjectURL and the delayed revoke (createElement/appendChild/click),
+  // and each leaked URL keeps its whole Blob alive for the page's lifetime.
+  // The revoke stays delayed: the browser reads the URL asynchronously after
+  // the synchronous click, so revoking immediately can cancel the download.
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename.toLowerCase().endsWith(".xlsx")
+      ? filename
+      : `${filename}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
 
 /**
@@ -3452,7 +3533,7 @@ if ("requestIdleCallback" in window) {
 
 > **stream 阈值从 10 万降到 5 万**（v1.9 确立，v2.0 确认）：toBuffer 塌方起始点在 5.5–6 万行（实测 6万 1.6s 已超线性）。5 万是 Workbook 路径的保守安全上限（实测 ~648ms）。≥5 万行一律走 stream，避开塌方边界的不确定性。
 >
-> **stream 的样式限制（已知取舍；v2.6 注）**：现行 fast-xlsx 完全不产出样式（连 `style`/`headerStyle` 数据列样式也 warn 后丢弃）；v2.0 时代的 `StreamingXlsxWriter` 也只接受 `StreamingCellInput.style` 数字索引（需配合 `setStylesXml`）。v1 的 stream 路径只支持纯数据，且 `width`/`freezeRows`/`autoFilter`/`merges` 等 `SheetConfig` 布局字段在 stream 模式下仅 `console.warn` 后丢弃（见 4.8 现行源码的 skipped 清单）。需要完整样式的大数据导出（≥5万行）在 Phase 1 暂不支持，业务侧需：① 拆分为 <5 万行（≤49,999）/文件走 Workbook；② 或接受纯数据。这是工程取舍，非 bug。
+> **stream 的样式限制（已知取舍；v2.6 注，v2.12 修正）**：现行 fast-xlsx 完全不产出样式（`style`/`headerStyle` 数据列样式 warn 后丢弃），但**支持多行表头（列树分组）与数据区 `merges`**（输出 `<mergeCells>`，见 4.8 现行源码）；v2.0 时代的 `StreamingXlsxWriter` 也只接受 `StreamingCellInput.style` 数字索引（需配合 `setStylesXml`）。v1 的 stream 路径只支持纯数据，`width`/`freezeRows`/`autoFilter` 等 `SheetConfig` 布局字段在 stream 模式下仅 `console.warn` 后丢弃（见 4.8 现行源码的 skipped 清单）。需要完整样式的大数据导出（≥5万行）在 Phase 1 暂不支持，业务侧需：① 拆分为 <5 万行（≤49,999）/文件走 Workbook；② 或接受纯数据。这是工程取舍，非 bug。
 >
 > **v2.7 注（多级表头与合并）**：fast-xlsx 已支持多行表头（`ColumnConfig.children`）与合并（表头合并 + 数据区 `merges`，输出 `<mergeCells>`），`merges` 已从 skipped 清单移除；stream 仍不支持 `style`/`headerStyle`/`width`/`freezeRows`/`autoFilter`。SheetJS 兜底同样支持多级表头与合并（`!merges`）。扁平列输出与改造前逐字节一致（单格跨度的表头不产生 merge）。
 >
@@ -4042,13 +4123,13 @@ const blob = new Blob([bytes], {
 
 ---
 
-**文档版本**：v2.8 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **v2.6 仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-08-21（v2.8：onProgress 兜底收尾修复、sharedStrings count 规范修正、PERF_TIGHT 残留清理；v2.7 的版本标签此前未同步到本行，一并修正。历史见文末修订历史）
+**文档版本**：v2.12 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-09-16（v2.12：Invalid Date/enum 原型链/散点对象形式/filename 校验/objectURL 泄漏五处代码修复 + 4.8 等快照再对齐；该行此前停留 v2.8，v2.9–v2.11 漏更，一并修正。历史见顶部版本注与文末修订历史）
 
 ---
 
 ### 附录 F · Node 版本与补充依赖（v2.1 重写）
 
-> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（127 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 123 个，2026-09-15 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
+> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（134 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 130 个，2026-09-16 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
 >
 > v2.0 曾把 `@playwright/test`（`^1.62.0`）列入「补充依赖」、并写「Node 24+ 升级指引」，二者均与实际仓库不符（本仓库无 Playwright、CI 跑 Node 22），v2.1 已删除该依赖行与升级指引。关于 `unplugin`：6.2 的 Vite 插件是 Vite 原生插件对象（`{ name, buildStart() }`），全程未 import `unplugin`；若未来要让资源拷贝同时支持 Webpack，再按需引入。
 

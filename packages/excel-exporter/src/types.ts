@@ -198,6 +198,7 @@ export type ExportPhase = "init" | "build" | "download";
 /** Export options. */
 export interface ExportOptions {
   sheets: SheetConfig[];
+  /** Download file name; `.xlsx` appended unless already present. Validated as a non-empty string at export time. */
   filename: string;
   /** Mode selection: auto = auto-decide by row count (default). */
   mode?: ExportMode;

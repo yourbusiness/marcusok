@@ -218,6 +218,45 @@ describe("empty sheets array", () => {
   });
 });
 
+describe("missing or invalid filename", () => {
+  // Pre-fix, filename was never validated: a JS caller omitting it got
+  // success:true on the Node route, and on the browser route a masked
+  // TypeError inside triggerDownload (caught as a cryptic warning) — no file
+  // on disk either way. It now fails fast like every other structural input.
+  it("resolves with a structured failure, keeping the 0 -> 1 progress contract", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const onProgress = vi.fn();
+    try {
+      const r = await exportExcel({
+        // @ts-expect-error runtime JS callers can omit it
+        filename: undefined,
+        download: false,
+        mode: "main",
+        onProgress,
+        sheets: [baseSheet()],
+      });
+      expect(r.success).toBe(false);
+      expect(r.blob).toBeUndefined();
+      expect(r.error?.message).toMatch(/filename must be a non-empty string/);
+      expect(warn).not.toHaveBeenCalled();
+      expect(onProgress.mock.calls.map((c) => c[0])).toEqual([0, 1]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("rejects an empty-string filename with the same error", async () => {
+    const r = await exportExcel({
+      filename: "",
+      download: false,
+      mode: "main",
+      sheets: [baseSheet()],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(/filename must be a non-empty string/);
+  });
+});
+
 describe("structurally malformed sheets input", () => {
   // Pre-fix, `totalRows` was reduce()d before validateInput ran, so these
   // shapes rejected the promise with a raw TypeError instead of resolving

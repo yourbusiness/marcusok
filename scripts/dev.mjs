@@ -11,7 +11,7 @@
  *
  * 用法：
  *   node scripts/dev.mjs            # 启动全部服务
- *   node scripts/dev.mjs play       # 只启动指定服务（excel-exporter / play / docs）
+ *   node scripts/dev.mjs play       # 只启动指定服务（excel-exporter / play / docs / preview-docs）
  */
 import { spawn, execSync } from "node:child_process";
 import { createRequire } from "node:module";
@@ -43,6 +43,18 @@ const TASKS = {
     binName: "vitepress",
     args: ["dev", "--port", "5174"],
     color: "\x1b[35m", // magenta
+  },
+  // Serves the built docs site (vitepress preview). Routed through this
+  // launcher for the same reason as dev: preview is also a long-lived
+  // server, and spawning it via `pnpm --filter` leaves the child behind on
+  // Ctrl+C on Windows (the exact hazard the usage note above describes).
+  // Requires a prior `pnpm build:docs` — preview serves .vitepress/dist.
+  "preview-docs": {
+    cwd: "apps/docs",
+    binPkg: "vitepress",
+    binName: "vitepress",
+    args: ["preview", "--port", "4174"],
+    color: "\x1b[33m", // yellow
   },
 };
 

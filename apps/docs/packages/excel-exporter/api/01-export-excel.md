@@ -52,7 +52,7 @@ Optional — assets default to the files shipped next to the package entry (see 
 - `WorkbookBuilder.create()` + `addSheet(config)` + `toBuffer()` / `toBlob()`: batch build with full styling;
 - `exportAsStream(sheets, onProgress?)`: lower-level streaming, returns `Promise<{ bytes, rowCount }>`;
 - `exportTable(options)`: convenience for common table data; accepts AntD `title`/`dataIndex` and Element Plus `label`/`prop`;
-- `exportEcharts(options)`: convenience for common ECharts data; supports category-axis series, pie `name/value`, and scatter `[x,y]`. Default sheet name and headers are Chinese — override via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`; in long/item layouts duplicated headers are rejected (they double as row keys);
+- `exportEcharts(options)`: convenience for common ECharts data; supports category-axis series, pie `name/value`, and scatter pairs in either ECharts spelling (`[x,y]` or `{ value: [x,y] }`). Default sheet name and headers are Chinese — override via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`; in long/item layouts duplicated headers are rejected (they double as row keys);
 - `getWasmLoader()`: access the global WASM loader (state: idle / loading / ready / error).
 
 ```ts

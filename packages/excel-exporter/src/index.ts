@@ -99,6 +99,13 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
  * (WASM unavailable, build errors) still degrade to the stream as before.
  */
 function validateInput(options: ExportOptions): void {
+  // Guard the other core input alongside the sheets checks below: without it,
+  // a JS caller omitting `filename` only fails inside triggerDownload with a
+  // masked TypeError (caught as a cryptic warning), leaving success:true and
+  // no file on disk. Fail fast with the structured { success: false } instead.
+  if (typeof options.filename !== "string" || options.filename.length === 0) {
+    throw new Error("[excel-exporter] filename must be a non-empty string");
+  }
   // An empty sheets array is not a build error on the stream path (fast-xlsx
   // would zip a zero-sheet workbook Excel flags as corrupt while reporting
   // success), so reject it here like every other structural input error.

@@ -1,0 +1,14 @@
+# Generated files Prettier must not check or rewrite. The format/format:check
+# globs in the root package.json match `yaml`/`js`, so without this file the
+# pnpm lockfile would be checked (it passes today only by coincidence — a
+# regenerated lockfile with different styling would fail format:check and a
+# local `pnpm format` would rewrite it) and build outputs would rely on
+# Prettier's implicit .gitignore fallback (>=3.5) instead of an explicit list.
+pnpm-lock.yaml
+dist/
+coverage/
+node_modules/
+.turbo/
+.turbo
+apps/docs/.vitepress/cache/
+apps/docs/.vitepress/dist/

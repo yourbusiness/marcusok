@@ -2,15 +2,23 @@
 export function triggerDownload(blob: Blob, filename: string): void {
   if (typeof document === "undefined") return;
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.toLowerCase().endsWith(".xlsx")
-    ? filename
-    : `${filename}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Release the objectURL on every path: a sandboxed DOM can throw between
+  // createObjectURL and the delayed revoke (createElement/appendChild/click),
+  // and each leaked URL keeps its whole Blob alive for the page's lifetime.
+  // The revoke stays delayed: the browser reads the URL asynchronously after
+  // the synchronous click, so revoking immediately can cancel the download.
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename.toLowerCase().endsWith(".xlsx")
+      ? filename
+      : `${filename}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
 
 /**

@@ -183,6 +183,64 @@ describe("echartsToSheet / exportEcharts", () => {
     ]);
   });
 
+  it("exports object-form scatter datums ({ value: [x, y] }) like bare pairs", () => {
+    // Both spellings are legal ECharts scatter data; the object form used to
+    // fall through to the name/value branch and stringify the pair as "[1,2]".
+    const sheet = echartsToSheet({
+      option: {
+        series: [
+          {
+            name: "点",
+            type: "scatter",
+            data: [{ value: [1, 2], name: "ignored" }, { value: [3, 4] }],
+          },
+        ],
+      },
+    });
+
+    expect(sheet.columns.map((c) => c.header)).toEqual(["系列", "X", "Y"]);
+    expect(sheet.data).toEqual([
+      { 系列: "点", X: 1, Y: 2 },
+      { 系列: "点", X: 3, Y: 4 },
+    ]);
+  });
+
+  it("mixes the two scatter spellings in one series, and with other series", () => {
+    const sheet = echartsToSheet({
+      option: {
+        series: [
+          { name: "a", data: [[1, 2], { value: [3, 4] }] },
+          { name: "b", data: [{ value: [5, 6] }] },
+        ],
+      },
+    });
+
+    expect(sheet.columns.map((c) => c.header)).toEqual(["系列", "X", "Y"]);
+    expect(sheet.data).toEqual([
+      { 系列: "a", X: 1, Y: 2 },
+      { 系列: "a", X: 3, Y: 4 },
+      { 系列: "b", X: 5, Y: 6 },
+    ]);
+  });
+
+  it("still rejects scatter data (either spelling) mixed with name/value data", () => {
+    expect(() =>
+      echartsToSheet({
+        option: {
+          series: [{ name: "s", data: [[1, 2], { name: "n", value: 3 }] }],
+        },
+      }),
+    ).toThrow(/mixing scatter coordinate data/);
+
+    expect(() =>
+      echartsToSheet({
+        option: {
+          series: [{ name: "s", data: [{ value: [1, 2] }, "plain"] }],
+        },
+      }),
+    ).toThrow(/mixing scatter coordinate data/);
+  });
+
   it("rejects dataset mode instead of guessing", () => {
     expect(() =>
       echartsToSheet({

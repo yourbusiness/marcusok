@@ -124,7 +124,7 @@ await exportExcel({
 | `build`    | 工作簿构建（按实际构建次数报告，含兜底重试——失败后走流式兜底会再报告一次）                                                                                                                                            |
 | `download` | 浏览器触发下载（`download: false` 时不报告；Node 下无此阶段）                                                                                                                                                         |
 
-> `onPhase` 只反映各阶段耗时，不影响 `ExportResult.duration`（始终测量完整导出）。
+> `onPhase` 只反映各阶段耗时，不影响 `ExportResult.duration`（主线程路由为整次导出总耗时；worker 路由的 duration 只覆盖 Worker 内耗时）。
 
 ## 关闭自动下载
 

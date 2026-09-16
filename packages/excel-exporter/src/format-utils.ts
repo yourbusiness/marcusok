@@ -7,11 +7,15 @@ export const DEFAULT_DATETIME_PATTERN = "yyyy-MM-dd HH:mm";
 
 /** Safely stringify any value to a string (objects -> JSON, null/undef -> '').
  *  Symbols/functions are not JSON-serializable (JSON.stringify returns
- *  undefined for them); String() them so the cell never receives a non-string. */
+ *  undefined for them); String() them so the cell never receives a non-string.
+ *  Invalid Dates stringify as "Invalid Date" — toISOString() would throw a
+ *  RangeError and fail the whole export over one bad cell (see toJsDate for
+ *  the same NaN guard on the parsing side). */
 export function toStr(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date)
+    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
   if (
     typeof value === "number" ||
     typeof value === "boolean" ||
@@ -29,8 +33,16 @@ export function toStr(value: unknown): string {
  */
 export function applyFormat(value: unknown, spec: FormatSpec): string | number {
   switch (spec.type) {
-    case "enum":
-      return spec.map[toStr(value)] ?? spec.fallback ?? toStr(value);
+    case "enum": {
+      // Own-property lookup: a plain `spec.map[key]` walks the prototype
+      // chain, so values like "constructor" / "toString" / "__proto__" that
+      // the map does not define would find Object.prototype members (non-
+      // nullish) and bypass the fallback, writing "function Object() {...}"
+      // into the cell instead of the configured fallback text.
+      const key = toStr(value);
+      const mapped = Object.hasOwn(spec.map, key) ? spec.map[key] : undefined;
+      return mapped ?? spec.fallback ?? key;
+    }
     case "date": {
       const d = toJsDate(value);
       return d === null ? toStr(value) : dateToSerial(d);

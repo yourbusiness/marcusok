@@ -75,6 +75,40 @@ function isCoordinatePair(value: EChartsDatum): value is [number, number] {
 }
 
 /**
+ * Object-form scatter datum: `{ value: [x, y] }` (an optional `name` is
+ * accepted and ignored — the scatter layout has no name column). ECharts
+ * accepts this shape interchangeably with the bare `[x, y]` pair, so the
+ * coordinate detection below must recognize both or the object form would
+ * silently fall through to the name/value branch and stringify the pair.
+ */
+function isCoordinateDatum(
+  value: EChartsDatum,
+): value is { name?: string; value: [number, number] } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    isCoordinatePair(value.value as EChartsDatum)
+  );
+}
+
+/** A datum of either scatter form: bare pair or object-wrapped pair. */
+function isScatterItem(
+  value: EChartsDatum,
+): value is [number, number] | { name?: string; value: [number, number] } {
+  return isCoordinatePair(value) || isCoordinateDatum(value);
+}
+
+/** Unwrap either scatter form into its [x, y] pair. */
+function asCoordinatePair(value: EChartsDatum): [number, number] {
+  if (isCoordinatePair(value)) return value;
+  if (isCoordinateDatum(value)) return value.value;
+  // Callers filter through isScatterItem first; keep the failure loud if
+  // that invariant ever breaks instead of returning a bogus pair.
+  throw new Error("[excel-exporter] internal: not a scatter datum");
+}
+
+/**
  * Long/item layouts use the header texts themselves as row keys
  * (`{ [seriesHeader]: name, [valueHeader]: item }`), so two identical headers
  * would silently overwrite each other's column. Reject duplicates up front,
@@ -190,10 +224,10 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
   const valueHeader = input.valueHeader ?? DEFAULT_VALUE_HEADER;
 
   const allCoordinate = series.every((s) =>
-    (s.data ?? []).every((item) => isCoordinatePair(item)),
+    (s.data ?? []).every((item) => isScatterItem(item)),
   );
   const anyCoordinate = series.some((s) =>
-    (s.data ?? []).some((item) => isCoordinatePair(item)),
+    (s.data ?? []).some((item) => isScatterItem(item)),
   );
 
   if (anyCoordinate && !allCoordinate) {
@@ -210,8 +244,9 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
     for (let i = 0; i < series.length; i++) {
       const name = seriesName(series[i], i);
       for (const item of series[i].data ?? []) {
-        if (!isCoordinatePair(item)) continue;
-        data.push({ [seriesHeader]: name, [xKey]: item[0], [yKey]: item[1] });
+        if (!isScatterItem(item)) continue;
+        const [x, y] = asCoordinatePair(item);
+        data.push({ [seriesHeader]: name, [xKey]: x, [yKey]: y });
       }
     }
     return {
@@ -234,7 +269,7 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
     const name = seriesName(series[i], i);
     for (let j = 0; j < (series[i].data ?? []).length; j++) {
       const item = (series[i].data ?? [])[j];
-      if (isCoordinatePair(item)) continue;
+      if (isScatterItem(item)) continue;
       if (item !== null && typeof item === "object") {
         data.push({
           [seriesHeader]: name,
@@ -268,7 +303,9 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
  * Supported shapes:
  * - `xAxis.data` + multiple one-dimensional `series[].data` (wide/long).
  * - pie-like `series[].data: { name, value }[]` (long).
- * - scatter-like `series[].data: [x, y][]` (long).
+ * - scatter-like `series[].data: [x, y][]` or `{ value: [x, y] }[]` (long) —
+ *   the two ECharts spellings of the same shape, accepted individually or
+ *   mixed with each other, but not with name/value data.
  *
  * `dataset` mode and mixed coordinate/name-value series are rejected
  * explicitly rather than silently producing a misleading table.
