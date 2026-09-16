@@ -59,6 +59,14 @@ await exportExcel({
 });
 ```
 
+This produces a 3-row header:
+
+| Row | A       | B                       | C      | D                | E      |
+| --- | ------- | ----------------------- | ------ | ---------------- | ------ |
+| 1   | Product | Revenue (merged B–E)    |        |                  |        |
+| 2   |         | This month (merged B–C) |        | YTD (merged D–E) |        |
+| 3   |         | Qty                     | Amount | Qty              | Amount |
+
 Rules:
 
 - Leaf columns (no `children`) need a `key`; group columns may omit it and contribute header rows only;

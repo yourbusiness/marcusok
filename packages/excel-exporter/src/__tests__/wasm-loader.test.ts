@@ -116,6 +116,56 @@ describe("WasmLoader error recovery", () => {
     }
   });
 
+  it("treats an equal URL object as unchanged (compares by string, not reference)", async () => {
+    // URL 对象每次构造都是新引用：若 updateOptions 用 !== 比较，同一地址
+    // 会被反复判为"变更"，已 ready 的 loader 被不断 reset 并刷幂等警告。
+    // 必须按 String 归一化比较（与 export.worker.ts 的 loadedWasmKey 一致）。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      initWasmMock.mockResolvedValue(undefined);
+      const loader = makeLoader("https://cdn.example.com/x.wasm");
+      await loader.ensureLoaded();
+      expect(loader.isReady).toBe(true);
+
+      loader.updateOptions({
+        wasmUrl: new URL("https://cdn.example.com/x.wasm"),
+      });
+      expect(loader.isReady).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
+
+      await loader.ensureLoaded();
+      expect(initWasmMock).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("a superseded load must not stamp over the successor's ready state", async () => {
+    // 时序：加载 A 的 attempt 1 失败进入 300ms 退避 → 退避期间换 URL
+    // （reset）并完成新加载 B（ready）→ A 醒来跑 attempt 2。修复前
+    // loadWithRetry 在每个 attempt 无条件写 state="loading"，会把 B 写好
+    // 的 ready 覆盖掉且无人写回，isReady() 误报 false。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      initWasmMock.mockRejectedValueOnce(new Error("old url fails"));
+      const loader = makeLoader("a.wasm");
+      const superseded = loader.ensureLoaded();
+      // 等 attempt 1 确实发生（此后 A 处于退避等待中）。
+      await vi.waitFor(() => expect(initWasmMock).toHaveBeenCalledTimes(1));
+
+      loader.updateOptions({ wasmUrl: "b.wasm" });
+      initWasmMock.mockResolvedValue(undefined);
+      await loader.ensureLoaded();
+      expect(loader.isReady).toBe(true);
+
+      // A 的退避到期、attempt 2 跑完并 settle 之后，ready 必须保持。
+      await superseded;
+      expect(loader.isReady).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("falls back to initWasm when the mocked modern-xlsx lacks initWasmSync", async () => {
     // The mock factory in this file has no initWasmSync export (test doubles
     // often won't): Node auto-init must step aside instead of throwing when

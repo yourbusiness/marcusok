@@ -103,6 +103,12 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     target: "es2022",
+    // copy-wasm 挂在 onSuccess 而非只在 "build" script：本配置 clean:true，
+    // watch 模式首次构建即清空 dist（连带删掉上次 build 复制的 wasm）且
+    // 此后不再回补，开着 pnpm dev 时 Node 自动初始化/集成测试会因
+    // dist/modern-xlsx.wasm 缺失而失败。onSuccess 在普通构建与 watch 的
+    // 每次重建后都执行，"build" 与 "dev" 两条链路由此统一回补。
+    onSuccess: "node scripts/copy-wasm.mjs",
     // Browser resolution: without this, tsup defaults to platform "node" and
     // fflate's Node entry bakes a top-level `import { createRequire } from
     // "module"` shim into the bundle, which hard-fails consumer browser

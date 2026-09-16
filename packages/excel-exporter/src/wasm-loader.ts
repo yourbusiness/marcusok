@@ -73,24 +73,38 @@ export class WasmLoader {
    * instead of throwing forever.
    *
    * Caveat (modern-xlsx 1.2.0 verified): `initWasm` is idempotent with a
-   * module-level "first successful init wins" guard. On a thread where WASM
-   * is already initialized the re-attempt is a silent no-op — the reset only
-   * guarantees initWasm is *called* with the new URL, which modern-xlsx
-   * ignores if its module-level `initialized` flag is already set. The new
-   * URL genuinely takes effect only in a fresh JS realm (a page reload, or a
-   * worker created after terminateWorker()). updateOptions warns when this
-   * caveat applies.
+   * module-level "first successful init wins" guard, and keeps a single
+   * in-flight promise: (a) on a thread where WASM is already initialized the
+   * re-attempt is a silent no-op — the reset only guarantees initWasm is
+   * *called* with the new URL, which modern-xlsx ignores; (b) while an
+   * initial fetch is still pending (e.g. hung past timeoutMs), every retry
+   * and every new URL resolves to that same pending promise — the new URL is
+   * only picked up after the in-flight fetch rejects (modern-xlsx clears its
+   * promise on rejection), and never if it eventually succeeds. The new URL
+   * genuinely takes effect only in a fresh JS realm (a page reload, or a
+   * worker created after terminateWorker()). updateOptions warns when any
+   * part of this caveat applies.
    */
   updateOptions(opts: LoaderOptions): void {
+    // 按 String 归一化比较：URL 对象经结构化克隆/重复构造后是全新引用，
+    // `!==` 会把同一地址误判为"变更"（反复 reset 已加载状态并刷警告）。
+    // 与 export.worker.ts 的 loadedWasmKey 归一化保持一致。
     const urlChanged =
-      opts.wasmUrl !== undefined && opts.wasmUrl !== this.opts.wasmUrl;
-    if (urlChanged && this.state === "ready") {
+      opts.wasmUrl !== undefined &&
+      (this.opts.wasmUrl === undefined
+        ? true
+        : String(opts.wasmUrl) !== String(this.opts.wasmUrl));
+    if (urlChanged && (this.state === "ready" || this.state === "loading")) {
       console.warn(
-        "[excel-exporter] wasmUrl changed after WASM already initialized on this thread. " +
-          "modern-xlsx's initWasm is idempotent (first successful init wins), so the already-loaded " +
-          "module stays in effect and the new URL is ignored by initWasm. The new URL takes effect " +
-          "only in a fresh JS realm (reload the page, or terminateWorker() before the next export " +
-          "so a new worker is created).",
+        "[excel-exporter] wasmUrl changed while WASM is " +
+          (this.state === "ready" ? "already initialized" : "still loading") +
+          " on this thread. modern-xlsx's initWasm is idempotent and keeps a single " +
+          "module-level in-flight promise: the already-loaded module stays in effect, " +
+          "and a still-pending initial fetch cannot be aborted or redirected — the new " +
+          "URL is picked up only by the next fresh initWasm call after the in-flight " +
+          "one settles (or never, if it already succeeded). The new URL genuinely takes " +
+          "effect only in a fresh JS realm (reload the page, or terminateWorker() before " +
+          "the next export so a new worker is created).",
       );
     }
     this.opts = { ...this.opts, ...opts };
@@ -108,6 +122,11 @@ export class WasmLoader {
       );
     }
     if (this.promise) return this.promise;
+    // 状态写入统一收敛到本方法（带 promise 身份校验）：loadWithRetry 曾在
+    // 每个 attempt 无条件写 state="loading"，被取代的旧加载（重试退避期间
+    // 换了 URL）会把新加载已写好的 "ready" 覆盖回 "loading"，且无人再写回，
+    // isReady() 因此误报 false。
+    this.state = "loading";
     // Capture the promise locally: updateOptions() may null this.promise while
     // the load is in flight (wasmUrl changed), and this load must not clobber
     // the reset state when it settles -- otherwise a superseded old-URL load
@@ -190,7 +209,6 @@ export class WasmLoader {
         );
       });
       try {
-        this.state = "loading";
         await Promise.race([initWasm(wasmUrl), timeout]);
         return;
       } catch (e) {
@@ -205,7 +223,11 @@ export class WasmLoader {
       }
     }
     throw new Error(
-      `[excel-exporter] WASM load failed after ${maxRetries} attempts: ${(lastErr as Error).message}`,
+      // 非 Error 的 rejection（如字符串）没有 message 字段，强转会得到
+      // "...: undefined"，降级为 String() 保留原始信息。
+      `[excel-exporter] WASM load failed after ${maxRetries} attempts: ${
+        lastErr instanceof Error ? lastErr.message : String(lastErr)
+      }`,
     );
   }
 }
@@ -227,10 +249,11 @@ export function getWasmLoader(): WasmLoader {
  * makes the next export retry with the new settings.
  *
  * Note: changing `wasmUrl` after a *successful* load does not reload WASM on
- * a thread that already initialized it — modern-xlsx's `initWasm` is
- * idempotent and keeps the first successfully loaded module (see
- * WasmLoader.updateOptions). The new URL takes effect in a fresh JS realm
- * only (page reload / a worker created after `terminateWorker()`), and
+ * a thread that already initialized it, and changing it while the initial
+ * fetch is still in flight cannot redirect that fetch — modern-xlsx's
+ * `initWasm` is idempotent and keeps the first successfully loaded module
+ * (see WasmLoader.updateOptions). The new URL takes effect in a fresh JS
+ * realm only (page reload / a worker created after `terminateWorker()`), and
  * updateOptions prints a warning when the caveat applies.
  */
 export function configureWasm(opts: LoaderOptions): void {

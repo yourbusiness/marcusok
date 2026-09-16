@@ -141,6 +141,64 @@ function validateInput(options: ExportOptions): void {
     }
     const { leaves } = flattenColumnTree(sheet.columns);
     validateMerges(sheet, leaves.length);
+    // 数值型布局/格式字段的前置校验：缺了这层，非法 width/freezeRows 会直通
+    // 引擎并以晦涩的 serde 错误失败（"JSON parse error: invalid type: null,
+    // expected f64"），随后整份导出被降级为无样式 stream；而同一输入在
+    // >=50k 的 stream 路由却被静默忽略（width）——同一错误跨阈值一边降级
+    // 一边成功。在此拦截使两条路径行为一致，且报错能定位到具体的列/表。
+    if (
+      sheet.freezeRows !== undefined &&
+      (typeof sheet.freezeRows !== "number" ||
+        !Number.isInteger(sheet.freezeRows) ||
+        sheet.freezeRows < 0)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" freezeRows must be a non-negative integer`,
+      );
+    }
+    for (const col of leaves) {
+      // OOXML 中 width=0 合法（隐藏列），负数与非有限数非法；只有叶子列
+      // 消费 width，分组列上的 width 本就被忽略。
+      if (
+        col.width !== undefined &&
+        (typeof col.width !== "number" ||
+          !Number.isFinite(col.width) ||
+          col.width < 0)
+      ) {
+        throw new Error(
+          `[excel-exporter] column "${col.header}" width must be a finite non-negative number`,
+        );
+      }
+      if (col.format && typeof col.format === "object") {
+        const spec = col.format;
+        // decimals 两路径共享：Workbook 路径拼 numFormat 字符串（任意值都
+        // "能出"），stream 路径烧入 toFixed(decimals)——收敛到 toFixed 自身
+        // 的 0..100 上限，同一 spec 才不会在 50k 行上下一边成功一边抛错。
+        if (
+          spec.type === "number" &&
+          spec.decimals !== undefined &&
+          (!Number.isInteger(spec.decimals) ||
+            spec.decimals < 0 ||
+            spec.decimals > 100)
+        ) {
+          throw new Error(
+            `[excel-exporter] column "${col.header}" format.decimals must be an integer between 0 and 100`,
+          );
+        }
+        // padding.length：非整数/负数会让 padStart 抛 RangeError 或静默不
+        // 填充，超大值会生成巨型字符串，均在渲染期才爆——前置拦截。
+        if (
+          spec.type === "padding" &&
+          (!Number.isInteger(spec.length) ||
+            spec.length < 0 ||
+            spec.length > 10_000)
+        ) {
+          throw new Error(
+            `[excel-exporter] column "${col.header}" format.length must be an integer between 0 and 10000`,
+          );
+        }
+      }
+    }
   }
 }
 
@@ -340,6 +398,17 @@ export async function exportExcel(
     try {
       return await runOnMainThread();
     } catch (e) {
+      // 与下方 retryOnMainThread 的防护对齐：首次尝试已经是 fast stream
+      // （Node stream 路由）时，finishWithStream 重试等于对同一输入重跑一遍
+      // 确定性失败的构建——直接失败，不再白付第二次构建的时间与告警。
+      if (picked.workerMode === "stream") {
+        options.onProgress?.(1);
+        return {
+          success: false,
+          error: e as Error,
+          duration: performance.now() - start,
+        };
+      }
       return finishWithStream((e as Error).message);
     }
   }

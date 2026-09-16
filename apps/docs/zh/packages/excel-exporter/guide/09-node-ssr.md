@@ -44,8 +44,6 @@ await getWasmLoader().ensureLoaded(); // 一次性读取并编译随包发布的
 
 > 不要用单独安装的 `modern-xlsx` 的 `initWasmSync` 来预热：引擎已打包进 `@marcusok/excel-exporter`，外部副本是另一个模块实例，预热不到打包内的这一份。
 
-也可以通过 `configureWasm({ wasmUrl })` 指定一个可 fetch 的 HTTP 地址（走网络加载而非磁盘读取）。
-
 ## 配合框架（如 Next.js Route Handler）
 
 ```ts

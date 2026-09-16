@@ -8,7 +8,7 @@
 | `columns`      | `ColumnConfig[]`            | yes      | Column definitions                                                        |
 | `data`         | `Record<string, unknown>[]` | yes      | Row data                                                                  |
 | `headerStyle?` | `CellStyle`                 | —        | Default header style; overridden by column-level `headerStyle`            |
-| `freezeRows?`  | `number`                    | —        | Freeze the first N header rows                                            |
+| `freezeRows?`  | `number`                    | —        | Freeze the first N header rows; validated as a non-negative integer       |
 | `merges?`      | `MergeRange[]`              | —        | Merged cells (relative to the data area)                                  |
 | `autoFilter?`  | `boolean`                   | —        | Header auto filter                                                        |
 
@@ -19,7 +19,7 @@
 | `key?`         | `string`                 | leaf columns | Field name on the data row; group columns (with `children`) may omit it                                                                       |
 | `header`       | `string`                 | yes          | Header text (leaf and group columns alike)                                                                                                    |
 | `children?`    | `ColumnConfig[]`         | —            | Group column: produces a multi-row header; its header cell merges across all descendant leaf columns. `children: []` is a leaf                |
-| `width?`       | `number`                 | —            | Column width (Excel character units); leaf columns only                                                                                       |
+| `width?`       | `number`                 | —            | Column width (Excel character units; `0` hides the column); validated as a finite non-negative number; leaf columns only                      |
 | `style?`       | `CellStyle`              | —            | Data-cell style (headers excluded); leaf columns only                                                                                         |
 | `headerStyle?` | `CellStyle`              | —            | Header style for this column (group header cells included); wins over sheet-level `headerStyle`                                               |
 | `format?`      | `FormatSpec \| Function` | —            | Value formatting; leaf columns only; functions run on main-thread paths and are stripped on the browser worker path (see the FormatSpec page) |

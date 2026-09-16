@@ -425,3 +425,127 @@ describe("empty columns", () => {
     );
   });
 });
+
+// 数值型布局/格式字段的跨路径一致性校验：非法 width/freezeRows/decimals
+// 此前在 Workbook 路径以晦涩的引擎 serde 错误失败并触发整份降级，在
+// stream 路径却静默忽略或抛 RangeError——前置校验让两条路径同样直接失败。
+describe("numeric field validation (width / freezeRows / format spec)", () => {
+  const cases: Array<{
+    label: string;
+    sheet: Partial<SheetConfig>;
+    message: RegExp;
+  }> = [
+    {
+      label: "width NaN",
+      sheet: { columns: [{ key: "a", header: "A", width: NaN }] },
+      message: /column "A" width must be a finite non-negative number/,
+    },
+    {
+      label: "width negative",
+      sheet: {
+        columns: [
+          { key: "a", header: "A" },
+          { key: "b", header: "B", width: -5 },
+        ],
+      },
+      message: /column "B" width must be a finite non-negative number/,
+    },
+    {
+      label: "width non-number (JS caller)",
+      sheet: {
+        columns: [{ key: "a", header: "A", width: "20" as unknown as number }],
+      },
+      message: /column "A" width must be a finite non-negative number/,
+    },
+    {
+      label: "freezeRows fractional",
+      sheet: { freezeRows: 1.5 },
+      message: /sheet "S" freezeRows must be a non-negative integer/,
+    },
+    {
+      label: "freezeRows negative",
+      sheet: { freezeRows: -1 },
+      message: /sheet "S" freezeRows must be a non-negative integer/,
+    },
+    {
+      label: "decimals negative",
+      sheet: {
+        columns: [
+          {
+            key: "a",
+            header: "A",
+            format: { type: "number", decimals: -1 },
+          },
+        ],
+      },
+      message:
+        /column "A" format\.decimals must be an integer between 0 and 100/,
+    },
+    {
+      label: "decimals above toFixed limit",
+      sheet: {
+        columns: [
+          {
+            key: "a",
+            header: "A",
+            format: { type: "number", decimals: 105 },
+          },
+        ],
+      },
+      message:
+        /column "A" format\.decimals must be an integer between 0 and 100/,
+    },
+    {
+      label: "padding length negative",
+      sheet: {
+        columns: [
+          {
+            key: "a",
+            header: "A",
+            format: { type: "padding", fill: "0", length: -1 },
+          },
+        ],
+      },
+      message:
+        /column "A" format\.length must be an integer between 0 and 10000/,
+    },
+  ];
+
+  for (const { label, sheet, message } of cases) {
+    it(`fails fast on ${label} (no engine call, no fallback)`, async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const r = await exportExcel({
+          filename: "numeric-validation",
+          download: false,
+          mode: "main",
+          sheets: [baseSheet(sheet)],
+        });
+        expect(r.success).toBe(false);
+        expect(r.error?.message).toMatch(message);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  }
+
+  it("width 0 stays legal (OOXML hides the column) and freezeRows 0 is a no-op", async () => {
+    const r = await exportExcel({
+      filename: "numeric-validation-legal",
+      download: false,
+      mode: "main",
+      sheets: [
+        baseSheet({
+          freezeRows: 0,
+          columns: [
+            { key: "a", header: "A", width: 0 },
+            { key: "b", header: "B" },
+          ],
+        }),
+      ],
+    });
+    expect(r.success).toBe(true);
+    expect(r.error).toBeUndefined();
+  });
+});

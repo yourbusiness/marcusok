@@ -47,7 +47,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsup && node scripts/copy-wasm.mjs",
+    "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -38,7 +38,7 @@ Accepts `Date` / parseable string / timestamp. The Workbook path writes an Excel
 { type: "number", decimals: 2, thousands: true }
 ```
 
-`decimals` defaults to 0, `thousands` to false. **Always set `decimals` explicitly**: the Workbook path keeps full precision rendered via `numFormat`, while Stream/fallback paths bake decimals into the stored value — the two can differ otherwise.
+`decimals` defaults to 0, `thousands` to false; `decimals` is validated as an integer in 0–100 (the `toFixed` ceiling the stream path relies on). **Always set `decimals` explicitly**: the Workbook path keeps full precision rendered via `numFormat`, while Stream/fallback paths bake decimals into the stored value — the two can differ otherwise.
 
 Cross-path `thousands`: the Workbook path renders the separator via an auto-injected `#,##0` `numFormat`; the stream path (>= 50,000 rows / degraded exports) cannot use `numFormat` and keeps the cell a **number**, so separators are not visible there (baking them into the value would turn data cells into text and break downstream calculations).
 

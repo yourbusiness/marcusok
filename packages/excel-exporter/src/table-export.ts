@@ -64,13 +64,29 @@ function normalizeHeader(
  * header); leaves need a usable key. Group `width`/`style`/`format` are not
  * meaningful (no data cells), so they are dropped.
  */
-function toColumnConfig(col: TableColumnInput, index: number): ColumnConfig {
+function toColumnConfig(
+  col: TableColumnInput,
+  index: number,
+  // 检测环必须在转换阶段做：递归 map 先于 exportExcel 的
+  // flattenColumnTree 执行，循环 children 若不在本层拦截，用户拿到的是
+  // 栈溢出而非 flattenColumnTree 里那个清晰的环错误。
+  visiting: Set<TableColumnInput> = new Set(),
+): ColumnConfig {
+  if (visiting.has(col)) {
+    throw new Error(
+      "[excel-exporter] circular children reference in table columns",
+    );
+  }
   const key = col.key ?? col.dataIndex ?? col.prop;
   const header = normalizeHeader(
     col.header ?? col.title ?? col.label,
     key ?? `group-${index}`,
   );
-  const children = col.children?.map((child, i) => toColumnConfig(child, i));
+  visiting.add(col);
+  const children = col.children?.map((child, i) =>
+    toColumnConfig(child, i, visiting),
+  );
+  visiting.delete(col);
 
   if (children?.length) {
     return {

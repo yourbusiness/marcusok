@@ -10,6 +10,19 @@ import {
 import { readBuffer } from "./setup";
 
 describe("tableToSheet / exportTable", () => {
+  it("rejects circular children with a clear error instead of a stack overflow", () => {
+    // 转换阶段的递归 map 先于 flattenColumnTree 的环检测执行：循环引用
+    // 若不在 toColumnConfig 拦截，用户拿到的是 RangeError 栈溢出。
+    const group: Record<string, unknown> = { title: "G", children: [] };
+    (group.children as unknown[]).push(group);
+    expect(() =>
+      tableToSheet({
+        columns: [group as never],
+        data: [],
+      }),
+    ).toThrow(/circular children reference in table columns/);
+  });
+
   it("normalizes Ant Design and Element Plus column naming styles", () => {
     const sheet = tableToSheet({
       sheetName: "Orders",

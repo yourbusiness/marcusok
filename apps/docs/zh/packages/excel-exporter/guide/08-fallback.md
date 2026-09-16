@@ -7,7 +7,7 @@
 - 环境不支持 `WebAssembly`（仅影响 main 与 Worker + Workbook 路径；≥ 50,000 行的 stream 路径不依赖 WASM，不受此条影响）；
 - `modern-xlsx.wasm` 加载失败（共尝试 `maxRetries` 次后仍失败，默认 3 次含首次）；
 - Worker 路径失败（如 worker 资产 404）**且**自动的主线程重试也失败——Workbook 路由下重试会先在主线程运行 modern-xlsx（样式保留），流式兜底是最后保底，而非 Worker 失败后的直接下一步。≥ 50,000 行的 stream 路由下，重试本身就是同一个快速流（相同代码、相同输入），失败即终局，不会再做第三次尝试；
-- 构建阶段抛错（如 modern-xlsx 构建期内部错误）。注意：结构性输入错误（非法/重复表名、越界合并区间等）不进入此链路——前置校验在任何路由运行前即拦截，直接返回 `success: false`，不会发起兜底尝试。
+- 主线程 Workbook 路由的构建阶段抛错（如 modern-xlsx 构建期内部错误）。Node 上的 stream 路由（无 `window`，显式 `mode: "stream"` 或 auto ≥ 50,000 行）构建抛错则直接终局——首次尝试已经在同一份输入上跑过快速流，没有可重试或可兜底的路径。注意：结构性输入错误（非法/重复表名、越界合并区间、非数值或负数 `width`、非整数 `freezeRows`、越界 `format.decimals` 等）不进入此链路——前置校验在任何路由运行前即拦截，直接返回 `success: false`，不会发起兜底尝试。
 
 ## 行为差异
 

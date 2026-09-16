@@ -84,7 +84,9 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
     const resp: WorkerResponse = {
       id,
       ok: false,
-      error: (err as Error).message,
+      // 兜底非 Error 的 throw（如字符串）：直接取 .message 会得到
+      // undefined，主线程只能落到 "worker unknown error"，丢失原始信息。
+      error: err instanceof Error ? err.message : String(err),
     };
     (self as unknown as Worker).postMessage(resp);
   }

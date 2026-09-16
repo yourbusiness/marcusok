@@ -7,8 +7,11 @@
  * `@marcusok/excel-exporter/dist/modern-xlsx.wasm?url` resolvable, which is the
  * zero-plugin asset path documented in the README.
  *
- * Runs after `tsup` (see the "build" script); dist/modern-xlsx.wasm ships with
- * the package via the "files": ["dist"] entry.
+ * Runs after `tsup` via the main config's onSuccess hook (see tsup.config.ts),
+ * covering both the one-shot "build" script and every "dev" watch rebuild —
+ * otherwise the clean:true wipe at watch startup leaves dist without the wasm
+ * (Node auto-init / integration tests then fail). dist/modern-xlsx.wasm ships
+ * with the package via the "files": ["dist"] entry.
  */
 import { copyFileSync, mkdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";

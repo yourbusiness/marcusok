@@ -24,6 +24,8 @@
 
 > 🔄 **v2.12（梳理修复 + 快照再对齐，2026-09-16）**：① 代码修复四处——`format-utils.ts` 的 `toStr` 对 Invalid Date 防御（原 `toISOString()` 抛 RangeError 使四条导出路径整体失败，现写 `"Invalid Date"` 可见字符串，与 `toJsDate` 的 NaN 防御对齐）、enum map 改 `Object.hasOwn` 自有属性查找（`"constructor"`/`"__proto__"` 等原型链键原会绕过 fallback 写出 `function Object() {...}` 文本）；`echarts-export.ts` 识别对象形式散点数据 `{ value: [x, y] }`（原静默落入 name/value 分支、坐标被 stringify 成 `"[1,2]"` 文本，与顶层数组形式的混排显式拒绝自相矛盾）；`index.ts` 的 `validateInput` 补 filename 非空前置校验（原 JS 调用者漏传时浏览器路径 `success:true` 但永不下载、warn 只报晦涩 TypeError）；`download.ts` 的 `triggerDownload` 以 try/finally 保证异常路径也调度 `revokeObjectURL`（沙箱 DOM 抛错时 objectURL 原会泄漏并保活整个 Blob）。新增回归用例 7 个（134 全量 / CI 实跑 130）。② 快照同步——4.4（types.ts filename 注释 + format-utils 修复段）、4.8（fast-xlsx.ts 整体刷新至现行：v2.6 后该快照停留在多级表头与合并落地之前，`merges` 仍在 skipped 清单、表头仍是单行写法）、4.10（index.ts filename 校验）、4.13（download.ts try/finally）；4.7 补【历史】标注（快照自 v1.1.0 多级表头改造起停留旧版，v2.9 已注声明、本次补齐标签）。③ 5.3 stream 限制注修正——现行 fast-xlsx 支持多行表头与数据区 `merges`（输出 `<mergeCells>`），`width`/`style`/`headerStyle`/`freezeRows`/`autoFilter` 仍为 warn 后丢弃。④ 文档站同步——guide/10（zh/en）`ExportResult.duration` 描述补 worker 路由例外（2.1.3 源码注释已改、两侧漏同步）；api/01（zh/en）与包 README 补散点两种写法（`[x,y]` / `{ value: [x,y] }`）。
 
+> 🔄 **v2.13（梳理修复：降级链防护缺口 + 数值字段跨路径校验 + wasm-loader 状态机，2026-09-16）**：① **代码修复六处**——`index.ts` Node stream 路由（无 `window` 的 `mode:"stream"` / auto ≥50k）build 期抛错改为直接失败（原走 `finishWithStream` 对同一输入重跑一遍确定性失败的 fast stream，全量构建白跑两遍；与 worker 链 `retryOnMainThread` 的既有防护对齐）；`validateInput` 补数值字段前置校验（`width` 有限非负——0 合法为隐藏列、`freezeRows` 非负整数、`format.decimals` 0–100 整数、`padding.length` 0–10000 整数），修复跨路径分裂（原 Workbook 路径以晦涩 serde 错误失败并整份降级无样式 stream，stream 路径却静默忽略或抛 `toFixed` RangeError，同一输入在 50k 阈值上下行为相反）；`table-export.ts` 的 `toColumnConfig` 在转换阶段做环检测（原 `exportTable` 循环 `children` 先于 `flattenColumnTree` 的 `assertAcyclic` 无限递归，用户拿到栈溢出而非清晰错误）；`wasm-loader.ts` 状态写入收敛到 `ensureLoaded` 的 promise 身份校验处（原 `loadWithRetry` 每个 attempt 无条件写 `loading`，被取代的旧加载会把新加载的 `ready` 覆盖掉且无人写回，`isReady()` 误报）、`wasmUrl` 比较按 `String` 归一化（URL 对象同地址不再被 `!==` 误判为变更而反复 reset；与 `export.worker.ts` 的 `loadedWasmKey` 归一化对齐）、caveat/警告补“初始化进行中”档（modern-xlsx `initPromise` in-flight 期间换 URL/重试拿到同一 pending promise）、非 Error rejection 的消息 `String()` 兜底；`export.worker.ts` 的 `error` 字段同样兜底非 Error throw。`types.ts` 注释修正两处（worker 路由 `duration` 实际含主线程序列化与 worker 往返，非“仅 worker 内”；`autoFilter` 实际范围是末表头行+数据行，非“header range”字面义）。② **工程**——`copy-wasm` 自 `build` 脚本后置移入 tsup 主配置 `onSuccess`（`build` 简化为 `tsup`）：主配置 `clean:true` 在 dev watch 首次构建清空 dist 后无 copy 步骤回补，开着 `pnpm dev` 时 `dist/modern-xlsx.wasm` 缺失连坐 Node 自动初始化与集成测试；onSuccess 对一次性构建与每次 watch 重建均生效。③ **测试**——新增 `export-worker.test.ts` 直接驱动 worker 消息协议（此前 worker 链仅测超时一支：成功路径、init 幂等（loadedWasmKey 字符串归一化）、transfer、错误字符串化均零覆盖，两端 `WorkerResponse` 形状不同仅靠约定对齐）；A1/A3/A4/A5/A6/A9 各配回归用例。④ **快照同步**——4.2（2.1.4；`build` 简化）、4.3（onSuccess）、4.4（types.ts 注释）、4.5（wasm-loader 全量）、4.9（export.worker）、4.10（index.ts 全量）、3.3（`preview:docs` 滞留行——该行 2026-08-04 起即与 v2.11“已对齐”声明矛盾）。⑤ **文档站同步**——guide/08（zh/en）补 Node stream 终局语义与新校验清单、api/02（width/freezeRows 校验语义）、api/03（decimals 0–100）、guide/05（zh/en）补 `headerStyle` 交叉引用；zh 镜像漂移修复（zh/09 删除 en 侧不存在的独立句、en/10 补 zh 侧已有的 3 行表头结构示意表）。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -293,7 +295,7 @@ marcusok/
     "dev:play": "node scripts/dev.mjs play",
     "dev:docs": "node scripts/dev.mjs docs",
     "build:docs": "turbo run build --filter=@marcusok/docs",
-    "preview:docs": "pnpm --filter @marcusok/docs preview",
+    "preview:docs": "node scripts/dev.mjs preview-docs",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
@@ -704,7 +706,7 @@ packages/excel-exporter/
 ```json
 {
   "name": "@marcusok/excel-exporter",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "type": "module",
   "description": "Excel export engine built on modern-xlsx (Rust + WASM): declarative API, auto worker/stream routing, full cell styling.",
   "license": "MIT",
@@ -746,7 +748,7 @@ packages/excel-exporter/
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsup && node scripts/copy-wasm.mjs",
+    "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -769,7 +771,7 @@ packages/excel-exporter/
 }
 ```
 
-> **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照已是 2.1.3 现状（v2.11 自 2.1.1 同步：2.1.2 为纯文档发布，2.1.3 改 download.ts 的 `.xlsx` 后缀大小写并更新 types.ts 注释，见 4.13/4.4）。
+> **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照已是 2.1.4 现状（v2.11 自 2.1.1 同步 2.1.3；v2.13 同步 2.1.4：`build` 简化为 `tsup`，wasm 转发移入 tsup 主配置 onSuccess，见 4.2/4.3）。
 
 **设计要点**：
 
@@ -777,7 +779,7 @@ packages/excel-exporter/
 - 【历史】`modern-xlsx` 曾以 peerDep 声明以保证全局单实例（两份引擎并存时未初始化的那份会静默失败）；2.0 起改为构建期打包，引擎随本包分发，单实例问题随之消失，代价是产物体积含引擎（JS 打包进 chunk，wasm 随包发布）。
 - `exports` 暴露三个库 API 入口 + 资产子路径：① 主入口（`.`）；② 样式预设 `./styles`（按需 tree-shake）；③ `./worker-utils`（Worker 封装，入口名刻意避开 `./worker`，以免与 `modern-xlsx.worker.js` 混淆）；④ `./dist/export.worker.js`（自包含 Worker 脚本）；⑤ `./dist/modern-xlsx.wasm`（2.0 新增，供 `?url` 显式接线）；⑥ `./package.json`（运行时读版本号）。
 - `sideEffects: false`：让消费方的 bundler 能安全 tree-shake。
-- `files` 为 `dist` / `README.md` / `CHANGELOG.md` / `LICENSE`；`build` 脚本为 `tsup && node scripts/copy-wasm.mjs`（构建后把 wasm 转发进 dist）。
+- `files` 为 `dist` / `README.md` / `CHANGELOG.md` / `LICENSE`；`build` 脚本为 `tsup`（wasm 转发由 tsup 主配置的 `onSuccess` 执行，见 4.3——v2.13 起 dev watch 与 build 统一走该钩子回补 wasm）。
 - devDependencies：`@types/node`、`eslint`、`fflate`、`modern-xlsx`、`tsup`、`typescript`、`vitest`——引擎与压缩器在此声明（构建期打包用），「谁用谁声明」。
 
 ### 4.3 `tsup.config.ts`（构建）
@@ -888,6 +890,12 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     target: "es2022",
+    // copy-wasm 挂在 onSuccess 而非只在 "build" script：本配置 clean:true，
+    // watch 模式首次构建即清空 dist（连带删掉上次 build 复制的 wasm）且
+    // 此后不再回补，开着 pnpm dev 时 Node 自动初始化/集成测试会因
+    // dist/modern-xlsx.wasm 缺失而失败。onSuccess 在普通构建与 watch 的
+    // 每次重建后都执行，"build" 与 "dev" 两条链路由此统一回补。
+    onSuccess: "node scripts/copy-wasm.mjs",
     // Browser resolution: without this, tsup defaults to platform "node" and
     // fflate's Node entry bakes a top-level `import { createRequire } from
     // "module"` shim into the bundle, which hard-fails consumer browser
@@ -921,7 +929,7 @@ export default defineConfig([
 >
 > **`clean` 字段**：数组 config 中只有第一个设 `clean:true`，第二个设 `clean:false`。tsup 按数组顺序串行执行——第一个清空 `dist` 后产出主入口，第二个追加 worker 产物不清空。若两个都设 `clean:true`，第二个会清掉第一个的产物。
 >
-> **构建命令（v2.10 对齐）**：现行 `build` 脚本为 `"tsup && node scripts/copy-wasm.mjs"`——tsup 处理数组 config（两份配置的 `clean` 组合约束见上方注），后置脚本把 `modern-xlsx.wasm` 转发进 `dist`（`exports` 的 `./dist/modern-xlsx.wasm` 子路径即指它）。最终产物 `dist/export.worker.js`（ESM，自包含 modern-xlsx + fflate）包含在 `files` 字段内，随包发布。
+> **构建命令（v2.13 对齐）**：现行 `build` 脚本为 `"tsup"`——tsup 处理数组 config（两份配置的 `clean` 组合约束见上方注），主配置的 `onSuccess` 钩子执行 `node scripts/copy-wasm.mjs` 把 `modern-xlsx.wasm` 转发进 `dist`（`exports` 的 `./dist/modern-xlsx.wasm` 子路径即指它）。改挂 onSuccess 的动因：主配置 `clean:true` 在 dev watch 首次构建即清空 dist 且旧 `dev` 链（`tsup --watch`）无 copy 步骤，开着 `pnpm dev` 时 wasm 缺失会连坐 Node 自动初始化与集成测试；onSuccess 对一次性构建与每次 watch 重建都生效，两条链路统一回补。最终产物 `dist/export.worker.js`（ESM，自包含 modern-xlsx + fflate）包含在 `files` 字段内，随包发布。
 >
 > **S5 · Worker 自包含打包的 go/no-go 关卡**：上述「modern-xlsx 打进 worker」的技术路径已做最小验证——esbuild/tsup 打包时，modern-xlsx glue（`dist/modern-xlsx.worker.js` 源码核实）里的 `new URL("modern_xlsx_wasm_bg.wasm", import.meta.url)` 会被**原样保留**（v2.1 核实：worker.js glue 内确实是 `modern_xlsx_wasm_bg.wasm`；但 `dist/modern-xlsx.wasm` 也存在且是主入口 `detectWasmUrl()` 引用的文件，二者并存，见 2.1；实测 esbuild 不报错、不重写、不触发 asset 拷贝，因为 `.wasm` 不在 import graph 里）。运行时 worker 内 `import.meta.url` 指向 `export.worker.js`，本方案靠显式 `initWasm(wasmUrl)` 注入绕过该路径（见 4.9），故不依赖 `import.meta.url` 兜底。**但必须真机验证**：Phase 1 预研阶段需确认 ① tsup 产物 `export.worker.js` 体积合理（预期 modern-xlsx ESM ~133KB + 本库 worker 逻辑）；② `new Worker(url,{type:'module'})` 在 Chrome/Firefox/Safari 均能加载；③ worker 内 `initWasm(wasmUrl)` + `sheetAddAoa` + `wb.toBuffer()` 全链路跑通。若打包阶段报错（如 esbuild 对 wasm-bindgen glue 的 `__wbg_init` 处理异常），备选方案：worker 也 `external: ['modern-xlsx']`，改用运行时 `import(/* @vite-ignore */ url)` 动态加载或 import map（需消费方配合）。
 
@@ -1096,7 +1104,11 @@ export interface SheetConfig {
   freezeRows?: number;
   /** Merged cell ranges. */
   merges?: MergeRange[];
-  /** Whether to add an auto-filter over the header range. */
+  /**
+   * Whether to add an auto-filter. The filter range spans the last header row
+   * plus all data rows (Excel's filter semantics — the dropdown sits on the
+   * header row and covers the data beneath it), not the header rows alone.
+   */
   autoFilter?: boolean;
 }
 
@@ -1147,7 +1159,10 @@ export interface ExportOptions {
    * wall-clock duration in ms (0 means the phase did no work, e.g. WASM was
    * already loaded). Useful for metrics/play panels; does not affect
    * `ExportResult.duration` (which measures the whole export on main-thread
-   * routes; the worker route's duration covers the in-worker time only).
+   * routes; the worker route's duration is measured on the main thread from
+   * the call into `exportInWorker` — including the pre-post serialization and
+   * the worker round-trip — through Blob construction, so it is wider than
+   * the pure in-worker build time).
    */
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   /** Trigger browser download (default true). Set false to only return a Blob. */
@@ -1588,24 +1603,38 @@ export class WasmLoader {
    * instead of throwing forever.
    *
    * Caveat (modern-xlsx 1.2.0 verified): `initWasm` is idempotent with a
-   * module-level "first successful init wins" guard. On a thread where WASM
-   * is already initialized the re-attempt is a silent no-op — the reset only
-   * guarantees initWasm is *called* with the new URL, which modern-xlsx
-   * ignores if its module-level `initialized` flag is already set. The new
-   * URL genuinely takes effect only in a fresh JS realm (a page reload, or a
-   * worker created after terminateWorker()). updateOptions warns when this
-   * caveat applies.
+   * module-level "first successful init wins" guard, and keeps a single
+   * in-flight promise: (a) on a thread where WASM is already initialized the
+   * re-attempt is a silent no-op — the reset only guarantees initWasm is
+   * *called* with the new URL, which modern-xlsx ignores; (b) while an
+   * initial fetch is still pending (e.g. hung past timeoutMs), every retry
+   * and every new URL resolves to that same pending promise — the new URL is
+   * only picked up after the in-flight fetch rejects (modern-xlsx clears its
+   * promise on rejection), and never if it eventually succeeds. The new URL
+   * genuinely takes effect only in a fresh JS realm (a page reload, or a
+   * worker created after terminateWorker()). updateOptions warns when any
+   * part of this caveat applies.
    */
   updateOptions(opts: LoaderOptions): void {
+    // 按 String 归一化比较：URL 对象经结构化克隆/重复构造后是全新引用，
+    // `!==` 会把同一地址误判为"变更"（反复 reset 已加载状态并刷警告）。
+    // 与 export.worker.ts 的 loadedWasmKey 归一化保持一致。
     const urlChanged =
-      opts.wasmUrl !== undefined && opts.wasmUrl !== this.opts.wasmUrl;
-    if (urlChanged && this.state === "ready") {
+      opts.wasmUrl !== undefined &&
+      (this.opts.wasmUrl === undefined
+        ? true
+        : String(opts.wasmUrl) !== String(this.opts.wasmUrl));
+    if (urlChanged && (this.state === "ready" || this.state === "loading")) {
       console.warn(
-        "[excel-exporter] wasmUrl changed after WASM already initialized on this thread. " +
-          "modern-xlsx's initWasm is idempotent (first successful init wins), so the already-loaded " +
-          "module stays in effect and the new URL is ignored by initWasm. The new URL takes effect " +
-          "only in a fresh JS realm (reload the page, or terminateWorker() before the next export " +
-          "so a new worker is created).",
+        "[excel-exporter] wasmUrl changed while WASM is " +
+          (this.state === "ready" ? "already initialized" : "still loading") +
+          " on this thread. modern-xlsx's initWasm is idempotent and keeps a single " +
+          "module-level in-flight promise: the already-loaded module stays in effect, " +
+          "and a still-pending initial fetch cannot be aborted or redirected — the new " +
+          "URL is picked up only by the next fresh initWasm call after the in-flight " +
+          "one settles (or never, if it already succeeded). The new URL genuinely takes " +
+          "effect only in a fresh JS realm (reload the page, or terminateWorker() before " +
+          "the next export so a new worker is created).",
       );
     }
     this.opts = { ...this.opts, ...opts };
@@ -1623,6 +1652,11 @@ export class WasmLoader {
       );
     }
     if (this.promise) return this.promise;
+    // 状态写入统一收敛到本方法（带 promise 身份校验）：loadWithRetry 曾在
+    // 每个 attempt 无条件写 state="loading"，被取代的旧加载（重试退避期间
+    // 换了 URL）会把新加载已写好的 "ready" 覆盖回 "loading"，且无人再写回，
+    // isReady() 因此误报 false。
+    this.state = "loading";
     // Capture the promise locally: updateOptions() may null this.promise while
     // the load is in flight (wasmUrl changed), and this load must not clobber
     // the reset state when it settles -- otherwise a superseded old-URL load
@@ -1705,7 +1739,6 @@ export class WasmLoader {
         );
       });
       try {
-        this.state = "loading";
         await Promise.race([initWasm(wasmUrl), timeout]);
         return;
       } catch (e) {
@@ -1720,7 +1753,11 @@ export class WasmLoader {
       }
     }
     throw new Error(
-      `[excel-exporter] WASM load failed after ${maxRetries} attempts: ${(lastErr as Error).message}`,
+      // 非 Error 的 rejection（如字符串）没有 message 字段，强转会得到
+      // "...: undefined"，降级为 String() 保留原始信息。
+      `[excel-exporter] WASM load failed after ${maxRetries} attempts: ${
+        lastErr instanceof Error ? lastErr.message : String(lastErr)
+      }`,
     );
   }
 }
@@ -1742,10 +1779,11 @@ export function getWasmLoader(): WasmLoader {
  * makes the next export retry with the new settings.
  *
  * Note: changing `wasmUrl` after a *successful* load does not reload WASM on
- * a thread that already initialized it — modern-xlsx's `initWasm` is
- * idempotent and keeps the first successfully loaded module (see
- * WasmLoader.updateOptions). The new URL takes effect in a fresh JS realm
- * only (page reload / a worker created after `terminateWorker()`), and
+ * a thread that already initialized it, and changing it while the initial
+ * fetch is still in flight cannot redirect that fetch — modern-xlsx's
+ * `initWasm` is idempotent and keeps the first successfully loaded module
+ * (see WasmLoader.updateOptions). The new URL takes effect in a fresh JS
+ * realm only (page reload / a worker created after `terminateWorker()`), and
  * updateOptions prints a warning when the caveat applies.
  */
 export function configureWasm(opts: LoaderOptions): void {
@@ -2559,7 +2597,9 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
     const resp: WorkerResponse = {
       id,
       ok: false,
-      error: (err as Error).message,
+      // 兜底非 Error 的 throw（如字符串）：直接取 .message 会得到
+      // undefined，主线程只能落到 "worker unknown error"，丢失原始信息。
+      error: err instanceof Error ? err.message : String(err),
     };
     (self as unknown as Worker).postMessage(resp);
   }
@@ -2959,6 +2999,64 @@ function validateInput(options: ExportOptions): void {
     }
     const { leaves } = flattenColumnTree(sheet.columns);
     validateMerges(sheet, leaves.length);
+    // 数值型布局/格式字段的前置校验：缺了这层，非法 width/freezeRows 会直通
+    // 引擎并以晦涩的 serde 错误失败（"JSON parse error: invalid type: null,
+    // expected f64"），随后整份导出被降级为无样式 stream；而同一输入在
+    // >=50k 的 stream 路由却被静默忽略（width）——同一错误跨阈值一边降级
+    // 一边成功。在此拦截使两条路径行为一致，且报错能定位到具体的列/表。
+    if (
+      sheet.freezeRows !== undefined &&
+      (typeof sheet.freezeRows !== "number" ||
+        !Number.isInteger(sheet.freezeRows) ||
+        sheet.freezeRows < 0)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" freezeRows must be a non-negative integer`,
+      );
+    }
+    for (const col of leaves) {
+      // OOXML 中 width=0 合法（隐藏列），负数与非有限数非法；只有叶子列
+      // 消费 width，分组列上的 width 本就被忽略。
+      if (
+        col.width !== undefined &&
+        (typeof col.width !== "number" ||
+          !Number.isFinite(col.width) ||
+          col.width < 0)
+      ) {
+        throw new Error(
+          `[excel-exporter] column "${col.header}" width must be a finite non-negative number`,
+        );
+      }
+      if (col.format && typeof col.format === "object") {
+        const spec = col.format;
+        // decimals 两路径共享：Workbook 路径拼 numFormat 字符串（任意值都
+        // "能出"），stream 路径烧入 toFixed(decimals)——收敛到 toFixed 自身
+        // 的 0..100 上限，同一 spec 才不会在 50k 行上下一边成功一边抛错。
+        if (
+          spec.type === "number" &&
+          spec.decimals !== undefined &&
+          (!Number.isInteger(spec.decimals) ||
+            spec.decimals < 0 ||
+            spec.decimals > 100)
+        ) {
+          throw new Error(
+            `[excel-exporter] column "${col.header}" format.decimals must be an integer between 0 and 100`,
+          );
+        }
+        // padding.length：非整数/负数会让 padStart 抛 RangeError 或静默不
+        // 填充，超大值会生成巨型字符串，均在渲染期才爆——前置拦截。
+        if (
+          spec.type === "padding" &&
+          (!Number.isInteger(spec.length) ||
+            spec.length < 0 ||
+            spec.length > 10_000)
+        ) {
+          throw new Error(
+            `[excel-exporter] column "${col.header}" format.length must be an integer between 0 and 10000`,
+          );
+        }
+      }
+    }
   }
 }
 
@@ -3158,6 +3256,17 @@ export async function exportExcel(
     try {
       return await runOnMainThread();
     } catch (e) {
+      // 与下方 retryOnMainThread 的防护对齐：首次尝试已经是 fast stream
+      // （Node stream 路由）时，finishWithStream 重试等于对同一输入重跑一遍
+      // 确定性失败的构建——直接失败，不再白付第二次构建的时间与告警。
+      if (picked.workerMode === "stream") {
+        options.onProgress?.(1);
+        return {
+          success: false,
+          error: e as Error,
+          duration: performance.now() - start,
+        };
+      }
       return finishWithStream((e as Error).message);
     }
   }
@@ -4123,7 +4232,7 @@ const blob = new Blob([bytes], {
 
 ---
 
-**文档版本**：v2.12 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-09-16（v2.12：Invalid Date/enum 原型链/散点对象形式/filename 校验/objectURL 泄漏五处代码修复 + 4.8 等快照再对齐；该行此前停留 v2.8，v2.9–v2.11 漏更，一并修正。历史见顶部版本注与文末修订历史）
+**文档版本**：v2.13 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-09-16（v2.13：Node stream 终局防护 + 数值字段跨路径校验 + wasm-loader 状态机修复 + tsup onSuccess 统一 wasm 回补 + worker 协议测试；v2.12：Invalid Date/enum 原型链/散点对象形式/filename 校验/objectURL 泄漏五处代码修复 + 4.8 等快照再对齐；该行此前停留 v2.8，v2.9–v2.11 漏更，一并修正。历史见顶部版本注与文末修订历史）
 
 ---
 

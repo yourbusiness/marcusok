@@ -164,7 +164,11 @@ export interface SheetConfig {
   freezeRows?: number;
   /** Merged cell ranges. */
   merges?: MergeRange[];
-  /** Whether to add an auto-filter over the header range. */
+  /**
+   * Whether to add an auto-filter. The filter range spans the last header row
+   * plus all data rows (Excel's filter semantics — the dropdown sits on the
+   * header row and covers the data beneath it), not the header rows alone.
+   */
   autoFilter?: boolean;
 }
 
@@ -215,7 +219,10 @@ export interface ExportOptions {
    * wall-clock duration in ms (0 means the phase did no work, e.g. WASM was
    * already loaded). Useful for metrics/play panels; does not affect
    * `ExportResult.duration` (which measures the whole export on main-thread
-   * routes; the worker route's duration covers the in-worker time only).
+   * routes; the worker route's duration is measured on the main thread from
+   * the call into `exportInWorker` — including the pre-post serialization and
+   * the worker round-trip — through Blob construction, so it is wider than
+   * the pure in-worker build time).
    */
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   /** Trigger browser download (default true). Set false to only return a Blob. */

@@ -163,3 +163,52 @@ describe("stream fallback (terminal degradation, WebAssembly unavailable)", () =
     }
   });
 });
+
+// Node stream 路由：首次尝试就是 fast stream，build 期错误即终局——
+// exportExcel 的 catch 必须直接失败，而不是经 finishWithStream 对同一
+// 确定性失败再跑一遍（与 worker 链 retryOnMainThread 的防护对齐，见
+// index.ts）。
+describe("Node stream route failure is terminal (no doomed re-run)", () => {
+  it("fails once with the original error instead of re-running the stream", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const phases: string[] = [];
+    const progress: number[] = [];
+    try {
+      // Node 的 stream 路由会执行函数式 format；让它抛错即可让（唯一的）
+      // 构建尝试确定性失败。
+      const boom: SheetConfig = {
+        name: "S",
+        columns: [
+          {
+            key: "a",
+            header: "A",
+            format: () => {
+              throw new Error("format exploded");
+            },
+          },
+        ],
+        data: [{ a: 1 }],
+      };
+      const r = await exportExcel({
+        filename: "stream-terminal",
+        download: false,
+        mode: "stream",
+        sheets: [boom],
+        onPhase: (phase) => phases.push(phase),
+        onProgress: (p) => progress.push(p),
+      });
+
+      expect(r.success).toBe(false);
+      expect(r.error?.message).toBe("format exploded");
+      // 构建尝试恰好一次：若白跑一遍 finishWithStream，会出现第二个 build
+      // 阶段并打印兜底告警。
+      expect(phases.filter((p) => p === "build")).toHaveLength(1);
+      const messages = warn.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(messages).not.toContain("Falling back");
+      // 进度契约：结尾的 1 恰好发一次。
+      expect(progress.filter((p) => p === 1)).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

@@ -1,6 +1,6 @@
 # Styling
 
-A column-level `style` (`CellStyle`) applies to all **data cells** of that column (headers keep the default look). Seven presets are built in, and full customization is supported.
+A column-level `style` (`CellStyle`) applies to all **data cells** of that column — headers are styled separately via `headerStyle` (column-level) or the sheet-level `headerStyle` (see the [API reference](../api/02-types)). Seven presets are built in, and full customization is supported.
 
 ## Built-in presets
 

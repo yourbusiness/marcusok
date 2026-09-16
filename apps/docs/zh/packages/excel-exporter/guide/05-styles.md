@@ -1,6 +1,6 @@
 # 样式
 
-列级 `style`（`CellStyle`）应用于该列的所有**数据单元格**（表头保持默认样式）。内置 7 种预设，也支持完全自定义。
+列级 `style`（`CellStyle`）应用于该列的所有**数据单元格**——表头样式单独配置：列级 `headerStyle` 或表级 `headerStyle`（见 [API 参考](../api/02-types)）。内置 7 种预设，也支持完全自定义。
 
 ## 内置预设 StylePresets
 

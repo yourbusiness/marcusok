@@ -8,7 +8,7 @@
 | `columns`      | `ColumnConfig[]`            | 是   | 列定义                                                                   |
 | `data`         | `Record<string, unknown>[]` | 是   | 行数据                                                                   |
 | `headerStyle?` | `CellStyle`                 | —    | 表头行默认样式，可被列级 `headerStyle` 覆盖                              |
-| `freezeRows?`  | `number`                    | —    | 冻结前 N 行表头                                                          |
+| `freezeRows?`  | `number`                    | —    | 冻结前 N 行表头；校验为非负整数                                          |
 | `merges?`      | `MergeRange[]`              | —    | 合并单元格（相对数据区定位）                                             |
 | `autoFilter?`  | `boolean`                   | —    | 表头自动筛选                                                             |
 
@@ -19,7 +19,7 @@
 | `key?`         | `string`                 | 叶子列必填 | 数据行字段名；分组列（带 `children`）可省略                                                |
 | `header`       | `string`                 | 是         | 表头文字（叶子列与分组列都需要）                                                           |
 | `children?`    | `ColumnConfig[]`         | —          | 分组列：生成多行表头，该表头格自动跨其全部叶子列合并；`children: []` 视为叶子列            |
-| `width?`       | `number`                 | —          | 列宽（Excel 字符单位）；仅叶子列生效                                                       |
+| `width?`       | `number`                 | —          | 列宽（Excel 字符单位，`0` 表示隐藏列）；校验为有限非负数；仅叶子列生效                     |
 | `style?`       | `CellStyle`              | —          | 数据单元格样式（不含表头）；仅叶子列生效                                                   |
 | `headerStyle?` | `CellStyle`              | —          | 本列表头样式（含分组表头格），优先于表级 `headerStyle`                                     |
 | `format?`      | `FormatSpec \| Function` | —          | 值格式化；仅叶子列；函数在主线程路径执行，浏览器 worker 路径会被剥离（详见 FormatSpec 页） |
