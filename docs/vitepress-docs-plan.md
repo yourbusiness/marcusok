@@ -26,7 +26,7 @@
 | CI/CD     | `.github/workflows/ci.yml`（lint/typecheck/test/build）、`release.yml`（changesets 发布 npm）       |
 | 内部文档  | 根目录 `docs/` 存放设计/流程文档（excel-export-design.md 等），属于内部文档，与公开文档站**不混用** |
 
-> 注：上表为 2026-08-03 规划时的快照。此后 workspace 已加入 `apps/*`，excel-exporter 已发布到 2.x（当前 2.1.1），CI/CD 增加了 `deploy.yml`（文档站部署）。
+> 注：上表为 2026-08-03 规划时的快照。此后 workspace 已加入 `apps/*`，excel-exporter 已发布到 2.x（当前 2.1.3），CI/CD 增加了 `deploy.yml`（文档站部署）。
 
 ### 2.2 excel-exporter 公开 API（文档站内容来源）
 

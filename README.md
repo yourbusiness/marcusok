@@ -82,6 +82,12 @@ pnpm changeset version         # → 0.1.3-next.0
 pnpm changeset publish         # publish with the next dist-tag
 ```
 
+> The prerelease flow runs locally and is the one intentional exception: it
+> publishes directly and therefore skips the quality gate that the automated
+> release flow enforces. Run `pnpm lint && pnpm typecheck && RUN_PERF=0 pnpm test && pnpm build`
+> yourself before publishing, and leave `changeset pre exit` to return to the
+> normal two-phase (version PR → merge to publish) flow.
+
 ## Reference Docs
 
 - [`docs/excel-export-design.md`](./docs/excel-export-design.md) — Excel export core design doc

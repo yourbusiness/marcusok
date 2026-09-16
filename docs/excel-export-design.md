@@ -20,6 +20,8 @@
 
 > 🔄 **v2.10（2.1.1 快照再对齐，2026-09-15）**：以 2.1.1 源码为准整体刷新各"现行源码"快照与工程口径——4.1 目录树（fallback.ts 移除；补 column-tree.ts、copy-wasm.mjs 与现行测试清单）、4.2 package.json 快照（2.1.1；零 peerDep/dependencies，modern-xlsx/fflate 为 devDeps 构建期打包，files 含 CHANGELOG.md）与设计要点、4.3 tsup 快照（主入口不再 external 引擎；新增 rewrite-wasm-bg-url / drop-node-fs-promises 两个 esbuild 插件与 platform:"browser"；build 含 copy-wasm 后置）、4.4 types.ts/format-utils.ts 快照（BorderStyle 内联、ExportPhase、validateMerges、表名首尾引号校验）、4.5 wasm-loader 快照（新增 workerTimeoutMs / defaultWasmUrl / tryNodeAutoInit；updateOptions 对已初始化线程的 URL 变更为警告不重载）、4.9 WorkerResponse 补 phase/duration 字段、主线程封装快照（workerUrl 默认自动定位；超时可配置、超时终止坏 Worker 并连带拒绝兄弟请求；stripFunctionFormats 递归子列）、4.10 index.ts 快照（终局兜底 finishWithStream 纯 JS 快速流；下载触发隔离 triggerDownloadIsolated；前置校验覆盖结构非法输入；stream 路由主线程重试失败即终局不再三试）、3.6 turbo 快照（test dependsOn build）、3.10 changeset ignore、6.1/6.2 接入指南改写为零配置口径（旧方案归档为【历史】）、7.1 测试表对齐。SheetJS / finishWithSheetJS 相关段落自 2.0.0 起均为历史记录。
 
+> 🔄 **v2.11（快照失同步修复，2026-09-16）**：修复 v2.10 遗漏的快照漂移——① 3.2 目录树对齐现行仓库结构（补 deploy.yml / pre-push / play / apps/docs / scripts，移除未落地的 admin-a、_shared 预留）；② 3.3 根 package.json 快照对齐提交 a1aaa29（tsup / vite / vitest / eslint-plugin-vue / vue-eslint-parser / vue-tsc 已随根级死依赖清理下沉子包）；③ 3.8 eslint 快照对齐现行 ignores 清单与 reactHooks / reactRefresh 配置块；④ 3.9 lintstaged 快照对齐三段式现行配置；⑤ 4.2 版本快照 2.1.1 → 2.1.3；⑥ 4.4 types.ts 快照补 2.1.2/2.1.3 新增的 FormatSpec pattern-token 段与 ExportPhase 精确语义；⑦ 4.13 download.ts 快照补 2.1.3 的 `.xlsx` 后缀大小写不敏感修复；⑧ 4.14 / 5.4 / 7.3 / 九风险表 / 附录 C 清除以现行口吻描述 SheetJS 兜底的残留（终局兜底自 2.0.0 起为纯 JS fast stream，`engine` 恒为 `'modern-xlsx'`，`fallback.ts` 已删除）；⑨ 2.1 表 modern-xlsx 运行时要求与 3.3 注对齐（engines 声明 >=24，本仓库以 Node 22 实测全绿）。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -134,7 +136,7 @@
 | 版本                              | `1.2.0`                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | License                           | MIT（开源免费）                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 仓库                              | `github.com/ABCrimson/modern-xlsx`                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 运行时要求                        | Node.js 22+（实际 CI 与 .nvmrc 为 22，见附录 F） / Bun / Deno / 现代浏览器（需 WASM 支持）                                                                                                                                                                                                                                                                                                                                                      |
+| 运行时要求                        | engines 声明 `>=24.0.0`（v2.11 对齐 3.3 注：本仓库以 Node 22 实测全绿，`.npmrc` 设 `engine-strict=false`，CI 与 `.nvmrc` 为 22） / Bun / Deno / 现代浏览器（需 WASM 支持）                                                                                                                                                                                                                                                                      |
 | 运行时依赖                        | **零**（peerDependencies 为空）                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 产物体积（README 口径）           | ESM 133 KB + IIFE 60 KB + WASM **1.1 MB**（gzip 前）                                                                                                                                                                                                                                                                                                                                                                                            |
 | 实际产物（v2.1 tarball 解包核实） | `dist/index.mjs`(3.6KB re-export) + `dist/utils-Fc_qcAP_.mjs`(263KB 核心逻辑；`import from "../wasm/modern_xlsx_wasm.js"`，`detectWasmUrl()` 引用 `modern-xlsx.wasm`) + `dist/src-B2SjP9PA.mjs`(7.5KB stream/worker) + `dist/modern-xlsx.min.js`(79KB IIFE) + `dist/modern-xlsx.wasm`(**2,000,604 字节 ≈ 1.9MB**，未压缩) + `dist/index-lite.mjs`(7.5KB，只读精简入口，`import from "../wasm-lite/modern_xlsx_wasm.js"`，用**独立的更小 wasm**) |
@@ -247,20 +249,21 @@ marcusok/
 │   └── config.json
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                 # PR 检查：lint + typecheck + test + build
-│       └── release.yml            # Changesets 发布
+│       ├── ci.yml                 # PR + 直推 main：format:check + lint + commitlint + typecheck + test + build
+│       ├── release.yml            # Changesets 版本 PR + npm 发布
+│       └── deploy.yml             # 文档站部署（GitHub Pages，apps/docs/packages 路径触发）
 ├── .husky/
 │   ├── pre-commit                 # lint-staged
-│   └── commit-msg                 # commitlint
-├── packages/                      # 共享包目录（可水平扩展）
-│   ├── excel-exporter/            # ★ 本期：Excel 导出核心包
-│   ├── _shared/                   # 预留：跨包共享的 tsconfig / eslint / 工具
-│   │   ├── tsconfig-base/
-│   │   └── eslint-config/
-│   └── <future-pkg>/              # 预留：后续其他包（如 pdf-exporter）
-├── apps/                          # 消费方应用
-│   ├── admin-a/
-│   └── admin-b/
+│   ├── commit-msg                 # commitlint
+│   └── pre-push                   # RUN_PERF=0 全量校验（typecheck + test + build，--force）
+├── packages/                      # 库包目录（可水平扩展）
+│   ├── excel-exporter/            # ★ 发布包：Excel 导出核心库
+│   └── play/                      # 本地联调沙箱（React 19 + antd，私有包不发布）
+├── apps/
+│   └── docs/                      # VitePress 文档站（en 根 + zh/ 镜像，私有包）
+├── docs/                          # 内部设计文档（中文，本篇所在）
+├── scripts/
+│   └── dev.mjs                    # 统一 dev 启动器（进程树清理，Windows 兼容）
 ├── pnpm-workspace.yaml
 ├── turbo.json
 ├── package.json                   # 根 package.json（管理脚本与 devDeps）
@@ -269,6 +272,8 @@ marcusok/
 ├── .editorconfig
 └── README.md
 ```
+
+> **v2.11 注**：3.2 原树为规划期结构（admin-a / _shared / `<future-pkg>` 等预留均未落地），现按当前仓库实况重绘；规划期的扩展思路保留在此说明里——新库包放 `packages/<name>`、应用放 `apps/<name>`，与 `pnpm-workspace.yaml` 的两个 glob 一致。
 
 ### 3.3 根 `package.json`
 
@@ -306,21 +311,17 @@ marcusok/
     "eslint": "^9.16.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
-    "eslint-plugin-vue": "^10.10.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.10",
     "prettier": "^3.4.2",
-    "tsup": "^8.3.5",
     "turbo": "^2.3.3",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.18.0",
-    "vite": "^8.2.0",
-    "vitest": "^4.1.10",
-    "vue-eslint-parser": "^10.4.1",
-    "vue-tsc": "^3.3.9"
+    "typescript-eslint": "^8.18.0"
   }
 }
 ```
+
+> **v2.11 注（根依赖快照对齐）**：提交 a1aaa29（2026-09-15，"清理根级死依赖"）将 `tsup` / `vite` / `vitest` / `eslint-plugin-vue` / `vue-eslint-parser` / `vue-tsc` 从根 devDependencies 移除——它们只被对应子包使用，按「谁用谁声明」下沉（tsup/vitest → excel-exporter，vite/vitest → play，vue 系 → apps/docs）。根级仅保留全仓共享的工具链（lint/format/commit/changesets/turbo/typescript）。
 
 > **Node 版本说明（v2.1 修正）**：monorepo 根 `package.json` 的 `engines.node` 为 **`>=22.12.0`**，发布包 `@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 直接读它。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其运行时目标是浏览器、WASM 核心与 Node 版本无关；本仓库在 Node 22（v22.22.2 实测）下 `lint/typecheck/test/build` 全绿（127 个测试全部通过，见 `packages/excel-exporter/src/__tests__/`）。注意：modern-xlsx README 顶部声明 "Requires a runtime with WASM support (Node.js 24+, ...)"，但无专门的 "Node Usage" 章节；Node 22 可用性由本仓库测试套件实测验证，而非 README 声明。为避免 modern-xlsx 的 engines 声明在 Node 22 下 `pnpm install` 报错，`.npmrc` 设 `engine-strict=false`（见 3.5）。CI 与本地开发统一用 Node 22（`.nvmrc` 锁定）。
 
@@ -412,6 +413,8 @@ engine-strict=false
 
 ```js
 import tseslint from "typescript-eslint";
+import reactHooks from "eslint-plugin-react-hooks";
+import reactRefresh from "eslint-plugin-react-refresh";
 
 export default tseslint.config(
   {
@@ -419,8 +422,16 @@ export default tseslint.config(
       "**/dist/**",
       "**/node_modules/**",
       "**/coverage/**",
-      "**/.mxlsx-*/**",
-      "**/e2e-check/**",
+      "apps/docs/.vitepress/cache/**",
+      // Node scripts/config without tsconfig coverage (linted by their own
+      // package scopes / run as tests, not by the root type-aware config).
+      "apps/docs/eslint.config.mjs",
+      "apps/docs/scripts/**",
+      "eslint.config.mjs",
+      "packages/excel-exporter/scripts/**",
+      "packages/excel-exporter/tsup.config.ts",
+      "packages/excel-exporter/vitest.config.ts",
+      "scripts/**",
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
@@ -445,6 +456,14 @@ export default tseslint.config(
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/no-floating-promises": "error",
     },
+  },
+  {
+    files: ["**/*.{ts,tsx}"],
+    ...reactHooks.configs.flat["recommended-latest"],
+  },
+  {
+    files: ["**/*.{ts,tsx}"],
+    ...reactRefresh.configs.vite,
   },
   {
     // Test files: relax typed rules that are noisy in test context
@@ -472,12 +491,16 @@ export default tseslint.config(
 { "extends": ["@commitlint/config-conventional"] }
 ```
 
-`.lintstagedrc.json`：
+`.lintstagedrc.json`（v2.11 对齐现行三段式：JS/TS 走根 eslint，Vue 走 docs 包自己的 flat config，其余仅格式化）：
 
 ```json
 {
-  "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
-  "*.{json,md}": ["prettier --write"]
+  "*.{ts,tsx,mjs,js}": ["eslint --fix", "prettier --write"],
+  "*.vue": [
+    "eslint --fix --config apps/docs/eslint.config.mjs",
+    "prettier --write"
+  ],
+  "*.{json,md,yaml,yml}": ["prettier --write"]
 }
 ```
 
@@ -679,7 +702,7 @@ packages/excel-exporter/
 ```json
 {
   "name": "@marcusok/excel-exporter",
-  "version": "2.1.1",
+  "version": "2.1.3",
   "type": "module",
   "description": "Excel export engine built on modern-xlsx (Rust + WASM): declarative API, auto worker/stream routing, full cell styling.",
   "license": "MIT",
@@ -744,7 +767,7 @@ packages/excel-exporter/
 }
 ```
 
-> **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照已是 2.1.1 现状。
+> **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照已是 2.1.3 现状（v2.11 自 2.1.1 同步：2.1.2 为纯文档发布，2.1.3 改 download.ts 的 `.xlsx` 后缀大小写并更新 types.ts 注释，见 4.13/4.4）。
 
 **设计要点**：
 
@@ -978,6 +1001,13 @@ export interface CellStyle {
  * ("2025-01-05") parse as UTC midnight per ECMA-262; prefer them (or
  * `Date.UTC(...)`) over locally-constructed Dates, whose UTC components can
  * fall on the previous day in non-UTC timezones.
+ *
+ * Pattern tokens: the stream path (>= 50,000 rows, explicit stream mode, or
+ * the fallback) parses only `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (case-insensitive;
+ * `mm` resolves to minutes vs month by context) and emits anything else
+ * verbatim, while the Workbook path hands the pattern to Excel as a numFormat
+ * where every valid format code renders. Stick to the six tokens for
+ * cross-threshold consistency.
  */
 export type FormatSpec =
   | { type: "enum"; map: Record<string, string>; fallback?: string }
@@ -1079,11 +1109,16 @@ export type ExportMode = "auto" | "main" | "worker" | "stream";
  *   `loader.ensureLoaded()`; worker mode measures the worker's `initWasm()`
  *   (only reported when the worker actually re-initializes, not when its WASM
  *   instance is already cached). Reported as a zero-duration phase by the
- *   WASM-free stream fallback.
+ *   WASM-free stream fallback and the main-thread stream routes. The browser
+ *   worker-stream route (stream engine inside a worker) uses no WASM and
+ *   reports no `"init"` at all.
  * - `"build"`: workbook construction. Covers the Workbook/stream builder.
- *   Each real build attempt reports its own `"build"` phase, so a
- *   degradation chain (e.g. failed worker build -> main-thread retry ->
- *   stream fallback) reports one phase per attempt.
+ *   Each main-thread build attempt reports its own `"build"` phase (in a
+ *   `finally`, so also when that attempt throws), so a degradation chain
+ *   (e.g. failed worker build -> main-thread retry -> stream fallback) reports
+ *   one phase per main-thread attempt. An attempt that fails *inside* the
+ *   worker reports no `"build"` phase — its failure surfaces only through the
+ *   retry's error.
  * - `"download"`: the synchronous browser download trigger
  *   (`triggerDownload`); only reported when `download !== false`. Not reported
  *   in Node (no `document`).
@@ -3294,7 +3329,9 @@ export function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
+  a.download = filename.toLowerCase().endsWith(".xlsx")
+    ? filename
+    : `${filename}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -3319,15 +3356,19 @@ export function toBlobPart(bytes: Uint8Array): BlobPart {
 
 - `init`：WASM 初始化。主线程路径测 `loader.ensureLoaded()`；worker 路径由
   `export.worker.ts` 在真正执行 `initWasm()` 时测量并回传（实例已缓存则不上报该阶段）。
-  SheetJS 降级路径不涉及 WASM，无 `init` 阶段。
-- `build`：工作簿构建（Workbook / 流式构建 / SheetJS 建表写文件）。若 modern-xlsx
-  构建失败后降级到 SheetJS，会依次上报两次 `build`——对应两次真实发生的构建尝试，
-  而不是合并成一个数字。
+  免 WASM 的 fast stream 路径（含终局兜底与主线程 stream 路由）上报 0ms 的 `init`
+  以保持阶段序列稳定；浏览器 worker-stream 路由不使用 WASM，完全不上报 `init`。
+- `build`：工作簿构建（Workbook / fast-xlsx 流式构建）。每次主线程构建尝试各上报一次
+  `build`（在 `finally` 中打点，尝试抛错也上报）——降级链（worker 失败 → 主线程重试 →
+  stream 兜底）每个主线程尝试一次，而不是合并成一个数字；在 Worker 内部失败的尝试
+  不上报 `build`，其失败只经由重试的错误体现。
 - `download`：`triggerDownload` 的同步开销，仅 `download !== false` 且浏览器环境时上报。
 
-该回调不影响 `ExportResult.duration`（仍为整次导出的总耗时，保持向后兼容）。实现位置：
+该回调不影响 `ExportResult.duration`（主线程路由为整次导出总耗时；worker 路由的
+duration 只覆盖 Worker 内耗时——见 4.4 `onPhase` JSDoc）。实现位置：
 主线程路径在 `index.ts` 打点；worker 路径由 `export.worker.ts` 测量、经 phase 消息
-回传后由 `worker-exporter.ts` 转发；降级路径在 `fallback.ts` 打点。
+回传后由 `worker-exporter.ts` 转发；终局兜底沿用 `runOnMainThread` 的打点
+（`fallback.ts` 已随 2.0 移除，纯 JS 兜底在 `index.ts` 的 `finishWithStream` 编排）。
 
 ---
 
@@ -3420,14 +3461,19 @@ if ("requestIdleCallback" in window) {
 ### 5.4 降级链路
 
 ```
-WASM 不支持 / WASM 加载失败（主线程路径）──→ SheetJS（xlsx，无样式，最后保底）
+WASM 不支持 / WASM 加载失败（主线程路径）──→ 纯 JS Fast stream（无样式，终局兜底）
 
-Worker 路径失败（workerUrl 未配/404、Worker 内 WASM 初始化失败、超时等）
+Worker 路径失败（workerUrl 404、Worker 内 WASM 初始化失败、超时等）
   ──→ 主线程重试（modern-xlsx 保样式；≥5 万行档位走免 WASM 的 Fast stream）
-        ──→ 仍失败 → SheetJS（xlsx，无样式，最后保底）
+        ──→ 仍失败 → 纯 JS Fast stream（无样式，终局兜底）
 ```
 
-降级时在控制台 `warn`，并在 `ExportResult.engine` 标记 `'sheetjs'`，便于业务方监控降级率。v2.9 起 Worker 失败不再直接降 SheetJS（此前版本见 4.9 v2.2 注）：先回退主线程保样式；进度收尾 1 仍恰好一次（重试成功由主线程路径上报，重试失败由 SheetJS 兜底的 finally 上报）。
+降级时在控制台 `warn`；成功的降级导出 `success: true` 且在 `ExportResult.error` 携带
+`"Fallback: styles stripped (fast stream). Reason: …"` 软错误，供业务方监控降级率
+（2.0 起 `engine` 恒为 `'modern-xlsx'`，不再有 `'sheetjs'` 标记——历史 SheetJS 方案见
+4.12【历史】）。Worker 失败先回退主线程保样式（v2.9 起）；stream 路由的主线程重试本身
+已是同一个 fast stream，重试失败即终局失败、不再三试（v2.10 起）；进度收尾 1 仍恰好一次
+（重试成功由主线程路径上报，失败由 `finishWithStream` 的 catch 上报）。
 
 ### 5.5 内存控制
 
@@ -3830,7 +3876,10 @@ test("worker-mode WASM 初始化失败时触发降级", async ({ page }) => {
   await page.goto("/demo?wasmFail=1");
   const result = await page.evaluate(() => (window as any).triggerExport());
   expect(result.success).toBe(true);
-  expect(result.engine).toBe("sheetjs");
+  // 2.0 起终局兜底为纯 JS fast stream：engine 恒为 "modern-xlsx"，
+  // 降级由 success:true + error 软错误标识（无 'sheetjs' 标记）
+  expect(result.mode).toBe("stream");
+  expect(result.error?.message).toMatch(/Fallback: styles stripped/);
 });
 ```
 
@@ -3857,16 +3906,16 @@ test("worker-mode WASM 初始化失败时触发降级", async ({ page }) => {
 
 ## 九、风险与应对
 
-| 风险                            | 概率 | 影响 | 应对                                                                                                                                                                                                                |
-| ------------------------------- | :--: | :--: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| WASM 加载失败（CDN/网络）       |  中  |  高  | 自托管 `.wasm`；3 次指数退避重试；失败降级 SheetJS                                                                                                                                                                  |
-| 浏览器不支持 WASM               |  低  |  高  | `WebAssembly` 能力检测，直接走 SheetJS                                                                                                                                                                              |
-| Worker 序列化开销大             |  中  |  中  | 仅 ≥20,000 行启用 Worker（auto；可用 `mode` 显式覆盖，v2.6 对齐源码）                                                                                                                                               |
-| modern-xlsx 版本不兼容          |  低  |  中  | 锁定 `^1.2.0`；升级走 Changeset minor 流程 + 回归测试                                                                                                                                                               |
-| 大文件 OOM                      |  中  |  高  | ≥5 万行走 fast-xlsx（fflate minimal OOXML，v2.5 起；旧写 `StreamingXlsxWriter` 已弃用）；监控内存                                                                                                                   |
-| 颜色/样式在 Excel 中显示异常    |  低  |  中  | 用 6 位 RGB hex（不带 `#`）；样式单测 + 真机抽样验证                                                                                                                                                                |
-| SheetJS 降级路径缺少样式        |  中  |  低  | 可接受；监控降级率，逐步修复 WASM 加载根因                                                                                                                                                                          |
-| 浏览器 ≥20,000 行忘配 workerUrl |  中  |  低  | v2.9 起 Worker 路由失败先回退主线程重试（保样式；≥5 万行走免 WASM 的 Fast stream），仅重试也失败才降级 SheetJS，两级均打 console.warn（非静默）；显式 configureWasm({workerUrl}) 可避免主线程阻塞（见 4.9 v2.9 注） |
+| 风险                              | 概率 | 影响 | 应对                                                                                                                                                                                                                     |
+| --------------------------------- | :--: | :--: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| WASM 加载失败（CDN/网络）         |  中  |  高  | 自托管 `.wasm`；3 次指数退避重试；失败降级纯 JS fast stream（无样式，2.0 起终局兜底，不再依赖 SheetJS）                                                                                                                  |
+| 浏览器不支持 WASM                 |  低  |  高  | `WebAssembly` 能力检测，直接走纯 JS fast stream                                                                                                                                                                          |
+| Worker 序列化开销大               |  中  |  中  | 仅 ≥20,000 行启用 Worker（auto；可用 `mode` 显式覆盖，v2.6 对齐源码）                                                                                                                                                    |
+| modern-xlsx 版本不兼容            |  低  |  中  | 锁定 `^1.2.0`；升级走 Changeset minor 流程 + 回归测试                                                                                                                                                                    |
+| 大文件 OOM                        |  中  |  高  | ≥5 万行走 fast-xlsx（fflate minimal OOXML，v2.5 起；旧写 `StreamingXlsxWriter` 已弃用）；监控内存                                                                                                                        |
+| 颜色/样式在 Excel 中显示异常      |  低  |  中  | 用 6 位 RGB hex（不带 `#`）；样式单测 + 真机抽样验证                                                                                                                                                                     |
+| fast stream 降级路径缺少样式      |  中  |  低  | 可接受；监控降级率（`result.error` 软错误），逐步修复 WASM 加载根因                                                                                                                                                      |
+| 浏览器 ≥20,000 行 Worker 加载失败 |  中  |  低  | v2.9 起 Worker 路由失败先回退主线程重试（保样式；≥5 万行走免 WASM 的 Fast stream），仅重试也失败才降级 fast stream，两级均打 console.warn（非静默）；2.0 起 workerUrl 默认自动定位，通常无需显式 configureWasm（见 4.9） |
 
 ---
 
@@ -3927,18 +3976,19 @@ test("worker-mode WASM 初始化失败时触发降级", async ({ page }) => {
 
 ### 附录 C · 关键依赖版本清单（建议锁定）
 
-| 依赖               | 版本                          | 用途                                                                                             |
-| ------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------ |
-| modern-xlsx        | ^1.2.0                        | 核心引擎                                                                                         |
-| xlsx（SheetJS CE） | >=0.18.5（npm latest 即此版） | 降级方案（optional peerDep）；v1.9 从 >=0.20.0 放宽，避免 strict-peer-dependencies 报错，见 4.12 |
-| typescript         | ^5.9.3                        | 语言                                                                                             |
-| tsup               | ^8.3.5                        | 包构建                                                                                           |
-| vitest             | ^4.1.10                       | 测试                                                                                             |
-| turbo              | ^2.3.3                        | Monorepo 编排                                                                                    |
-| pnpm               | 9.12.0                        | 包管理（packageManager 字段）                                                                    |
-| @changesets/cli    | ^2.27.10                      | 版本/发布                                                                                        |
-| eslint             | ^9.16.0                       | Lint（flat config）                                                                              |
-| typescript-eslint  | ^8.18.0                       | TS lint 规则（flat config 用）                                                                   |
+| 依赖              | 版本     | 用途                           |
+| ----------------- | -------- | ------------------------------ |
+| modern-xlsx       | ^1.2.0   | 核心引擎                       |
+| typescript        | ^5.9.3   | 语言                           |
+| tsup              | ^8.3.5   | 包构建                         |
+| vitest            | ^4.1.10  | 测试                           |
+| turbo             | ^2.3.3   | Monorepo 编排                  |
+| pnpm              | 9.12.0   | 包管理（packageManager 字段）  |
+| @changesets/cli   | ^2.27.10 | 版本/发布                      |
+| eslint            | ^9.16.0  | Lint（flat config）            |
+| typescript-eslint | ^8.18.0  | TS lint 规则（flat config 用） |
+
+（v2.11 注：`xlsx`/SheetJS 曾以 optional peerDep 作为降级方案，2.0.0 起随 SheetJS 兜底一并移除，本包现为零依赖——历史口径见 4.12【历史】与 CHANGELOG 2.0.0。）
 
 ### 附录 D · 后续扩展预留
 

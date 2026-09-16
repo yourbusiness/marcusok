@@ -2,14 +2,17 @@
 
 In Node servers (including SSR) you don't need browser assets and there is **no initialization boilerplate**: the engine locates this package's `dist/modern-xlsx.wasm` on disk (pnpm-symlink-safe) and initializes it synchronously on first use. The explicit `initWasmSync` bootstrap from earlier versions is no longer required — keep it only if you want the one-off read+compile at startup instead of the first request.
 
+> Auto-initialization does a one-off synchronous file read plus WASM compile (measured ~20ms on this repo's dev machine, Node 22: ~4ms to read the 1.9MB binary, ~15ms to compile), charged to the first export. To move that cost to process startup instead, use the explicit init below.
+
 ## Environment differences
 
-| Dimension         | Browser              | Node / SSR                                 |
-| ----------------- | -------------------- | ------------------------------------------ |
-| Worker path       | available            | no Web Worker; falls back to main/stream   |
-| Auto download     | triggers download    | `triggerDownload` is a no-op               |
-| `download` option | defaults to true     | set `false` explicitly and handle the Blob |
-| Large data        | worker + Fast stream | main → stream at ≥ 50k rows (main thread)  |
+| Dimension         | Browser                | Node / SSR                                 |
+| ----------------- | ---------------------- | ------------------------------------------ |
+| Worker path       | available              | no Web Worker; falls back to main/stream   |
+| Auto download     | triggers download      | `triggerDownload` is a no-op               |
+| `download` option | defaults to true       | set `false` explicitly and handle the Blob |
+| Large data        | worker + Fast stream   | main → stream at ≥ 50k rows (main thread)  |
+| WASM init         | auto-located (default) | auto-located and initialized               |
 
 ## Export and write to disk
 

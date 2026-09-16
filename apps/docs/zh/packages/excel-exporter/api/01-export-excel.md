@@ -67,4 +67,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> 入口还重导出了若干底层工具与类型（如 `format-utils` 的 `applyFormat` / `validateSheetName`、`LoaderOptions` / `LoadState`、`BorderStyle` 等），本文档只覆盖常用的稳定 API，完整列表见 `src/index.ts`。
+> 入口还重导出了若干底层工具与类型（如 `format-utils` 的 `applyFormat` / `validateSheetName`、`LoaderOptions` / `LoadState`、`BorderStyle` 等），本文档只覆盖常用的稳定 API，完整列表见 `src/index.ts`。`exportInWorker` / `terminateWorker` 不在主入口，经独立子路径 `@marcusok/excel-exporter/worker-utils` 发布（源入口 `src/worker-exporter.ts`）。

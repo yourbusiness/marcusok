@@ -13,7 +13,7 @@ import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
 
 // rows：业务侧的销售明细数据，字段与下方 columns 一一对应
 //（由你的业务代码提供，此处省略取数过程；示例场景为 1 万行，
-//  在线演示用的是同一销售场景的 mock 数据，比示例多几列，如 unitPrice）
+//  在线演示用的是同一销售场景的 mock 数据，比示例多一列 unitPrice）
 
 const result = await exportExcel({
   filename: "销售月报-2026-07",

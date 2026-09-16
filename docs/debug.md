@@ -42,7 +42,7 @@ cefad0e fix(excel-exporter): tighten exports and declare xlsx as optional peer d
 
 所以它们各自失败，根因很可能并不相同。下面分开讲。
 
-**CI** (`ci.yml`)：checkout → pnpm → node22 → `pnpm install --frozen-lockfile` → lint → typecheck → test → build（commitlint 只在 PR 时跑，直推 main 不跑。注：此为 2026-07 排障时的状态；2026-08-27 起 ci.yml 已增加对直推 main 的提交逐条 lint，见提交 9d9339f 与 `docs/ci-workflow-analysis.md`）。
+**CI** (`ci.yml`)：checkout → pnpm → node22 → `pnpm install --frozen-lockfile` → lint → typecheck → test → build（commitlint 只在 PR 时跑，直推 main 不跑。注：此为 2026-07 排障时的状态；2026-08-27 起 ci.yml 已增加对直推 main 的提交逐条 lint，见提交 9d9339f 与 `docs/ci-workflow-analysis.md`；2026-08-28 起 lint 前还增加了 `pnpm format:check`，见提交 e75e2ad——现行完整顺序见 `docs/ci-workflow-analysis.md` 的 ci.yml 快照）。
 
 **Release** (`release.yml`)：checkout → pnpm → node22 → install → `changesets/action`。
 
@@ -289,7 +289,7 @@ Get-ChildItem -Path docs,README.md -Recurse -File | ForEach-Object {
 
 ### 9.2 修复
 
-用 git 原始内容 + .NET API 精确控制编码重写：
+用 git 原始内容 + .NET API 精确控制编码重写（注：脚本中的 `docs/commit-and-release-workflow.md` 后已拆分为 `docs/release-guide.md` / `docs/release-workflow-analysis.md` / `docs/release-publish-logic.md`，文件名不再存在，脚本仅作当时操作的历史记录）：
 
 ```powershell
 foreach ($f in @("docs/commit-and-release-workflow.md","docs/debug.md","docs/excel-export-design.md")) {

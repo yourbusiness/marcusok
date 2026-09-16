@@ -239,7 +239,7 @@ config.json 里 `commit: false` 不是「不提交版本改动」，而是「`ch
 
 ### husky 在 CI 里被跳过
 
-根 package.json 有 `"prepare": "husky"`，本地 `pnpm install` 会装钩子（pre-commit 跑 lint-staged，commit-msg 跑 commitlint）。但两个 workflow 都设了 `env: HUSKY: "0"`，CI 里 husky 直接禁用，避免和 CI 自己的 lint/commitlint 步骤重复或冲突。
+根 package.json 有 `"prepare": "husky"`，本地 `pnpm install` 会装钩子（pre-commit 跑 lint-staged，commit-msg 跑 commitlint）。但三个 workflow（ci.yml / release.yml / deploy.yml）都设了 `env: HUSKY: "0"`，CI 里 husky 直接禁用，避免和 CI 自己的 lint/commitlint 步骤重复或冲突。
 
 ### changeset 文件不要拿来做实验
 

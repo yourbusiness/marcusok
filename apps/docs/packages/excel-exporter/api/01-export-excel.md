@@ -67,4 +67,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> The entry point also re-exports lower-level utilities and types (e.g. `applyFormat` / `validateSheetName` from `format-utils`, `LoaderOptions` / `LoadState`, `BorderStyle`). This page covers the commonly used stable API only; see `src/index.ts` for the full list.
+> The entry point also re-exports lower-level utilities and types (e.g. `applyFormat` / `validateSheetName` from `format-utils`, `LoaderOptions` / `LoadState`, `BorderStyle`). This page covers the commonly used stable API only; see `src/index.ts` for the full list. `exportInWorker` / `terminateWorker` live on the separate `@marcusok/excel-exporter/worker-utils` subpath (source entry `src/worker-exporter.ts`), not in the main entry.
