@@ -28,7 +28,7 @@ function stubBrowser(): void {
 const sheets = [
   {
     name: "S",
-    columns: [{ key: "x", header: "X" }],
+    columns: [{ prop: "x", label: "X" }],
     data: [{ x: 1 }],
   },
 ];

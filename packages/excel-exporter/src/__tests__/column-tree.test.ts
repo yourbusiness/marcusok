@@ -1,25 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { flattenColumnTree, a1Range } from "../column-tree";
+import { columnProp, flattenColumnTree, a1Range } from "../column-tree";
 import type { ColumnConfig } from "../types";
 
-/** 3-level grouped header: 产品(leaf) | 收入情况(本月/本年累计). */
+/** 3-level grouped label: 产品(leaf) | 收入情况(本月/本年累计). */
 const groupedColumns: ColumnConfig[] = [
-  { key: "product", header: "产品" },
+  { prop: "product", label: "产品" },
   {
-    header: "收入情况",
+    label: "收入情况",
     children: [
       {
-        header: "本月",
+        label: "本月",
         children: [
-          { key: "m_qty", header: "数量" },
-          { key: "m_amt", header: "金额" },
+          { prop: "m_qty", label: "数量" },
+          { prop: "m_amt", label: "金额" },
         ],
       },
       {
-        header: "本年累计",
+        label: "本年累计",
         children: [
-          { key: "y_qty", header: "数量" },
-          { key: "y_amt", header: "金额" },
+          { prop: "y_qty", label: "数量" },
+          { prop: "y_amt", label: "金额" },
         ],
       },
     ],
@@ -29,11 +29,11 @@ const groupedColumns: ColumnConfig[] = [
 describe("flattenColumnTree", () => {
   it("keeps flat columns byte-compatible: H=1, no header merges, same leaf order", () => {
     const flat = flattenColumnTree([
-      { key: "a", header: "A" },
-      { key: "b", header: "B" },
+      { prop: "a", label: "A" },
+      { prop: "b", label: "B" },
     ]);
     expect(flat.headerRowCount).toBe(1);
-    expect(flat.leaves.map((l) => l.key)).toEqual(["a", "b"]);
+    expect(flat.leaves.map((l) => l.prop)).toEqual(["a", "b"]);
     expect(flat.headerGrid).toEqual([["A", "B"]]);
     // Single-cell spans must not produce merges, so flat output is unchanged.
     expect(flat.headerMerges).toHaveLength(0);
@@ -43,7 +43,7 @@ describe("flattenColumnTree", () => {
   it("flattens a 3-level grouped header into leaves + merges", () => {
     const t = flattenColumnTree(groupedColumns);
     expect(t.headerRowCount).toBe(3);
-    expect(t.leaves.map((l) => l.key)).toEqual([
+    expect(t.leaves.map((l) => l.prop)).toEqual([
       "product",
       "m_qty",
       "m_amt",
@@ -73,12 +73,12 @@ describe("flattenColumnTree", () => {
 
   it("handles mixed depth: a depth-0 leaf next to a 1-level group", () => {
     const t = flattenColumnTree([
-      { key: "a", header: "A" },
+      { prop: "a", label: "A" },
       {
-        header: "G",
+        label: "G",
         children: [
-          { key: "b", header: "B" },
-          { key: "c", header: "C" },
+          { prop: "b", label: "B" },
+          { prop: "c", label: "C" },
         ],
       },
     ]);
@@ -91,36 +91,61 @@ describe("flattenColumnTree", () => {
       ["A", "G", null],
       [null, "B", "C"],
     ]);
-    expect(t.leaves.map((l) => l.key)).toEqual(["a", "b", "c"]);
+    expect(t.leaves.map((l) => l.prop)).toEqual(["a", "b", "c"]);
   });
 
   it("treats children: [] as a leaf", () => {
-    const t = flattenColumnTree([{ key: "a", header: "A", children: [] }]);
+    const t = flattenColumnTree([{ prop: "a", label: "A", children: [] }]);
     expect(t.headerRowCount).toBe(1);
-    expect(t.leaves.map((l) => l.key)).toEqual(["a"]);
+    expect(t.leaves.map((l) => l.prop)).toEqual(["a"]);
   });
 
-  it("throws when a leaf column has no usable key", () => {
-    expect(() => flattenColumnTree([{ header: "no key" }])).toThrow(
-      /must have a non-empty string key/,
+  it("throws when a leaf column has no usable prop", () => {
+    expect(() => flattenColumnTree([{ label: "no prop" }])).toThrow(
+      /must have a non-empty string prop/,
+    );
+  });
+
+  it("reads deprecated key/header aliases; prop/label win when both exist", () => {
+    // 2.2.0 前的旧字段名仍可用：仅提供旧名时导出行为不变。
+    const legacy = flattenColumnTree([
+      { key: "a", header: "A" },
+      { header: "G", children: [{ key: "b", header: "B" }] },
+    ]);
+    expect(legacy.leaves.map(columnProp)).toEqual(["a", "b"]);
+    expect(legacy.headerGrid).toEqual([
+      ["A", "G"],
+      [null, "B"],
+    ]);
+    // 新旧同给时新名优先，旧名被忽略。
+    const both = flattenColumnTree([
+      { key: "old", header: "Old", prop: "new", label: "New" },
+    ]);
+    expect(both.leaves.map(columnProp)).toEqual(["new"]);
+    expect(both.headerGrid).toEqual([["New"]]);
+  });
+
+  it("throws when a column has neither label nor legacy header", () => {
+    expect(() => flattenColumnTree([{ prop: "a" }])).toThrow(
+      /must have a non-empty label/,
     );
   });
 
   it("throws on circular children references instead of overflowing", () => {
-    const a: ColumnConfig = { header: "A", children: [] };
-    const b: ColumnConfig = { header: "B", children: [a] };
+    const a: ColumnConfig = { label: "A", children: [] };
+    const b: ColumnConfig = { label: "B", children: [a] };
     a.children!.push(b);
     expect(() => flattenColumnTree([a])).toThrow(/circular children/);
   });
 
   it("throws when the same column object is reused (diamond, not a cycle)", () => {
-    const leaf: ColumnConfig = { key: "a", header: "A" };
+    const leaf: ColumnConfig = { prop: "a", label: "A" };
     // Hung under two parents: previously passed the path-based cycle check
     // and was walked twice, silently emitting duplicate data columns.
     expect(() =>
       flattenColumnTree([
-        { header: "G1", children: [leaf] },
-        { header: "G2", children: [leaf] },
+        { label: "G1", children: [leaf] },
+        { label: "G2", children: [leaf] },
       ]),
     ).toThrow(/reused/);
   });

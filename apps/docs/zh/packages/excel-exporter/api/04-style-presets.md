@@ -18,10 +18,10 @@
 import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
 
 columns: [
-  { key: "amount", header: "金额", width: 14, style: StylePresets.currency },
-  { key: "rate", header: "增长率", width: 12, style: StylePresets.percent },
-  { key: "date", header: "日期", width: 12, style: StylePresets.date },
-  { key: "flag", header: "状态", width: 10, style: StylePresets.danger },
+  { prop: "amount", label: "金额", width: 14, style: StylePresets.currency },
+  { prop: "rate", label: "增长率", width: 12, style: StylePresets.percent },
+  { prop: "date", label: "日期", width: 12, style: StylePresets.date },
+  { prop: "flag", label: "状态", width: 10, style: StylePresets.danger },
 ];
 ```
 

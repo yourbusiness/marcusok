@@ -1,4 +1,5 @@
 import type { ColumnConfig, ExportOptions, ExportResult } from "./types";
+import { columnLabel } from "./column-tree";
 import { defaultWasmUrl, getWasmLoader } from "./wasm-loader";
 import { toBlobPart } from "./download";
 
@@ -117,7 +118,7 @@ function stripColumn(c: ColumnConfig): ColumnConfig {
   const children = c.children?.map(stripColumn);
   if (c.format && typeof c.format === "function") {
     console.warn(
-      `[excel-exporter] column "${c.key ?? c.header}" uses a function format, stripped for worker mode. Use FormatSpec for worker compatibility.`,
+      `[excel-exporter] column "${columnLabel(c)}" uses a function format, stripped for worker mode. Use FormatSpec for worker compatibility.`,
     );
     const { format: _format, ...rest } = c;
     return children ? { ...rest, children } : rest;

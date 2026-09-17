@@ -9,10 +9,10 @@ describe("exportAsStream round-trip", () => {
       {
         name: "Data",
         columns: [
-          { key: "id", header: "ID" },
-          { key: "name", header: "Name" },
-          { key: "amount", header: "Amount" },
-          { key: "status", header: "Status" },
+          { prop: "id", label: "ID" },
+          { prop: "name", label: "Name" },
+          { prop: "amount", label: "Amount" },
+          { prop: "status", label: "Status" },
         ],
         data: Array.from({ length: 1000 }, (_, i) => ({
           id: i,
@@ -42,22 +42,22 @@ describe("exportAsStream round-trip", () => {
       {
         name: "Grouped",
         columns: [
-          { key: "product", header: "产品" },
+          { prop: "product", label: "产品" },
           {
-            header: "收入情况",
+            label: "收入情况",
             children: [
               {
-                header: "本月",
+                label: "本月",
                 children: [
-                  { key: "m_qty", header: "数量" },
-                  { key: "m_amt", header: "金额" },
+                  { prop: "m_qty", label: "数量" },
+                  { prop: "m_amt", label: "金额" },
                 ],
               },
               {
-                header: "本年累计",
+                label: "本年累计",
                 children: [
-                  { key: "y_qty", header: "数量" },
-                  { key: "y_amt", header: "金额" },
+                  { prop: "y_qty", label: "数量" },
+                  { prop: "y_amt", label: "金额" },
                 ],
               },
             ],
@@ -85,8 +85,8 @@ describe("exportAsStream round-trip", () => {
       {
         name: "S",
         columns: [
-          { key: "a", header: "A" },
-          { key: "b", header: "B" },
+          { prop: "a", label: "A" },
+          { prop: "b", label: "B" },
         ],
         data: [{ a: 1, b: 2 }],
       },
@@ -100,10 +100,10 @@ describe("exportAsStream round-trip", () => {
     const { bytes, rowCount } = await exportAsStream([
       {
         name: "A",
-        columns: [{ key: "x", header: "X" }],
+        columns: [{ prop: "x", label: "X" }],
         data: [{ x: 1 }, { x: 2 }],
       },
-      { name: "B", columns: [{ key: "y", header: "Y" }], data: [{ y: 3 }] },
+      { name: "B", columns: [{ prop: "y", label: "Y" }], data: [{ y: 3 }] },
     ]);
     expect(rowCount).toBe(3);
     const wb = await readBuffer(bytes);
@@ -118,11 +118,11 @@ describe("exportAsStream round-trip", () => {
         name: "Dates",
         columns: [
           {
-            key: "d",
-            header: "Date",
+            prop: "d",
+            label: "Date",
             format: { type: "date", pattern: "dd/MM/yyyy" },
           },
-          { key: "dt", header: "DateTime", format: { type: "datetime" } },
+          { prop: "dt", label: "DateTime", format: { type: "datetime" } },
         ],
         // UTC-constructed so the expected strings hold in every timezone
         // (stream formats UTC components, matching the workbook serial).
@@ -146,8 +146,8 @@ describe("exportAsStream round-trip", () => {
       {
         name: "SST",
         columns: [
-          { key: "a", header: "A" },
-          { key: "b", header: "B" },
+          { prop: "a", label: "A" },
+          { prop: "b", label: "B" },
         ],
         data: [
           { a: "dup", b: "x" },
@@ -171,8 +171,8 @@ describe("exportAsStream round-trip", () => {
       {
         name: "S",
         columns: [
-          { key: "a", header: "A" },
-          { key: "b", header: "B" },
+          { prop: "a", label: "A" },
+          { prop: "b", label: "B" },
         ],
         // `b` missing on every row: previously each missing field interned ""
         // and emitted a shared-string cell reference.
@@ -204,7 +204,7 @@ describe("exportAsStream round-trip", () => {
       [
         {
           name: "S",
-          columns: [{ key: "a", header: "A" }],
+          columns: [{ prop: "a", label: "A" }],
           data: Array.from({ length: 2000 }, (_, i) => ({ a: i })),
         },
       ],
@@ -219,11 +219,11 @@ describe("exportAsStream round-trip", () => {
       {
         name: "S",
         columns: [
-          { key: "a", header: "A" },
+          { prop: "a", label: "A" },
           // number/date specs read row[key] directly in displayValue — the
           // null-row guard must cover them too.
-          { key: "b", header: "B", format: { type: "number" } },
-          { key: "c", header: "C", format: { type: "date" } },
+          { prop: "b", label: "B", format: { type: "number" } },
+          { prop: "c", label: "C", format: { type: "date" } },
         ],
         data: [
           null,

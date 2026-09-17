@@ -34,8 +34,8 @@ async function exportWithFallback(
 const basicSheet: SheetConfig = {
   name: "Sheet1",
   columns: [
-    { key: "name", header: "Name" },
-    { key: "value", header: "Value" },
+    { prop: "name", label: "Name" },
+    { prop: "value", label: "Value" },
   ],
   data: [
     { name: "Alice", value: 10 },
@@ -73,15 +73,15 @@ describe("stream fallback (terminal degradation, WebAssembly unavailable)", () =
     const grouped: SheetConfig = {
       name: "Sheet1",
       columns: [
-        { key: "product", header: "产品" },
+        { prop: "product", label: "产品" },
         {
-          header: "收入情况",
+          label: "收入情况",
           children: [
             {
-              header: "本月",
+              label: "本月",
               children: [
-                { key: "m_qty", header: "数量" },
-                { key: "m_amt", header: "金额" },
+                { prop: "m_qty", label: "数量" },
+                { prop: "m_amt", label: "金额" },
               ],
             },
           ],
@@ -113,7 +113,7 @@ describe("stream fallback (terminal degradation, WebAssembly unavailable)", () =
       basicSheet,
       {
         name: "Sheet2",
-        columns: [{ key: "x", header: "X" }],
+        columns: [{ prop: "x", label: "X" }],
         data: [{ x: 1 }, { x: 2 }, { x: 3 }],
       },
     ]);
@@ -180,8 +180,8 @@ describe("Node stream route failure is terminal (no doomed re-run)", () => {
         name: "S",
         columns: [
           {
-            key: "a",
-            header: "A",
+            prop: "a",
+            label: "A",
             format: () => {
               throw new Error("format exploded");
             },

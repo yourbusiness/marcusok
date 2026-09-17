@@ -38,10 +38,10 @@ describe("tableToSheet / exportTable", () => {
 
     expect(sheet.name).toBe("Orders");
     expect(sheet.columns[0]).toMatchObject({
-      key: "orderNo",
-      header: "订单号",
+      prop: "orderNo",
+      label: "订单号",
     });
-    expect(sheet.columns[1]).toMatchObject({ key: "customer", header: "客户" });
+    expect(sheet.columns[1]).toMatchObject({ prop: "customer", label: "客户" });
   });
 
   it("maps Ant Design grouped columns (children) to a multi-row header", () => {
@@ -60,17 +60,33 @@ describe("tableToSheet / exportTable", () => {
       data: [{ product: "A", m_qty: 1, m_amt: 2 }],
     });
 
-    // Leaf keeps key/header.
-    expect(sheet.columns[0]).toMatchObject({ key: "product", header: "产品" });
-    // Group has header + children, no key (no data cells).
+    // Leaf keeps prop/label.
+    expect(sheet.columns[0]).toMatchObject({ prop: "product", label: "产品" });
+    // Group has label + children, no prop (no data cells).
     expect(sheet.columns[1]).toMatchObject({
-      header: "收入情况",
+      label: "收入情况",
       children: [
-        { key: "m_qty", header: "数量" },
-        { key: "m_amt", header: "金额" },
+        { prop: "m_qty", label: "数量" },
+        { prop: "m_amt", label: "金额" },
       ],
     });
-    expect(sheet.columns[1].key).toBeUndefined();
+    expect(sheet.columns[1].prop).toBeUndefined();
+  });
+
+  it("prefers prop/label over legacy key/header; legacy-only columns still work", () => {
+    const sheet = tableToSheet({
+      columns: [
+        { prop: "new", key: "old", label: "New", header: "Old" },
+        { key: "legacyOnly", header: "Legacy" },
+      ],
+      data: [{ new: 1, old: 2, legacyOnly: 3 }],
+    });
+    expect(sheet.columns[0]).toMatchObject({ prop: "new", label: "New" });
+    // 旧名（pre-2.2 命名）单独使用是受支持的兼容路径，输出统一为新名。
+    expect(sheet.columns[1]).toMatchObject({
+      prop: "legacyOnly",
+      label: "Legacy",
+    });
   });
 
   it("exports a real xlsx from a common table data shape", async () => {
@@ -116,7 +132,7 @@ describe("echartsToSheet / exportEcharts", () => {
       },
     });
 
-    expect(sheet.columns.map((c) => c.header)).toEqual([
+    expect(sheet.columns.map((c) => c.label)).toEqual([
       "类目",
       "销售额",
       "利润",
@@ -137,11 +153,7 @@ describe("echartsToSheet / exportEcharts", () => {
       },
     });
 
-    expect(sheet.columns.map((c) => c.header)).toEqual([
-      "系列",
-      "类目",
-      "数值",
-    ]);
+    expect(sheet.columns.map((c) => c.label)).toEqual(["系列", "类目", "数值"]);
     expect(sheet.data).toHaveLength(2);
     expect(sheet.data[1]).toEqual({ 系列: "S1", 类目: "B", 数值: 2 });
   });
@@ -162,11 +174,7 @@ describe("echartsToSheet / exportEcharts", () => {
       },
     });
 
-    expect(sheet.columns.map((c) => c.header)).toEqual([
-      "系列",
-      "名称",
-      "数值",
-    ]);
+    expect(sheet.columns.map((c) => c.label)).toEqual(["系列", "名称", "数值"]);
     expect(sheet.data).toEqual([
       { 系列: "占比", 名称: "A", 数值: 10 },
       { 系列: "占比", 名称: "B", 数值: 20 },
@@ -189,7 +197,7 @@ describe("echartsToSheet / exportEcharts", () => {
       },
     });
 
-    expect(sheet.columns.map((c) => c.header)).toEqual(["系列", "X", "Y"]);
+    expect(sheet.columns.map((c) => c.label)).toEqual(["系列", "X", "Y"]);
     expect(sheet.data).toEqual([
       { 系列: "点", X: 1, Y: 2 },
       { 系列: "点", X: 3, Y: 4 },
@@ -211,7 +219,7 @@ describe("echartsToSheet / exportEcharts", () => {
       },
     });
 
-    expect(sheet.columns.map((c) => c.header)).toEqual(["系列", "X", "Y"]);
+    expect(sheet.columns.map((c) => c.label)).toEqual(["系列", "X", "Y"]);
     expect(sheet.data).toEqual([
       { 系列: "点", X: 1, Y: 2 },
       { 系列: "点", X: 3, Y: 4 },
@@ -228,7 +236,7 @@ describe("echartsToSheet / exportEcharts", () => {
       },
     });
 
-    expect(sheet.columns.map((c) => c.header)).toEqual(["系列", "X", "Y"]);
+    expect(sheet.columns.map((c) => c.label)).toEqual(["系列", "X", "Y"]);
     expect(sheet.data).toEqual([
       { 系列: "a", X: 1, Y: 2 },
       { 系列: "a", X: 3, Y: 4 },
@@ -293,10 +301,10 @@ describe("headerStyle", () => {
       name: "StyledHeader",
       headerStyle: StylePresets.header,
       columns: [
-        { key: "a", header: "A", style: StylePresets.dataRow },
+        { prop: "a", label: "A", style: StylePresets.dataRow },
         {
-          key: "b",
-          header: "B",
+          prop: "b",
+          label: "B",
           headerStyle: StylePresets.danger,
           style: StylePresets.dataRow,
         },

@@ -28,6 +28,8 @@
 
 > 🔄 **v2.14（梳理修复：进度契约边界 + 文档口径收敛 + 工程门补齐，2026-09-16）**：① **代码**——`fast-xlsx.ts` 进度 checkpoint 钳制：总行数为 1000 整数倍时末个 checkpoint 值恰为 1，与 `exportExcel` 的 terminal 1 连发两次（`onProgress` 契约承诺 1 只出现一次），改为到齐终点时跳过该 checkpoint，把 1 留给 terminal（新增回归用例 2 个：引擎层 + 入口层，153 全量 / CI 实跑 149）；`types.ts` 注释两处——pattern-token 段 "emits anything else verbatim" 精确化（超集 token 非原样透传：`mmm` 的 `mm` 前缀被解析、残留 `m` 原样输出，`"mmm"` → `"09m"`，而 Workbook 路径 numFormat 渲染月份缩写）、`onProgress` 段补钳制说明；`wasm-loader.ts` 三处 `terminateWorker()` 提及补导入路径（`@marcusok/excel-exporter/worker-utils` 子路径，不在主入口——运行时警告原先让用户调用一个主入口拿不到的函数）；`fast-xlsx.ts` 内部清理（`buildWorksheetXml` 参数必传化，消除"声明可选、实现非空断言"；`columnName` 去重，复用 `column-tree.ts` 导出）。② **文档口径**——worker 路由 `duration` 旧口径三处收敛（v2.13 改了 4.4 快照但漏改 4.14 正文与文档站 guide/10 zh/en："只覆盖 Worker 内耗时"→ 主线程从 `exportInWorker` 起表、含序列化与 Worker 往返、直到 Blob 构造）；文档站 zh/09 章节顺序对齐 en（"配合框架"与"显式初始化"互换回正、打包器注意事项归位显式初始化小节）；api/01（zh/en）补 `exportTable`（默认 sheet 名/`freezeRows` 等透传）与 `exportEcharts`（`layout` 选项、空 `xAxis.data` 走 item 布局、默认 sheet 名）细节；7.1 表补 v2.13 新增的 `export-worker.test.ts`（现行 15 个测试文件）；附录 F 计数更新（153/149）。③ **工程**——deploy.yml 质量门补 `format:check`（与 ci.yml 对齐，否则仅格式违规的提交在 CI 标红的同时文档站照常部署）并补 `.nvmrc`/`.npmrc` 触发路径；根 `release` 脚本补 `format:check` 前置；play 补 `@types/node` devDependency（`vite.config.ts`/`workspace-resolver.ts` 用 `node:` 模块，原先靠根目录 `@types` 泄漏过检）；`scripts/dev.mjs` 构建阶段的 turbo 子进程纳入 `children` 清理集合（Ctrl+C 由本脚本按进程树强杀，兑现头注释承诺）+ `main()` 失败兜底为友好中文错误（原以 unhandled rejection 裸栈崩溃）；`.prettierignore` 去除 `.turbo` 重复行；3.5 快照补齐 `.npmrc` 的 NOTE 注释行。
 
+> 🔄 **v2.15（API 命名对齐 Element Plus：`prop`/`label` 正式化 + `key`/`header` 兼容别名，2026-09-17）**：① **API 变更（minor，2.2.0）**——`ColumnConfig` 正式字段改为 `prop`（数据行字段名）与 `label`（表头文字），与 Element Plus 命名一致；旧名 `key`/`header` 降级为 deprecated 别名继续可用（运行时 `prop ?? key`、`label ?? header`，新旧同给时新名优先）。类型层四字段全部可选化，"`label`/`header` 至少提供一个"改由导出时校验兜底（`flattenColumnTree` 新增缺 label 前置报错，避免类型可选化后 undefined 混入 headerGrid）。兼容读取统一收敛到 `column-tree.ts` 新增的 `columnProp`/`columnLabel` 辅助，消费方不直接访问字段。② **代码同步**——format-utils（3 处取数走 `columnProp`）、column-tree（leaf prop 校验、label 非空校验、headerGrid 填充）、worker-exporter 警告与 index.ts 三处校验文案（列名引用改 `columnLabel`）、table-export（`TableColumnInput` 优先级改为 `prop ?? key ?? dataIndex` / `label ?? header ?? title`，产出直书新名）、echarts-export（内部构造列全量新名）；错误消息 "non-empty string key"→"prop"。③ **测试**——14 个测试文件字面量同步；新增兼容用例 4 个（column-tree 旧名别名/新旧优先级/缺 label、table-export 优先级与旧名单用、WorkbookBuilder 旧名端到端；157 全量 / CI 实跑 153）。④ **快照同步**——4.4（types.ts ColumnConfig、format-utils）、4.9（stripColumn 警告）、4.10（validateInput 校验、exportExcel JSDoc）及文中全部列字面量（含 4.6/4.12/附录等历史段，字段名直译、结构不动）。⑤ **外围同步**——包 README（含命名兼容说明段）、文档站 24 页 zh/en（api/02 字段表补 `prop`/`label` 行并标注旧名别名）、play `basic-export.demo.tsx`、docs 站 `datasets.ts`（`MockColumn` 改 `prop`/`label`，数据集 id 的 `key` 不动）与 `ExportDemo.vue`/`MockPreview.vue`。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -1036,12 +1038,27 @@ export type FormatSpec =
 /** Column configuration. A column with `children` is a group header; leaf columns produce data cells. */
 export interface ColumnConfig {
   /**
-   * Data row field name. Required for leaf columns (validated at export time);
-   * group columns (with `children`) may omit it.
+   * Data row field name (Element Plus naming). Required for leaf columns
+   * (validated at export time); group columns (with `children`) may omit it.
+   */
+  prop?: string;
+  /**
+   * Legacy alias of `prop` (pre-2.2 naming), kept for backward compatibility.
+   * `prop` takes precedence when both are present.
+   * @deprecated use `prop`
    */
   key?: string;
-  /** Header text (leaf or group). */
-  header: string;
+  /**
+   * Header text (leaf or group), Element Plus naming. At least one of
+   * `label` / legacy `header` must be provided (validated at export time).
+   */
+  label?: string;
+  /**
+   * Legacy alias of `label` (pre-2.2 naming), kept for backward compatibility.
+   * `label` takes precedence when both are present.
+   * @deprecated use `label`
+   */
+  header?: string;
   /**
    * Group header: the column tree becomes multi-row headers, and each group
    * header cell is merged across its descendant leaf columns. `children: []`
@@ -1097,7 +1114,7 @@ export interface SheetConfig {
   name: string; // 1-31 chars, ECMA-376 validation (no `: \ / ? * [ ]`, no leading/trailing apostrophe)
   columns: ColumnConfig[];
   /**
-   * Data rows keyed by column `key`. Cell values are normalized identically on
+   * Data rows keyed by column `prop`. Cell values are normalized identically on
    * every export path (main / worker / stream, including the stream fallback):
    * non-finite numbers (NaN/Infinity), plain objects, `Date`s and bigints
    * without a `format` are written as their visible string form (JSON for
@@ -1378,7 +1395,7 @@ export function displayValue(
           : (spec.pattern ?? DEFAULT_DATE_PATTERN);
       // row may be null on pathological input; reads as all-fields-missing.
       return formatDateByPattern(
-        row == null ? undefined : row[col.key ?? ""],
+        row == null ? undefined : row[columnProp(col) ?? ""],
         pattern,
       );
     }
@@ -1388,7 +1405,7 @@ export function displayValue(
       // path keeps full precision and renders decimals via numFormat instead.
       // null/undefined render as an empty cell, mirroring applyFormat (never
       // Number(null) === 0).
-      const raw = row == null ? undefined : row[col.key ?? ""];
+      const raw = row == null ? undefined : row[columnProp(col) ?? ""];
       if (raw == null) return "";
       const n = Number(raw);
       if (!Number.isFinite(n)) return toStr(raw);
@@ -1414,11 +1431,11 @@ export function resolveCellFormat(
   col: ColumnConfig,
   item: Record<string, unknown>,
 ): unknown {
-  // `col.key` is optional at the type level (group columns omit it); callers
-  // pass flattened leaves, whose keys are validated by flattenColumnTree.
+  // `col.prop` is optional at the type level (group columns omit it); callers
+  // pass flattened leaves, whose props are validated by flattenColumnTree.
   // A null/primitive row (pathological input) reads as all-fields-missing
   // instead of throwing a raw TypeError on property access.
-  const raw = item == null ? undefined : item[col.key ?? ""];
+  const raw = item == null ? undefined : item[columnProp(col) ?? ""];
   if (!col.format) return raw ?? "";
   if (typeof col.format === "function") return col.format(raw, item);
   return applyFormat(raw, col.format);
@@ -1920,7 +1937,7 @@ export class WorkbookBuilder {
     // so the cell renders correctly without forcing the caller to also set
     // style.numFormat (otherwise dates show as raw serials, numbers as text).
     const columns = config.columns.map(withAutoNumFormat);
-    const headers = columns.map((c) => c.header);
+    const headers = columns.map((c) => c.label);
     const rows = config.data.map((item) =>
       columns.map((col) => resolveCellFormat(col, item)),
     );
@@ -2456,7 +2473,7 @@ export async function exportAsStream(
     writer.startSheet(config.name);
     writer.writeRow(
       config.columns.map((c) => ({
-        value: c.header,
+        value: c.label,
         cellType: "sharedString",
       })),
     );
@@ -2747,7 +2764,7 @@ function stripColumn(c: ColumnConfig): ColumnConfig {
   const children = c.children?.map(stripColumn);
   if (c.format && typeof c.format === "function") {
     console.warn(
-      `[excel-exporter] column "${c.key ?? c.header}" uses a function format, stripped for worker mode. Use FormatSpec for worker compatibility.`,
+      `[excel-exporter] column "${columnLabel(c)}" uses a function format, stripped for worker mode. Use FormatSpec for worker compatibility.`,
     );
     const { format: _format, ...rest } = c;
     return children ? { ...rest, children } : rest;
@@ -3043,7 +3060,7 @@ function validateInput(options: ExportOptions): void {
           col.width < 0)
       ) {
         throw new Error(
-          `[excel-exporter] column "${col.header}" width must be a finite non-negative number`,
+          `[excel-exporter] column "${columnLabel(col)}" width must be a finite non-negative number`,
         );
       }
       if (col.format && typeof col.format === "object") {
@@ -3059,7 +3076,7 @@ function validateInput(options: ExportOptions): void {
             spec.decimals > 100)
         ) {
           throw new Error(
-            `[excel-exporter] column "${col.header}" format.decimals must be an integer between 0 and 100`,
+            `[excel-exporter] column "${columnLabel(col)}" format.decimals must be an integer between 0 and 100`,
           );
         }
         // padding.length：非整数/负数会让 padStart 抛 RangeError 或静默不
@@ -3071,7 +3088,7 @@ function validateInput(options: ExportOptions): void {
             spec.length > 10_000)
         ) {
           throw new Error(
-            `[excel-exporter] column "${col.header}" format.length must be an integer between 0 and 10000`,
+            `[excel-exporter] column "${columnLabel(col)}" format.length must be an integer between 0 and 10000`,
           );
         }
       }
@@ -3091,8 +3108,8 @@ function validateInput(options: ExportOptions): void {
  *   sheets: [{
  *     name: 'Sales', freezeRows: 1, autoFilter: true,
  *     columns: [
- *       { key: 'product', header: 'Product', width: 20 },
- *       { key: 'revenue', header: 'Revenue', width: 15, style: StylePresets.currency },
+ *       { prop: 'product', header: 'Product', width: 20 },
+ *       { prop: 'revenue', header: 'Revenue', width: 15, style: StylePresets.currency },
  *     ],
  *     data: [{ product: 'Widget', revenue: 9999.99 }],
  *   }],
@@ -3474,7 +3491,7 @@ export async function exportWithSheetJS(
     for (const s of options.sheets) {
       validateSheetName(s.name);
       const aoa = [
-        s.columns.map((c) => c.header),
+        s.columns.map((c) => c.label),
         // Apply FormatSpec (enum/padding/number/date) for data semantics; dates
         // format to readable strings since SheetJS CE has no style-write support.
         ...s.data.map((row) => s.columns.map((c) => displayValue(c, row))),
@@ -3821,24 +3838,24 @@ await exportExcel({
       freezeRows: 1,
       autoFilter: true,
       columns: [
-        { key: "orderId", header: "订单号", width: 18 },
-        { key: "product", header: "产品", width: 20 },
+        { prop: "orderId", header: "订单号", width: 18 },
+        { prop: "product", header: "产品", width: 20 },
         {
-          key: "amount",
-          header: "金额",
+          prop: "amount",
+          label: "金额",
           width: 12,
           style: StylePresets.currency,
         },
         {
-          key: "createdAt",
-          header: "下单时间",
+          prop: "createdAt",
+          label: "下单时间",
           width: 18,
           style: StylePresets.datetime,
         },
         // v2.0: format 用 FormatSpec（worker 兼容），而非函数
         {
-          key: "status",
-          header: "状态",
+          prop: "status",
+          label: "状态",
           width: 10,
           format: {
             type: "enum",
@@ -3918,7 +3935,7 @@ describe.runIf(RUN_PERF)(
         sheets: [
           {
             name: "s",
-            columns: [{ key: "id", header: "ID" }],
+            columns: [{ prop: "id", header: "ID" }],
             data: [{ id: 0 }],
           },
         ],
@@ -3971,7 +3988,7 @@ describe.runIf(RUN_PERF)(
 
     it("format function overhead does not dominate", async () => {
       const data = Array.from({ length: 10_000 }, (_, i) => ({ id: i }));
-      const base = { name: "s", columns: [{ key: "id", header: "ID" }], data };
+      const base = { name: "s", columns: [{ prop: "id", header: "ID" }], data };
 
       const t0 = performance.now();
       await exportExcel({
@@ -3992,8 +4009,8 @@ describe.runIf(RUN_PERF)(
             ...base,
             columns: [
               {
-                key: "id",
-                header: "ID",
+                prop: "id",
+                label: "ID",
                 format: (v: unknown) => `#${String(v)}`,
               },
             ],
@@ -4235,7 +4252,7 @@ const wb = new Workbook();
 for (const config of sheets) {
   const ws = wb.addSheet(config.name);
   drawTableFromData(wb, ws, config.data, {
-    headers: config.columns.map((c) => c.header),
+    headers: config.columns.map((c) => c.label),
     columnWidths: config.columns.map((c) => c.width),
     freezeHeader: true,
     autoFilter: true,

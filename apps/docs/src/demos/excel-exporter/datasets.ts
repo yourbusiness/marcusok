@@ -9,8 +9,8 @@ export interface ExcelHint {
 
 export interface MockColumn {
   /** 叶子列必填；分组列（带 children）可省略，只贡献表头行。 */
-  key?: string;
-  header: { zh: string; en: string };
+  prop?: string;
+  label: { zh: string; en: string };
   width?: number;
   hint?: ExcelHint;
   /** 分组列：生成多行表头，表头格自动跨其全部叶子列合并。 */
@@ -117,20 +117,20 @@ const sales: MockDataset = {
   fileName: "sales-report",
   sheetName: { zh: "销售明细", en: "Sales Detail" },
   columns: [
-    { key: "orderId", header: { zh: "订单号", en: "Order ID" }, width: 18 },
+    { prop: "orderId", label: { zh: "订单号", en: "Order ID" }, width: 18 },
     {
-      key: "date",
-      header: { zh: "日期", en: "Date" },
+      prop: "date",
+      label: { zh: "日期", en: "Date" },
       width: 12,
       hint: { kind: "format", spec: { type: "date" } },
     },
-    { key: "region", header: { zh: "区域", en: "Region" }, width: 10 },
-    { key: "product", header: { zh: "商品", en: "Product" }, width: 18 },
-    { key: "channel", header: { zh: "渠道", en: "Channel" }, width: 10 },
-    { key: "quantity", header: { zh: "数量", en: "Qty" }, width: 8 },
+    { prop: "region", label: { zh: "区域", en: "Region" }, width: 10 },
+    { prop: "product", label: { zh: "商品", en: "Product" }, width: 18 },
+    { prop: "channel", label: { zh: "渠道", en: "Channel" }, width: 10 },
+    { prop: "quantity", label: { zh: "数量", en: "Qty" }, width: 8 },
     {
-      key: "unitPrice",
-      header: { zh: "单价", en: "Unit Price" },
+      prop: "unitPrice",
+      label: { zh: "单价", en: "Unit Price" },
       width: 12,
       hint: {
         kind: "format",
@@ -138,14 +138,14 @@ const sales: MockDataset = {
       },
     },
     {
-      key: "amount",
-      header: { zh: "金额", en: "Amount" },
+      prop: "amount",
+      label: { zh: "金额", en: "Amount" },
       width: 14,
       hint: { kind: "style", preset: "currency" },
     },
     {
-      key: "status",
-      header: { zh: "状态", en: "Status" },
+      prop: "status",
+      label: { zh: "状态", en: "Status" },
       width: 10,
       hint: {
         kind: "format",
@@ -180,31 +180,31 @@ const inventory: MockDataset = {
   fileName: "inventory-ledger",
   sheetName: { zh: "库存台账", en: "Inventory" },
   columns: [
-    { key: "sku", header: { zh: "SKU", en: "SKU" }, width: 16 },
-    { key: "name", header: { zh: "商品名称", en: "Product" }, width: 20 },
-    { key: "category", header: { zh: "类目", en: "Category" }, width: 10 },
-    { key: "warehouse", header: { zh: "仓库", en: "Warehouse" }, width: 12 },
+    { prop: "sku", label: { zh: "SKU", en: "SKU" }, width: 16 },
+    { prop: "name", label: { zh: "商品名称", en: "Product" }, width: 20 },
+    { prop: "category", label: { zh: "类目", en: "Category" }, width: 10 },
+    { prop: "warehouse", label: { zh: "仓库", en: "Warehouse" }, width: 12 },
     {
-      key: "stock",
-      header: { zh: "库存", en: "Stock" },
+      prop: "stock",
+      label: { zh: "库存", en: "Stock" },
       width: 10,
       hint: { kind: "format", spec: { type: "number", thousands: true } },
     },
     {
-      key: "safetyStock",
-      header: { zh: "安全库存", en: "Safety Stock" },
+      prop: "safetyStock",
+      label: { zh: "安全库存", en: "Safety Stock" },
       width: 12,
     },
-    { key: "unit", header: { zh: "单位", en: "Unit" }, width: 8 },
+    { prop: "unit", label: { zh: "单位", en: "Unit" }, width: 8 },
     {
-      key: "updatedAt",
-      header: { zh: "更新时间", en: "Updated" },
+      prop: "updatedAt",
+      label: { zh: "更新时间", en: "Updated" },
       width: 12,
       hint: { kind: "format", spec: { type: "date" } },
     },
     {
-      key: "status",
-      header: { zh: "状态", en: "Status" },
+      prop: "status",
+      label: { zh: "状态", en: "Status" },
       width: 10,
       hint: {
         kind: "format",
@@ -239,26 +239,26 @@ const staff: MockDataset = {
   fileName: "staff-roster",
   sheetName: { zh: "人员花名册", en: "Staff Roster" },
   columns: [
-    { key: "id", header: { zh: "工号", en: "ID" }, width: 10 },
-    { key: "name", header: { zh: "姓名", en: "Name" }, width: 12 },
-    { key: "dept", header: { zh: "部门", en: "Department" }, width: 12 },
-    { key: "city", header: { zh: "城市", en: "City" }, width: 10 },
-    { key: "position", header: { zh: "职位", en: "Position" }, width: 14 },
+    { prop: "id", label: { zh: "工号", en: "ID" }, width: 10 },
+    { prop: "name", label: { zh: "姓名", en: "Name" }, width: 12 },
+    { prop: "dept", label: { zh: "部门", en: "Department" }, width: 12 },
+    { prop: "city", label: { zh: "城市", en: "City" }, width: 10 },
+    { prop: "position", label: { zh: "职位", en: "Position" }, width: 14 },
     {
-      key: "salary",
-      header: { zh: "月薪", en: "Monthly Salary" },
+      prop: "salary",
+      label: { zh: "月薪", en: "Monthly Salary" },
       width: 14,
       hint: { kind: "style", preset: "currency" },
     },
     {
-      key: "hiredAt",
-      header: { zh: "入职日期", en: "Hired" },
+      prop: "hiredAt",
+      label: { zh: "入职日期", en: "Hired" },
       width: 12,
       hint: { kind: "format", spec: { type: "date" } },
     },
     {
-      key: "status",
-      header: { zh: "状态", en: "Status" },
+      prop: "status",
+      label: { zh: "状态", en: "Status" },
       width: 10,
       hint: {
         kind: "format",
@@ -294,32 +294,32 @@ const salesGrouped: MockDataset = {
   sheetName: { zh: "销售明细（分组表头）", en: "Sales (Grouped Header)" },
   columns: [
     {
-      header: { zh: "订单信息", en: "Order" },
+      label: { zh: "订单信息", en: "Order" },
       children: [
-        { key: "orderId", header: { zh: "订单号", en: "Order ID" }, width: 18 },
+        { prop: "orderId", label: { zh: "订单号", en: "Order ID" }, width: 18 },
         {
-          key: "date",
-          header: { zh: "日期", en: "Date" },
+          prop: "date",
+          label: { zh: "日期", en: "Date" },
           width: 12,
           hint: { kind: "format", spec: { type: "date" } },
         },
-        { key: "region", header: { zh: "区域", en: "Region" }, width: 10 },
+        { prop: "region", label: { zh: "区域", en: "Region" }, width: 10 },
       ],
     },
     {
-      header: { zh: "商品销售", en: "Item" },
+      label: { zh: "商品销售", en: "Item" },
       children: [
-        { key: "product", header: { zh: "商品", en: "Product" }, width: 18 },
-        { key: "channel", header: { zh: "渠道", en: "Channel" }, width: 10 },
-        { key: "quantity", header: { zh: "数量", en: "Qty" }, width: 8 },
+        { prop: "product", label: { zh: "商品", en: "Product" }, width: 18 },
+        { prop: "channel", label: { zh: "渠道", en: "Channel" }, width: 10 },
+        { prop: "quantity", label: { zh: "数量", en: "Qty" }, width: 8 },
       ],
     },
     {
-      header: { zh: "金额", en: "Amount" },
+      label: { zh: "金额", en: "Amount" },
       children: [
         {
-          key: "unitPrice",
-          header: { zh: "单价", en: "Unit Price" },
+          prop: "unitPrice",
+          label: { zh: "单价", en: "Unit Price" },
           width: 12,
           hint: {
             kind: "format",
@@ -327,16 +327,16 @@ const salesGrouped: MockDataset = {
           },
         },
         {
-          key: "amount",
-          header: { zh: "金额", en: "Amount" },
+          prop: "amount",
+          label: { zh: "金额", en: "Amount" },
           width: 14,
           hint: { kind: "style", preset: "currency" },
         },
       ],
     },
     {
-      key: "status",
-      header: { zh: "状态", en: "Status" },
+      prop: "status",
+      label: { zh: "状态", en: "Status" },
       width: 10,
       hint: {
         kind: "format",

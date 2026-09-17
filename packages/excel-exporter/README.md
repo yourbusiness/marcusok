@@ -37,16 +37,16 @@ await exportExcel({
       freezeRows: 1,
       autoFilter: true,
       columns: [
-        { key: "orderId", header: "Order ID", width: 18 },
+        { prop: "orderId", label: "Order ID", width: 18 },
         {
-          key: "amount",
-          header: "Amount",
+          prop: "amount",
+          label: "Amount",
           width: 12,
           style: StylePresets.currency,
         },
         {
-          key: "status",
-          header: "Status",
+          prop: "status",
+          label: "Status",
           width: 10,
           format: {
             type: "enum",
@@ -60,6 +60,8 @@ await exportExcel({
   ],
 });
 ```
+
+Columns follow Element Plus naming (`prop` = data-row field, `label` = header text). The pre-2.2 names `key` / `header` still work as deprecated aliases (`prop` / `label` win when both are present), so existing code keeps exporting unchanged.
 
 ## How assets resolve (zero configuration)
 
@@ -100,22 +102,22 @@ Columns support a `children` tree to produce multi-row headers: a group column h
 
 ```ts
 columns: [
-  { key: "product", header: "Product" },
+  { prop: "product", label: "Product" },
   {
-    header: "Revenue",
+    label: "Revenue",
     children: [
       {
-        header: "This month",
+        label: "This month",
         children: [
-          { key: "m_qty", header: "Qty" },
-          { key: "m_amt", header: "Amount" },
+          { prop: "m_qty", label: "Qty" },
+          { prop: "m_amt", label: "Amount" },
         ],
       },
       {
-        header: "Year to date",
+        label: "Year to date",
         children: [
-          { key: "y_qty", header: "Qty" },
-          { key: "y_amt", header: "Amount" },
+          { prop: "y_qty", label: "Qty" },
+          { prop: "y_amt", label: "Amount" },
         ],
       },
     ],
@@ -174,7 +176,7 @@ When the browser Worker route fails (missing/404 worker asset, WASM init error i
 - `onPhase(phase, durationMs)` (an `exportExcel` option) — per-phase timing callback: `init` (WASM init) / `build` (workbook build) / `download` (trigger download); reports elapsed milliseconds per phase — note that each real build attempt reports its own `build` phase, so a degradation chain (failed worker build → main-thread retry → stream fallback) reports one `build` per attempt (see `ExportPhase` in [`src/types.ts`](./src/types.ts)). Does not affect the `duration` in the returned result.
 - `WorkbookBuilder` — batch builder (<50k rows, full styling).
 - `exportAsStream(sheets)` — large-file export (>=50k rows).
-- `exportTable(options)` — convenience export for common table data, supporting both AntD `title`/`dataIndex` and Element Plus `label`/`prop` column naming.
+- `exportTable(options)` — convenience export for common table data, accepting Element Plus `prop`/`label` (the library naming), AntD `dataIndex`/`title`, and the legacy `key`/`header` names.
 - `exportEcharts(options)` — convenience export for common ECharts data, supporting category-axis multi-series, pie `name/value`, and scatter pairs in either ECharts spelling (`[x,y]` or `{ value: [x,y] }`). The default sheet name and column headers are Chinese (`图表数据` / `系列` / `类目` / `名称` / `数值`); override them via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`. In long/item layouts the header texts double as row keys, so duplicated headers are rejected with a clear error.
 - `StylePresets` — the seven preset styles.
 - `headerStyle` — supported on both `SheetConfig` and `ColumnConfig` for styling header cells.

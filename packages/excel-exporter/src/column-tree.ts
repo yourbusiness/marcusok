@@ -23,17 +23,30 @@ export interface HeaderCell {
   col: number;
   rowSpan: number;
   colSpan: number;
-  /** The column owning this header cell (its `header`/`headerStyle`). */
+  /** The column owning this header cell (its `label`/`headerStyle`). */
   column: ColumnConfig;
 }
 
 export interface FlattenedColumnTree {
-  /** Data columns, in leaf order. Guaranteed to have a `key`. */
+  /** Data columns, in leaf order. Guaranteed to have a `prop` (or legacy `key`). */
   leaves: ColumnConfig[];
   headerRowCount: number;
   headerGrid: (string | null)[][];
   headerCells: HeaderCell[];
   headerMerges: HeaderCell[];
+}
+
+/**
+ * 兼容读取辅助：2.2.0 起正式字段名为 `prop`/`label`（Element Plus 命名），
+ * 旧名 `key`/`header` 保留为 deprecated 别名。所有消费方一律经由这两个
+ * 函数取值（新名优先），不得直接访问字段，否则旧名输入会静默丢失。
+ */
+export function columnProp(c: ColumnConfig): string | undefined {
+  return c.prop ?? c.key;
+}
+
+export function columnLabel(c: ColumnConfig): string | undefined {
+  return c.label ?? c.header;
 }
 
 /**
@@ -45,7 +58,8 @@ export interface FlattenedColumnTree {
  * - a group column emits no data column and a header cell at its depth with
  *   `colSpan = leafCount(subtree)`.
  *
- * Throws when a leaf column lacks a string `key`, when `children` contain a
+ * Throws when a leaf column lacks a string `prop` (or legacy `key`), when a
+ * column has no `label` (or legacy `header`), when `children` contain a
  * reference cycle (would otherwise overflow the stack in the DFS), or when the
  * same column object appears twice in the tree (a diamond would silently emit
  * duplicate data columns).
@@ -103,14 +117,23 @@ export function flattenColumnTree(
   (function walk(cols: ColumnConfig[]) {
     for (const c of cols) {
       const depth = depthOf.get(c)!;
+      // label/header 在类型层均为可选（兼容别名），空表头在此前置拦截，
+      // 避免 undefined 混入 headerGrid 写出空单元格。
+      const label = columnLabel(c);
+      if (typeof label !== "string" || label.length === 0) {
+        throw new Error(
+          "[excel-exporter] every column must have a non-empty label (or legacy header)",
+        );
+      }
       if (c.children?.length) {
         const colSpan = countLeaves(c);
         pushHeaderCell(depth, leafIndex, 1, colSpan, c);
         walk(c.children);
       } else {
-        if (typeof c.key !== "string" || c.key.length === 0) {
+        const prop = columnProp(c);
+        if (typeof prop !== "string" || prop.length === 0) {
           throw new Error(
-            `[excel-exporter] leaf column "${c.header}" must have a non-empty string key`,
+            `[excel-exporter] leaf column "${label}" must have a non-empty string prop`,
           );
         }
         pushHeaderCell(depth, leafIndex, headerRowCount - depth, 1, c);
@@ -125,7 +148,7 @@ export function flattenColumnTree(
     () => Array<null>(leaves.length).fill(null),
   );
   for (const cell of headerCells)
-    headerGrid[cell.row][cell.col] = cell.column.header;
+    headerGrid[cell.row][cell.col] = columnLabel(cell.column)!;
 
   return { leaves, headerRowCount, headerGrid, headerCells, headerMerges };
 

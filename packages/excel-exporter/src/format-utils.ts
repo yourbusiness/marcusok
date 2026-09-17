@@ -1,4 +1,5 @@
 import type { ColumnConfig, FormatSpec, SheetConfig } from "./types";
+import { columnProp } from "./column-tree";
 import { dateToSerial } from "modern-xlsx";
 
 /** Default display patterns (Excel format codes) when FormatSpec omits `pattern`. */
@@ -175,7 +176,7 @@ export function displayValue(
           : (spec.pattern ?? DEFAULT_DATE_PATTERN);
       // row may be null on pathological input; reads as all-fields-missing.
       return formatDateByPattern(
-        row == null ? undefined : row[col.key ?? ""],
+        row == null ? undefined : row[columnProp(col) ?? ""],
         pattern,
       );
     }
@@ -185,7 +186,7 @@ export function displayValue(
       // path keeps full precision and renders decimals via numFormat instead.
       // null/undefined render as an empty cell, mirroring applyFormat (never
       // Number(null) === 0).
-      const raw = row == null ? undefined : row[col.key ?? ""];
+      const raw = row == null ? undefined : row[columnProp(col) ?? ""];
       if (raw == null) return "";
       const n = Number(raw);
       if (!Number.isFinite(n)) return toStr(raw);
@@ -211,11 +212,11 @@ export function resolveCellFormat(
   col: ColumnConfig,
   item: Record<string, unknown>,
 ): unknown {
-  // `col.key` is optional at the type level (group columns omit it); callers
-  // pass flattened leaves, whose keys are validated by flattenColumnTree.
+  // `col.prop` is optional at the type level (group columns omit it); callers
+  // pass flattened leaves, whose props are validated by flattenColumnTree.
   // A null/primitive row (pathological input) reads as all-fields-missing
   // instead of throwing a raw TypeError on property access.
-  const raw = item == null ? undefined : item[col.key ?? ""];
+  const raw = item == null ? undefined : item[columnProp(col) ?? ""];
   if (!col.format) return raw ?? "";
   if (typeof col.format === "function") return col.format(raw, item);
   return applyFormat(raw, col.format);

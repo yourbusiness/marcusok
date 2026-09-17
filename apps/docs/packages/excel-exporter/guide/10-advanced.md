@@ -32,22 +32,22 @@ await exportExcel({
       name: "Sales",
       freezeRows: 3,
       columns: [
-        { key: "product", header: "Product" },
+        { prop: "product", label: "Product" },
         {
-          header: "Revenue",
+          label: "Revenue",
           children: [
             {
-              header: "This month",
+              label: "This month",
               children: [
-                { key: "m_qty", header: "Qty" },
-                { key: "m_amt", header: "Amount" },
+                { prop: "m_qty", label: "Qty" },
+                { prop: "m_amt", label: "Amount" },
               ],
             },
             {
-              header: "YTD",
+              label: "YTD",
               children: [
-                { key: "y_qty", header: "Qty" },
-                { key: "y_amt", header: "Amount" },
+                { prop: "y_qty", label: "Qty" },
+                { prop: "y_amt", label: "Amount" },
               ],
             },
           ],
@@ -59,7 +59,7 @@ await exportExcel({
 });
 ```
 
-This produces a 3-row header:
+This produces a 3-row label:
 
 | Row | A       | B                       | C      | D                | E      |
 | --- | ------- | ----------------------- | ------ | ---------------- | ------ |
@@ -69,7 +69,7 @@ This produces a 3-row header:
 
 Rules:
 
-- Leaf columns (no `children`) need a `key`; group columns may omit it and contribute header rows only;
+- Leaf columns (no `children`) need a `prop` (or legacy `key`); group columns may omit it and contribute header rows only;
 - `width` / `style` / `format` apply to leaf columns only;
 - Group header cells style via that column's `headerStyle`, leaf headers likewise (falling back to the sheet-level `headerStyle`);
 - Multi-row headers work on every path (main / worker / stream, including the stream fallback); merges survive on the stream and fallback paths too (styles excepted).

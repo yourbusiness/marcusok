@@ -14,28 +14,28 @@ Column `format` can be a structured **FormatSpec** (thread-safe; works on all pa
 
 ```ts
 columns: [
-  { key: "orderId", header: "Order ID", width: 12 },
+  { prop: "orderId", label: "Order ID", width: 12 },
   {
-    key: "date",
-    header: "Date",
+    prop: "date",
+    label: "Date",
     width: 12,
     format: { type: "date", pattern: "yyyy/MM/dd" },
   },
   {
-    key: "amount",
-    header: "Amount",
+    prop: "amount",
+    label: "Amount",
     width: 14,
     format: { type: "number", decimals: 2, thousands: true },
   },
   {
-    key: "status",
-    header: "Status",
+    prop: "status",
+    label: "Status",
     width: 10,
     format: { type: "enum", map: { paid: "Paid" }, fallback: "Unknown" },
   },
   {
-    key: "code",
-    header: "Code",
+    prop: "code",
+    label: "Code",
     width: 12,
     format: { type: "padding", fill: "0", length: 6, align: "right" },
   },
@@ -46,8 +46,8 @@ columns: [
 
 ```ts
 {
-  key: "amount",
-  header: "Amount",
+  prop: "amount",
+  label: "Amount",
   width: 14,
   format: (value, row) => {
     const n = Number(value);

@@ -91,12 +91,27 @@ export type FormatSpec =
 /** Column configuration. A column with `children` is a group header; leaf columns produce data cells. */
 export interface ColumnConfig {
   /**
-   * Data row field name. Required for leaf columns (validated at export time);
-   * group columns (with `children`) may omit it.
+   * Data row field name (Element Plus naming). Required for leaf columns
+   * (validated at export time); group columns (with `children`) may omit it.
+   */
+  prop?: string;
+  /**
+   * Legacy alias of `prop` (pre-2.2 naming), kept for backward compatibility.
+   * `prop` takes precedence when both are present.
+   * @deprecated use `prop`
    */
   key?: string;
-  /** Header text (leaf or group). */
-  header: string;
+  /**
+   * Header text (leaf or group), Element Plus naming. At least one of
+   * `label` / legacy `header` must be provided (validated at export time).
+   */
+  label?: string;
+  /**
+   * Legacy alias of `label` (pre-2.2 naming), kept for backward compatibility.
+   * `label` takes precedence when both are present.
+   * @deprecated use `label`
+   */
+  header?: string;
   /**
    * Group header: the column tree becomes multi-row headers, and each group
    * header cell is merged across its descendant leaf columns. `children: []`
@@ -152,7 +167,7 @@ export interface SheetConfig {
   name: string; // 1-31 chars, ECMA-376 validation (no `: \ / ? * [ ]`, no leading/trailing apostrophe)
   columns: ColumnConfig[];
   /**
-   * Data rows keyed by column `key`. Cell values are normalized identically on
+   * Data rows keyed by column `prop`. Cell values are normalized identically on
    * every export path (main / worker / stream, including the stream fallback):
    * non-finite numbers (NaN/Infinity), plain objects, `Date`s and bigints
    * without a `format` are written as their visible string form (JSON for

@@ -14,7 +14,7 @@ describe("exportExcel phase reporting (onPhase)", () => {
       sheets: [
         {
           name: "S",
-          columns: [{ key: "x", header: "X" }],
+          columns: [{ prop: "x", label: "X" }],
           data: [{ x: 1 }, { x: 2 }],
         },
       ],
@@ -42,7 +42,7 @@ describe("exportExcel phase reporting (onPhase)", () => {
       sheets: [
         {
           name: "S",
-          columns: [{ key: "id", header: "ID" }],
+          columns: [{ prop: "id", label: "ID" }],
           data: Array.from({ length: 100 }, (_, i) => ({ id: i })),
         },
       ],
@@ -66,7 +66,7 @@ describe("exportExcel phase reporting (onPhase)", () => {
       sheets: [
         {
           name: "S",
-          columns: [{ key: "x", header: "X" }],
+          columns: [{ prop: "x", label: "X" }],
           data: [{ x: 1 }],
         },
       ],

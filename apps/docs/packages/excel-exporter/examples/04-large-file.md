@@ -21,10 +21,10 @@ const result = await exportExcel({
     {
       name: "Sales",
       columns: [
-        { key: "orderId", header: "Order ID", width: 18 },
-        { key: "date", header: "Date", width: 12 },
-        { key: "amount", header: "Amount", width: 14 },
-        { key: "status", header: "Status", width: 10 },
+        { prop: "orderId", label: "Order ID", width: 18 },
+        { prop: "date", label: "Date", width: 12 },
+        { prop: "amount", label: "Amount", width: 14 },
+        { prop: "status", label: "Status", width: 10 },
       ],
       data: rows,
     },

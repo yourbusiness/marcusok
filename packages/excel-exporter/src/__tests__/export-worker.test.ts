@@ -54,7 +54,7 @@ const OPTIONS: ExportOptions = {
   sheets: [
     {
       name: "S",
-      columns: [{ key: "a", header: "A" }],
+      columns: [{ prop: "a", label: "A" }],
       data: [{ a: 1 }, { a: 2 }],
     },
   ],

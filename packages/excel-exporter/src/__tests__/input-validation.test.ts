@@ -14,8 +14,8 @@ import { readBuffer } from "./setup";
 const baseSheet = (over: Partial<SheetConfig> = {}): SheetConfig => ({
   name: "S",
   columns: [
-    { key: "a", header: "A" },
-    { key: "b", header: "B" },
+    { prop: "a", label: "A" },
+    { prop: "b", label: "B" },
   ],
   data: [
     { a: 1, b: 2 },
@@ -295,7 +295,7 @@ describe("structurally malformed sheets input", () => {
       sheets: [
         {
           name: "S",
-          columns: [{ key: "a", header: "A" }],
+          columns: [{ prop: "a", label: "A" }],
         } as unknown as SheetConfig,
       ],
     });
@@ -358,14 +358,14 @@ describe("stream feature warnings on nested columns", () => {
       await exportAsStream([
         baseSheet({
           columns: [
-            { key: "a", header: "A" },
+            { prop: "a", label: "A" },
             {
-              header: "Group",
+              label: "Group",
               headerStyle: { font: { bold: true } },
               children: [
                 {
-                  key: "b",
-                  header: "B",
+                  prop: "b",
+                  label: "B",
                   width: 20,
                   style: { font: { italic: true } },
                 },
@@ -437,15 +437,15 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
   }> = [
     {
       label: "width NaN",
-      sheet: { columns: [{ key: "a", header: "A", width: NaN }] },
+      sheet: { columns: [{ prop: "a", label: "A", width: NaN }] },
       message: /column "A" width must be a finite non-negative number/,
     },
     {
       label: "width negative",
       sheet: {
         columns: [
-          { key: "a", header: "A" },
-          { key: "b", header: "B", width: -5 },
+          { prop: "a", label: "A" },
+          { prop: "b", label: "B", width: -5 },
         ],
       },
       message: /column "B" width must be a finite non-negative number/,
@@ -453,7 +453,7 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
     {
       label: "width non-number (JS caller)",
       sheet: {
-        columns: [{ key: "a", header: "A", width: "20" as unknown as number }],
+        columns: [{ prop: "a", label: "A", width: "20" as unknown as number }],
       },
       message: /column "A" width must be a finite non-negative number/,
     },
@@ -472,8 +472,8 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
       sheet: {
         columns: [
           {
-            key: "a",
-            header: "A",
+            prop: "a",
+            label: "A",
             format: { type: "number", decimals: -1 },
           },
         ],
@@ -486,8 +486,8 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
       sheet: {
         columns: [
           {
-            key: "a",
-            header: "A",
+            prop: "a",
+            label: "A",
             format: { type: "number", decimals: 105 },
           },
         ],
@@ -500,8 +500,8 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
       sheet: {
         columns: [
           {
-            key: "a",
-            header: "A",
+            prop: "a",
+            label: "A",
             format: { type: "padding", fill: "0", length: -1 },
           },
         ],
@@ -539,8 +539,8 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
         baseSheet({
           freezeRows: 0,
           columns: [
-            { key: "a", header: "A", width: 0 },
-            { key: "b", header: "B" },
+            { prop: "a", label: "A", width: 0 },
+            { prop: "b", label: "B" },
           ],
         }),
       ],

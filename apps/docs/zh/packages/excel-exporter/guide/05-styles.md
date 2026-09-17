@@ -23,17 +23,17 @@ await exportExcel({
     {
       name: "Sheet1",
       columns: [
-        { key: "name", header: "名称", width: 16, style: StylePresets.dataRow },
+        { prop: "name", label: "名称", width: 16, style: StylePresets.dataRow },
         {
-          key: "amount",
-          header: "金额",
+          prop: "amount",
+          label: "金额",
           width: 14,
           style: StylePresets.currency,
         },
-        { key: "date", header: "日期", width: 12, style: StylePresets.date },
+        { prop: "date", label: "日期", width: 12, style: StylePresets.date },
         {
-          key: "status",
-          header: "状态",
+          prop: "status",
+          label: "状态",
           width: 10,
           style: StylePresets.danger,
         },

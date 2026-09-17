@@ -14,28 +14,28 @@
 
 ```ts
 columns: [
-  { key: "orderId", header: "订单号", width: 12 },
+  { prop: "orderId", label: "订单号", width: 12 },
   {
-    key: "date",
-    header: "日期",
+    prop: "date",
+    label: "日期",
     width: 12,
     format: { type: "date", pattern: "yyyy/MM/dd" },
   },
   {
-    key: "amount",
-    header: "金额",
+    prop: "amount",
+    label: "金额",
     width: 14,
     format: { type: "number", decimals: 2, thousands: true },
   },
   {
-    key: "status",
-    header: "状态",
+    prop: "status",
+    label: "状态",
     width: 10,
     format: { type: "enum", map: { paid: "已支付" }, fallback: "未知" },
   },
   {
-    key: "code",
-    header: "编码",
+    prop: "code",
+    label: "编码",
     width: 12,
     format: { type: "padding", fill: "0", length: 6, align: "right" },
   },
@@ -46,8 +46,8 @@ columns: [
 
 ```ts
 {
-  key: "amount",
-  header: "金额",
+  prop: "amount",
+  label: "金额",
   width: 14,
   format: (value, row) => {
     const n = Number(value);

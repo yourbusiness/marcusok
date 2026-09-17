@@ -15,17 +15,17 @@ describe("WorkbookBuilder round-trip", () => {
       autoFilter: true,
       merges: [{ row: 0, col: 0, rowspan: 2, colspan: 1 }],
       columns: [
-        { key: "id", header: "ID", width: 10 },
-        { key: "name", header: "Name", width: 18, style: StylePresets.dataRow },
+        { prop: "id", label: "ID", width: 10 },
+        { prop: "name", label: "Name", width: 18, style: StylePresets.dataRow },
         {
-          key: "amount",
-          header: "Amount",
+          prop: "amount",
+          label: "Amount",
           width: 14,
           style: StylePresets.currency,
         },
         {
-          key: "status",
-          header: "Status",
+          prop: "status",
+          label: "Status",
           width: 10,
           format: {
             type: "enum",
@@ -75,6 +75,27 @@ describe("WorkbookBuilder round-trip", () => {
     expect(ws.mergeCells.some((r) => r === "A2:A3")).toBe(true);
   });
 
+  it("still exports columns written with deprecated key/header names", async () => {
+    // 2.2.0 兼容承诺：pre-2.2 的 key/header 命名不做迁移也必须继续工作。
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "Legacy",
+      columns: [
+        { key: "id", header: "ID" },
+        { key: "name", header: "Name" },
+      ],
+      data: [
+        { id: 1, name: "Alice" },
+        { id: 2, name: "Bob" },
+      ],
+    });
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("Legacy")!;
+    expect(ws.cell("A1").value).toBe("ID");
+    expect(ws.cell("B2").value).toBe("Alice");
+    expect(String(ws.cell("A3").value)).toBe("2");
+  });
+
   it("writes a multi-row grouped header with header merges and data offset", async () => {
     const builder = await WorkbookBuilder.create();
     builder.addSheet({
@@ -82,22 +103,22 @@ describe("WorkbookBuilder round-trip", () => {
       freezeRows: 2,
       autoFilter: true,
       columns: [
-        { key: "product", header: "产品" },
+        { prop: "product", label: "产品" },
         {
-          header: "收入情况",
+          label: "收入情况",
           children: [
             {
-              header: "本月",
+              label: "本月",
               children: [
-                { key: "m_qty", header: "数量" },
-                { key: "m_amt", header: "金额" },
+                { prop: "m_qty", label: "数量" },
+                { prop: "m_amt", label: "金额" },
               ],
             },
             {
-              header: "本年累计",
+              label: "本年累计",
               children: [
-                { key: "y_qty", header: "数量" },
-                { key: "y_amt", header: "金额" },
+                { prop: "y_qty", label: "数量" },
+                { prop: "y_amt", label: "金额" },
               ],
             },
           ],
@@ -143,16 +164,16 @@ describe("WorkbookBuilder round-trip", () => {
       headerStyle: StylePresets.header,
       columns: [
         {
-          key: "a",
-          header: "A",
+          prop: "a",
+          label: "A",
           headerStyle: StylePresets.danger,
         },
         {
-          header: "G",
+          label: "G",
           headerStyle: StylePresets.currency, // group-level style
           children: [
-            { key: "b", header: "B" },
-            { key: "c", header: "C" },
+            { prop: "b", label: "B" },
+            { prop: "c", label: "C" },
           ],
         },
       ],
@@ -176,12 +197,12 @@ describe("WorkbookBuilder round-trip", () => {
     builder
       .addSheet({
         name: "S1",
-        columns: [{ key: "a", header: "A" }],
+        columns: [{ prop: "a", label: "A" }],
         data: [{ a: 1 }],
       })
       .addSheet({
         name: "S2",
-        columns: [{ key: "b", header: "B" }],
+        columns: [{ prop: "b", label: "B" }],
         data: [{ b: 2 }],
       });
     const bytes = await builder.toBuffer();
@@ -195,7 +216,7 @@ describe("WorkbookBuilder round-trip", () => {
     const builder = await WorkbookBuilder.create();
     builder.addSheet({
       name: "S",
-      columns: [{ key: "x", header: "X" }],
+      columns: [{ prop: "x", label: "X" }],
       data: [{ x: "hi" }],
     });
     const blob = await builder.toBlob();
@@ -211,16 +232,16 @@ describe("WorkbookBuilder round-trip", () => {
       name: "Typed",
       columns: [
         {
-          key: "d",
-          header: "Date",
+          prop: "d",
+          label: "Date",
           format: { type: "date", pattern: "yyyy/MM/dd" },
         },
         {
-          key: "n",
-          header: "Num",
+          prop: "n",
+          label: "Num",
           format: { type: "number", decimals: 2, thousands: true },
         },
-        { key: "plain", header: "Plain" },
+        { prop: "plain", label: "Plain" },
       ],
       // 1234.567: full precision must round-trip (was truncated to 1234.57 by
       // toFixed before the fix; decimals=2 now only affects display via numFormat).
@@ -253,10 +274,10 @@ describe("WorkbookBuilder round-trip", () => {
     const sheet = {
       name: "Mixed",
       columns: [
-        { key: "obj", header: "Obj" },
-        { key: "d", header: "D" },
-        { key: "big", header: "Big" },
-        { key: "sym", header: "Sym" },
+        { prop: "obj", label: "Obj" },
+        { prop: "d", label: "D" },
+        { prop: "big", label: "Big" },
+        { prop: "sym", label: "Sym" },
       ],
       data: [
         {
@@ -293,15 +314,15 @@ describe("WorkbookBuilder round-trip", () => {
     // values). The builder now caches by structural key.
     const builder = await WorkbookBuilder.create();
     const columns = Array.from({ length: 10 }, (_, i) => ({
-      key: `c${i}`,
-      header: `C${i}`,
+      prop: `c${i}`,
+      label: `C${i}`,
       style: StylePresets.currency,
       headerStyle: StylePresets.header,
     }));
     builder.addSheet({
       name: "Dedup",
       columns,
-      data: [Object.fromEntries(columns.map((c) => [c.key, 1]))],
+      data: [Object.fromEntries(columns.map((c) => [c.prop, 1]))],
     });
     const bytes = await builder.toBuffer();
 
@@ -329,8 +350,8 @@ describe("WorkbookBuilder round-trip", () => {
     builder.addSheet({
       name: "NullRow",
       columns: [
-        { key: "a", header: "A" },
-        { key: "b", header: "B", format: { type: "number", decimals: 1 } },
+        { prop: "a", label: "A" },
+        { prop: "b", label: "B", format: { type: "number", decimals: 1 } },
       ],
       data: [null, { a: "x", b: 2 }] as unknown as Record<string, unknown>[],
     });
@@ -347,7 +368,7 @@ describe("WorkbookBuilder round-trip", () => {
     const builder = await WorkbookBuilder.create();
     builder.addSheet({
       name: "EmptyBorder",
-      columns: [{ key: "a", header: "A", style: { border: {} } }],
+      columns: [{ prop: "a", label: "A", style: { border: {} } }],
       data: [{ a: 1 }],
     });
     const bytes = await builder.toBuffer();

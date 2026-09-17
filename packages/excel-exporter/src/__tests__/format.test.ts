@@ -94,15 +94,15 @@ describe("applyFormat", () => {
 
 describe("resolveCellFormat (union dispatch)", () => {
   it("returns raw value when no format", () => {
-    const col: ColumnConfig = { key: "x", header: "X" };
+    const col: ColumnConfig = { prop: "x", label: "X" };
     expect(resolveCellFormat(col, { x: "raw" })).toBe("raw");
     expect(resolveCellFormat(col, {})).toBe(""); // missing key -> ''
   });
 
   it("calls function form", () => {
     const col: ColumnConfig = {
-      key: "n",
-      header: "N",
+      prop: "n",
+      label: "N",
       format: (v) => Number(v) * 2,
     };
     expect(resolveCellFormat(col, { n: 5 })).toBe(10);
@@ -110,8 +110,8 @@ describe("resolveCellFormat (union dispatch)", () => {
 
   it("dispatches FormatSpec via applyFormat", () => {
     const col: ColumnConfig = {
-      key: "s",
-      header: "S",
+      prop: "s",
+      label: "S",
       format: { type: "enum", map: { a: "Alpha" } },
     };
     expect(resolveCellFormat(col, { s: "a" })).toBe("Alpha");
@@ -211,8 +211,8 @@ describe("formatDateByPattern", () => {
 describe("displayValue (stream number-decimals baking)", () => {
   it("bakes decimals into the displayed value when a number spec is set", () => {
     const col = {
-      key: "n",
-      header: "N",
+      prop: "n",
+      label: "N",
       format: { type: "number" as const, decimals: 2 },
     };
     // the stream path has no numFormat -> decimals applied here (1234.567 -> 1234.57)
@@ -220,18 +220,18 @@ describe("displayValue (stream number-decimals baking)", () => {
     // decimals default 0 -> integer display (1234.567 -> 1235)
     expect(
       displayValue(
-        { key: "n", header: "N", format: { type: "number" as const } },
+        { prop: "n", label: "N", format: { type: "number" as const } },
         { n: 1234.567 },
       ),
     ).toBe(1235);
     // no number spec -> raw value untouched
-    expect(displayValue({ key: "n", header: "N" }, { n: 1234.567 })).toBe(
+    expect(displayValue({ prop: "n", label: "N" }, { n: 1234.567 })).toBe(
       1234.567,
     );
     // non-finite -> stringified, never NaN
     expect(
       displayValue(
-        { key: "n", header: "N", format: { type: "number" as const } },
+        { prop: "n", label: "N", format: { type: "number" as const } },
         { n: "abc" },
       ),
     ).toBe("abc");
@@ -240,8 +240,8 @@ describe("displayValue (stream number-decimals baking)", () => {
     expect(
       displayValue(
         {
-          key: "n",
-          header: "N",
+          prop: "n",
+          label: "N",
           format: { type: "number" as const, decimals: 2 },
         },
         { n: null },
@@ -250,8 +250,8 @@ describe("displayValue (stream number-decimals baking)", () => {
     expect(
       displayValue(
         {
-          key: "n",
-          header: "N",
+          prop: "n",
+          label: "N",
           format: { type: "number" as const, decimals: 2 },
         },
         { n: undefined },
@@ -266,7 +266,7 @@ describe("toStr / Invalid Date", () => {
     // whole export (mirrors toJsDate's NaN guard on the parsing side).
     expect(toStr(new Date(NaN))).toBe("Invalid Date");
     // Same guard through the stream path's value resolver (no format)...
-    expect(displayValue({ key: "d", header: "D" }, { d: new Date(NaN) })).toBe(
+    expect(displayValue({ prop: "d", label: "D" }, { d: new Date(NaN) })).toBe(
       "Invalid Date",
     );
     // ...and through a date spec whose value does not parse to a real date.

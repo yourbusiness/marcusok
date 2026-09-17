@@ -117,7 +117,7 @@ export class WorkbookBuilder {
     });
 
     // Column styles: apply to data cells only, matching the `style: not the
-    // header` contract in types.ts. Header styling is handled separately above
+    // label` contract in types.ts. Header styling is handled separately above
     // via headerStyle. Data rows start at sheet row headerRowCount (0-based), so
     // slice(headerRowCount) iterates only data rows; mutating styleIndex is a
     // plain JS property write, bypassing ws.cell(ref) ref-parsing overhead.

@@ -24,7 +24,7 @@ describe("Node auto-init (integration, real wasm binary)", () => {
       sheets: [
         {
           name: "S",
-          columns: [{ key: "a", header: "A" }],
+          columns: [{ prop: "a", label: "A" }],
           data: [{ a: 1 }, { a: 2 }],
         },
       ],

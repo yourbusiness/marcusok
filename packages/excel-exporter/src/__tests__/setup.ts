@@ -24,8 +24,8 @@ export function makeData(n: number) {
   }));
 }
 export const fourCols = [
-  { key: "id", header: "ID" },
-  { key: "name", header: "Name" },
-  { key: "amount", header: "Amount" },
-  { key: "createdAt", header: "Date" },
+  { prop: "id", label: "ID" },
+  { prop: "name", label: "Name" },
+  { prop: "amount", label: "Amount" },
+  { prop: "createdAt", label: "Date" },
 ];

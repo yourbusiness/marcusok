@@ -66,17 +66,17 @@ const STATUS_LABEL: Record<RunStatus, string> = {
 
 /** 与 mock 字段一一对应的列配置；数字/日期列用 FormatSpec 验证 format 能力。 */
 const COLUMNS: ColumnConfig[] = [
-  { key: "id", header: "ID", width: 10 },
-  { key: "name", header: "姓名", width: 16 },
-  { key: "city", header: "城市", width: 12 },
+  { prop: "id", label: "ID", width: 10 },
+  { prop: "name", label: "姓名", width: 16 },
+  { prop: "city", label: "城市", width: 12 },
   {
-    key: "amount",
-    header: "金额",
+    prop: "amount",
+    label: "金额",
     width: 14,
     format: { type: "number", decimals: 2, thousands: true },
   },
-  { key: "orderDate", header: "下单日期", width: 14, format: { type: "date" } },
-  { key: "status", header: "状态", width: 12 },
+  { prop: "orderDate", label: "下单日期", width: 14, format: { type: "date" } },
+  { prop: "status", label: "状态", width: 12 },
 ];
 
 /**
@@ -85,35 +85,35 @@ const COLUMNS: ColumnConfig[] = [
  * 叶子顺序与 COLUMNS 一致，因此两种布局下"城市"都是第 3 个叶子列（col=2）。
  */
 const GROUPED_COLUMNS: ColumnConfig[] = [
-  { key: "id", header: "ID", width: 10 },
+  { prop: "id", label: "ID", width: 10 },
   {
-    header: "客户信息",
+    label: "客户信息",
     children: [
-      { key: "name", header: "姓名", width: 16 },
-      { key: "city", header: "城市", width: 12 },
+      { prop: "name", label: "姓名", width: 16 },
+      { prop: "city", label: "城市", width: 12 },
     ],
   },
   {
-    header: "订单明细",
+    label: "订单明细",
     children: [
       {
-        header: "金额与日期",
+        label: "金额与日期",
         children: [
           {
-            key: "amount",
-            header: "金额",
+            prop: "amount",
+            label: "金额",
             width: 14,
             format: { type: "number", decimals: 2, thousands: true },
           },
           {
-            key: "orderDate",
-            header: "下单日期",
+            prop: "orderDate",
+            label: "下单日期",
             width: 14,
             format: { type: "date" },
           },
         ],
       },
-      { key: "status", header: "状态", width: 12 },
+      { prop: "status", label: "状态", width: 12 },
     ],
   },
 ];

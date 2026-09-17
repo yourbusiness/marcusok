@@ -13,8 +13,8 @@ await exportExcel({
     {
       name: "Sheet1",
       columns: [
-        { key: "name", header: "Name", width: 16 },
-        { key: "count", header: "Count", width: 10 },
+        { prop: "name", label: "Name", width: 16 },
+        { prop: "count", label: "Count", width: 10 },
       ],
       data: [
         { name: "Keyboard", count: 12 },
@@ -40,17 +40,17 @@ await exportExcel({
       freezeRows: 1,
       autoFilter: true,
       columns: [
-        { key: "orderId", header: "Order ID", width: 18 },
-        { key: "date", header: "Date", width: 12, format: { type: "date" } },
+        { prop: "orderId", label: "Order ID", width: 18 },
+        { prop: "date", label: "Date", width: 12, format: { type: "date" } },
         {
-          key: "amount",
-          header: "Amount",
+          prop: "amount",
+          label: "Amount",
           width: 14,
           style: StylePresets.currency,
         },
         {
-          key: "status",
-          header: "Status",
+          prop: "status",
+          label: "Status",
           width: 10,
           format: {
             type: "enum",

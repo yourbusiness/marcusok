@@ -36,10 +36,10 @@ await exportExcel({
       freezeRows: 1,
       autoFilter: true,
       columns: [
-        { key: "orderId", header: "Order ID", width: 18 },
+        { prop: "orderId", label: "Order ID", width: 18 },
         {
-          key: "amount",
-          header: "Amount",
+          prop: "amount",
+          label: "Amount",
           width: 14,
           style: StylePresets.currency,
         },

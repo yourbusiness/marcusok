@@ -24,7 +24,7 @@ describe.runIf(RUN_PERF)(
         sheets: [
           {
             name: "s",
-            columns: [{ key: "id", header: "ID" }],
+            columns: [{ prop: "id", label: "ID" }],
             data: [{ id: 0 }],
           },
         ],
@@ -77,7 +77,7 @@ describe.runIf(RUN_PERF)(
 
     it("format function overhead does not dominate", async () => {
       const data = Array.from({ length: 10_000 }, (_, i) => ({ id: i }));
-      const base = { name: "s", columns: [{ key: "id", header: "ID" }], data };
+      const base = { name: "s", columns: [{ prop: "id", label: "ID" }], data };
 
       const t0 = performance.now();
       await exportExcel({
@@ -98,8 +98,8 @@ describe.runIf(RUN_PERF)(
             ...base,
             columns: [
               {
-                key: "id",
-                header: "ID",
+                prop: "id",
+                label: "ID",
                 format: (v: unknown) => `#${String(v)}`,
               },
             ],

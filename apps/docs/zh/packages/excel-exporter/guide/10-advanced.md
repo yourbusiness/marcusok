@@ -32,22 +32,22 @@ await exportExcel({
       name: "销售",
       freezeRows: 3,
       columns: [
-        { key: "product", header: "产品" },
+        { prop: "product", label: "产品" },
         {
-          header: "收入情况",
+          label: "收入情况",
           children: [
             {
-              header: "本月",
+              label: "本月",
               children: [
-                { key: "m_qty", header: "数量" },
-                { key: "m_amt", header: "金额" },
+                { prop: "m_qty", label: "数量" },
+                { prop: "m_amt", label: "金额" },
               ],
             },
             {
-              header: "本年累计",
+              label: "本年累计",
               children: [
-                { key: "y_qty", header: "数量" },
-                { key: "y_amt", header: "金额" },
+                { prop: "y_qty", label: "数量" },
+                { prop: "y_amt", label: "金额" },
               ],
             },
           ],
@@ -69,7 +69,7 @@ await exportExcel({
 
 规则：
 
-- 叶子列（无 `children`）必须有 `key`；分组列可省略 `key`，只贡献表头；
+- 叶子列（无 `children`）必须有 `prop`（或旧名 `key`）；分组列可省略，只贡献表头；
 - `width` / `style` / `format` 只对叶子列生效；
 - 分组表头样式用该列的 `headerStyle`，叶子表头样式同理（未设置时回退到表级 `headerStyle`）；
 - 任意路径（main / worker / stream，含流式兜底）都支持多级表头，stream 与兜底路径同样保留合并（样式除外）。

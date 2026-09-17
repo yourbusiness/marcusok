@@ -29,7 +29,7 @@ describe("exportExcel mode routing (Node environment)", () => {
       sheets: [
         {
           name: "S",
-          columns: [{ key: "x", header: "X", style: StylePresets.currency }],
+          columns: [{ prop: "x", label: "X", style: StylePresets.currency }],
           data: [{ x: 1 }, { x: 2 }],
         },
       ],
@@ -45,7 +45,7 @@ describe("exportExcel mode routing (Node environment)", () => {
     const r = await exportExcel({
       filename: "routing-auto-stream",
       download: false,
-      sheets: [{ name: "S", columns: [{ key: "id", header: "ID" }], data }],
+      sheets: [{ name: "S", columns: [{ prop: "id", label: "ID" }], data }],
     });
     expect(r.success).toBe(true);
     expect(r.engine).toBe("modern-xlsx");
@@ -63,7 +63,7 @@ describe("exportExcel mode routing (Node environment)", () => {
       sheets: [
         {
           name: "S",
-          columns: [{ key: "id", header: "ID" }],
+          columns: [{ prop: "id", label: "ID" }],
           data: Array.from({ length: 2000 }, (_, i) => ({ id: i })),
         },
       ],
@@ -87,7 +87,7 @@ describe("exportExcel mode routing (Node environment)", () => {
         sheets: [
           {
             name: "S",
-            columns: [{ key: "x", header: "X" }],
+            columns: [{ prop: "x", label: "X" }],
             data: [{ x: 1 }, { x: 2 }],
           },
         ],
@@ -124,7 +124,7 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
         sheets: [
           {
             name: "S",
-            columns: [{ key: "x", header: "X" }],
+            columns: [{ prop: "x", label: "X" }],
             data: [{ x: 1 }],
           },
         ],
@@ -161,7 +161,7 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
         sheets: [
           {
             name: "S",
-            columns: [{ key: "x", header: "X" }],
+            columns: [{ prop: "x", label: "X" }],
             data: [{ x: 1 }],
           },
         ],
@@ -193,7 +193,7 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
         sheets: [
           {
             name: "S",
-            columns: [{ key: "x", header: "X" }],
+            columns: [{ prop: "x", label: "X" }],
             data: [{ x: 1 }],
           },
         ],
@@ -223,8 +223,8 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
         name: "S",
         columns: [
           {
-            key: "x",
-            header: "X",
+            prop: "x",
+            label: "X",
             format: () => {
               calls++;
               throw new Error(`boom-${calls}`);
@@ -270,8 +270,8 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
         name: "S",
         columns: [
           {
-            key: "x",
-            header: "X",
+            prop: "x",
+            label: "X",
             format: () => {
               calls++;
               throw new Error(`boom-${calls}`);
@@ -310,7 +310,7 @@ describe("download trigger isolation", () => {
     },
   };
   const oneSheet = [
-    { name: "S", columns: [{ key: "x", header: "X" }], data: [{ x: 1 }] },
+    { name: "S", columns: [{ prop: "x", label: "X" }], data: [{ x: 1 }] },
   ];
 
   it("main route: a throwing download trigger keeps the successful result", async () => {

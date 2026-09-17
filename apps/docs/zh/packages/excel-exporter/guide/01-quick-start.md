@@ -13,8 +13,8 @@ await exportExcel({
     {
       name: "Sheet1",
       columns: [
-        { key: "name", header: "名称", width: 16 },
-        { key: "count", header: "数量", width: 10 },
+        { prop: "name", label: "名称", width: 16 },
+        { prop: "count", label: "数量", width: 10 },
       ],
       data: [
         { name: "机械键盘", count: 12 },
@@ -40,22 +40,22 @@ await exportExcel({
       freezeRows: 1,
       autoFilter: true,
       columns: [
-        { key: "orderId", header: "订单号", width: 18 },
+        { prop: "orderId", label: "订单号", width: 18 },
         {
-          key: "date",
-          header: "日期",
+          prop: "date",
+          label: "日期",
           width: 12,
           format: { type: "date" },
         },
         {
-          key: "amount",
-          header: "金额",
+          prop: "amount",
+          label: "金额",
           width: 14,
           style: StylePresets.currency,
         },
         {
-          key: "status",
-          header: "状态",
+          prop: "status",
+          label: "状态",
           width: 10,
           format: {
             type: "enum",

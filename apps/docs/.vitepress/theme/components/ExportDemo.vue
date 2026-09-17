@@ -93,13 +93,13 @@ async function run() {
     // 递归映射：分组列（children）成为多行表头，width/style/format 只落在叶子列。
     const toColumnConfig = (c: MockColumn): ColumnConfig => {
       const col: ColumnConfig = {
-        header: isEn.value ? c.header.en : c.header.zh,
+        label: isEn.value ? c.label.en : c.label.zh,
       };
       if (c.children?.length) {
         col.children = c.children.map(toColumnConfig);
         return col;
       }
-      col.key = c.key;
+      col.prop = c.prop;
       if (c.width) col.width = c.width;
       if (c.hint?.kind === "style" && c.hint.preset) {
         col.style = StylePresets[c.hint.preset as keyof typeof StylePresets];

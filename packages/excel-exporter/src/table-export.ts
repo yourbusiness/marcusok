@@ -11,9 +11,10 @@ import type {
 /**
  * A deliberately dependency-free table column descriptor.
  *
- * It accepts the common field names used by Ant Design (`title` / `dataIndex`)
- * and Element Plus (`label` / `prop`). `key` / `header` take precedence when
- * both naming styles are present.
+ * It accepts the common field names used by Element Plus (`prop` / `label`,
+ * also the library's own naming since 2.2.0) and Ant Design (`dataIndex` /
+ * `title`), plus the library's pre-2.2 legacy names (`key` / `header`).
+ * `prop` / `label` take precedence when several naming styles are present.
  */
 export interface TableColumnInput {
   key?: string;
@@ -54,14 +55,14 @@ function normalizeHeader(
   if (typeof value === "string" && value.length > 0) return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   throw new Error(
-    `[excel-exporter] table column "${key}" has no usable header. Provide header, title, or label.`,
+    `[excel-exporter] table column "${key}" has no usable header. Provide label, header, or title.`,
   );
 }
 
 /**
  * Recursively map a table column (Ant Design / Element Plus shaped) to a
  * `ColumnConfig`. Columns with `children` become group headers (multi-row
- * header); leaves need a usable key. Group `width`/`style`/`format` are not
+ * header); leaves need a usable prop. Group `width`/`style`/`format` are not
  * meaningful (no data cells), so they are dropped.
  */
 function toColumnConfig(
@@ -77,10 +78,11 @@ function toColumnConfig(
       "[excel-exporter] circular children reference in table columns",
     );
   }
-  const key = col.key ?? col.dataIndex ?? col.prop;
-  const header = normalizeHeader(
-    col.header ?? col.title ?? col.label,
-    key ?? `group-${index}`,
+  // 新名（prop/label）优先，其次本库旧名（key/header），最后 Ant Design 命名兜底。
+  const prop = col.prop ?? col.key ?? col.dataIndex;
+  const label = normalizeHeader(
+    col.label ?? col.header ?? col.title,
+    prop ?? `group-${index}`,
   );
   visiting.add(col);
   const children = col.children?.map((child, i) =>
@@ -90,19 +92,19 @@ function toColumnConfig(
 
   if (children?.length) {
     return {
-      header,
+      label,
       ...(col.headerStyle !== undefined && { headerStyle: col.headerStyle }),
       children,
     };
   }
-  if (!key || typeof key !== "string") {
+  if (!prop || typeof prop !== "string") {
     throw new Error(
-      `[excel-exporter] table column #${index} has no usable key. Provide key, dataIndex, or prop.`,
+      `[excel-exporter] table column #${index} has no usable prop. Provide prop, key, or dataIndex.`,
     );
   }
   return {
-    key,
-    header,
+    prop,
+    label,
     ...(col.width !== undefined && { width: col.width }),
     ...(col.style !== undefined && { style: col.style }),
     ...(col.headerStyle !== undefined && { headerStyle: col.headerStyle }),

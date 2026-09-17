@@ -177,9 +177,9 @@ function buildCategorySheet(
     return {
       name: input.sheetName ?? "图表数据",
       columns: [
-        { key: seriesHeader, header: seriesHeader },
-        { key: categoryHeader, header: categoryHeader },
-        { key: valueHeader, header: valueHeader },
+        { prop: seriesHeader, label: seriesHeader },
+        { prop: categoryHeader, label: categoryHeader },
+        { prop: valueHeader, label: valueHeader },
       ],
       data,
     };
@@ -196,10 +196,10 @@ function buildCategorySheet(
   }
 
   const columns: ColumnConfig[] = [
-    { key: categoryHeader, header: categoryHeader },
+    { prop: categoryHeader, label: categoryHeader },
     ...series.map((s, i) => ({
-      key: `__series_${i}`,
-      header: seriesName(s, i),
+      prop: `__series_${i}`,
+      label: seriesName(s, i),
     })),
   ];
   const data = categories.map((category, rowIndex) => {
@@ -252,9 +252,9 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
     return {
       name: input.sheetName ?? "图表数据",
       columns: [
-        { key: seriesHeader, header: seriesHeader },
-        { key: xKey, header: "X" },
-        { key: yKey, header: "Y" },
+        { prop: seriesHeader, label: seriesHeader },
+        { prop: xKey, label: "X" },
+        { prop: yKey, label: "Y" },
       ],
       data,
     };
@@ -289,9 +289,9 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
   return {
     name: input.sheetName ?? "图表数据",
     columns: [
-      { key: seriesHeader, header: seriesHeader },
-      { key: nameHeader, header: nameHeader },
-      { key: valueHeader, header: valueHeader },
+      { prop: seriesHeader, label: seriesHeader },
+      { prop: nameHeader, label: nameHeader },
+      { prop: valueHeader, label: valueHeader },
     ],
     data,
   };

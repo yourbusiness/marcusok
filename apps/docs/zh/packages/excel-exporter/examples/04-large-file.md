@@ -21,10 +21,10 @@ const result = await exportExcel({
     {
       name: "销售明细",
       columns: [
-        { key: "orderId", header: "订单号", width: 18 },
-        { key: "date", header: "日期", width: 12 },
-        { key: "amount", header: "金额", width: 14 },
-        { key: "status", header: "状态", width: 10 },
+        { prop: "orderId", label: "订单号", width: 18 },
+        { prop: "date", label: "日期", width: 12 },
+        { prop: "amount", label: "金额", width: 14 },
+        { prop: "status", label: "状态", width: 10 },
       ],
       data: rows,
     },

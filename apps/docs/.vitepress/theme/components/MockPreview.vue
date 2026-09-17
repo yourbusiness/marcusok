@@ -37,7 +37,7 @@ const headerRows = computed<HeaderCell[][]>(() => {
   const depth = headerDepth(ds.value.columns);
   const rows: HeaderCell[][] = Array.from({ length: depth }, () => []);
   let groupSeq = 0;
-  const label = (c: MockColumn) => (isEn.value ? c.header.en : c.header.zh);
+  const label = (c: MockColumn) => (isEn.value ? c.label.en : c.label.zh);
   (function walk(cols: MockColumn[], level: number) {
     for (const c of cols) {
       if (c.children?.length) {
@@ -50,7 +50,7 @@ const headerRows = computed<HeaderCell[][]>(() => {
         walk(c.children, level + 1);
       } else {
         rows[level]!.push({
-          key: c.key ?? `l${groupSeq++}`,
+          key: c.prop ?? `l${groupSeq++}`,
           label: label(c),
           rowspan: depth - level,
           colspan: 1,
@@ -89,8 +89,8 @@ function reshuffle() {
       </thead>
       <tbody>
         <tr v-for="(row, i) in items" :key="i">
-          <td v-for="c in leaves" :key="c.key">
-            {{ String(row[c.key!] ?? "") }}
+          <td v-for="c in leaves" :key="c.prop">
+            {{ String(row[c.prop!] ?? "") }}
           </td>
         </tr>
       </tbody>

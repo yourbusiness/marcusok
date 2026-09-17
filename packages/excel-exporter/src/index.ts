@@ -10,7 +10,7 @@ import {
   type EChartsExportOptions,
 } from "./echarts-export";
 import { validateSheetName, validateMerges } from "./format-utils";
-import { flattenColumnTree } from "./column-tree";
+import { columnLabel, flattenColumnTree } from "./column-tree";
 
 export * from "./types";
 export * from "./style-presets";
@@ -166,7 +166,7 @@ function validateInput(options: ExportOptions): void {
           col.width < 0)
       ) {
         throw new Error(
-          `[excel-exporter] column "${col.header}" width must be a finite non-negative number`,
+          `[excel-exporter] column "${columnLabel(col)}" width must be a finite non-negative number`,
         );
       }
       if (col.format && typeof col.format === "object") {
@@ -182,7 +182,7 @@ function validateInput(options: ExportOptions): void {
             spec.decimals > 100)
         ) {
           throw new Error(
-            `[excel-exporter] column "${col.header}" format.decimals must be an integer between 0 and 100`,
+            `[excel-exporter] column "${columnLabel(col)}" format.decimals must be an integer between 0 and 100`,
           );
         }
         // padding.length：非整数/负数会让 padStart 抛 RangeError 或静默不
@@ -194,7 +194,7 @@ function validateInput(options: ExportOptions): void {
             spec.length > 10_000)
         ) {
           throw new Error(
-            `[excel-exporter] column "${col.header}" format.length must be an integer between 0 and 10000`,
+            `[excel-exporter] column "${columnLabel(col)}" format.length must be an integer between 0 and 10000`,
           );
         }
       }
@@ -214,8 +214,8 @@ function validateInput(options: ExportOptions): void {
  *   sheets: [{
  *     name: 'Sales', freezeRows: 1, autoFilter: true,
  *     columns: [
- *       { key: 'product', header: 'Product', width: 20 },
- *       { key: 'revenue', header: 'Revenue', width: 15, style: StylePresets.currency },
+ *       { prop: 'product', label: 'Product', width: 20 },
+ *       { prop: 'revenue', label: 'Revenue', width: 15, style: StylePresets.currency },
  *     ],
  *     data: [{ product: 'Widget', revenue: 9999.99 }],
  *   }],
