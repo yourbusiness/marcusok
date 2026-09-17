@@ -153,6 +153,18 @@ On the Worker path the main thread only performs one structured-clone `postMessa
 
 [`src/style-presets.ts`](./src/style-presets.ts) provides 8 presets: `header` (bold, dark-blue background with white text), `currency` (thousands separator, two decimals), `date`/`datetime`, `percent`, `dataRow` (left-aligned, light-gray bottom border), `bordered` (thin light-gray box on all four sides), `danger` (red bold). Custom `CellStyle` is supported (font/fill/alignment/borders/number format); colors are 6-digit RGB hex (e.g. `'FF0000'`).
 
+Presets are plain constant objects — combine them at the sheet level, and derive variants with object spread instead of rewriting a `CellStyle` from scratch:
+
+```ts
+// sheet-level fields (see "Table-wide styling & index column" below)
+headerStyle: StylePresets.header, // headers, whole table
+dataStyle: StylePresets.bordered, // base style for every data cell
+// column-level: a tweaked preset — thousands separator, no decimals
+style: { ...StylePresets.currency, numFormat: "#,##0" },
+```
+
+Variant recipes and the full styling guide (header overrides, index-column styling, format-code tweaks): see the [docs](https://yourbusiness.github.io/marcusok/packages/excel-exporter/guide/05-styles).
+
 ### Table-wide styling & index column
 
 Two sheet-level fields cover the whole table in one place:
@@ -209,7 +221,7 @@ When the browser Worker route fails (missing/404 worker asset, WASM init error i
 - `exportAsStream(sheets)` — large-file export (>=50k rows).
 - `exportTable(options)` — convenience export for common table data, accepting Element Plus `prop`/`label` (the library naming), AntD `dataIndex`/`title`, and the legacy `key`/`header` names.
 - `exportEcharts(options)` — convenience export for common ECharts data, supporting category-axis multi-series, pie `name/value`, and scatter pairs in either ECharts spelling (`[x,y]` or `{ value: [x,y] }`). The default sheet name and column headers are Chinese (`图表数据` / `系列` / `类目` / `名称` / `数值`); override them via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`. In long/item layouts the header texts double as row keys, so duplicated headers are rejected with a clear error.
-- `StylePresets` — the seven preset styles.
+- `StylePresets` — the eight preset styles.
 - `headerStyle` — supported on both `SheetConfig` and `ColumnConfig` for styling header cells.
 - `exportInWorker` / `terminateWorker` (`@marcusok/excel-exporter/worker-utils`, source entry `src/worker-exporter.ts`) — manual Worker lifecycle control.
 

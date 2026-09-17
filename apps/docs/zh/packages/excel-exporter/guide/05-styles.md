@@ -1,6 +1,6 @@
 # 样式
 
-列级 `style`（`CellStyle`）应用于该列的所有**数据单元格**——表头样式单独配置：列级 `headerStyle` 或表级 `headerStyle`；表级 `dataStyle` 则为全部数据单元格提供基底样式（见下文）。内置 8 种预设，也支持完全自定义。
+列级 `style`（`CellStyle`）应用于该列的所有**数据单元格**——表头样式单独配置：列级 `headerStyle` 或表级 `headerStyle`；表级 `dataStyle` 则为全部数据单元格提供基底样式（见下文）。内置 8 种预设，也支持完全自定义——包括用对象展开（spread）从预设派生自己的变体。
 
 ## 内置预设 StylePresets
 
@@ -51,6 +51,95 @@ await exportExcel({
   ],
 });
 ```
+
+## 组合使用
+
+预设为组合而设计：一个表级 `headerStyle`、一个表级 `dataStyle`，加上少量列级 `style`，就能产出完整的报表观感：
+
+```ts
+import { exportExcel, StylePresets } from "@marcusok/excel-exporter";
+
+await exportExcel({
+  filename: "monthly-report",
+  sheets: [
+    {
+      name: "Orders",
+      headerStyle: StylePresets.header, // 整表深蓝表头
+      dataStyle: StylePresets.bordered, // 每个数据单元格的细边框
+      indexColumn: { label: "No.", width: 6 }, // 最左侧序号列
+      freezeRows: 1,
+      autoFilter: true,
+      columns: [
+        { prop: "orderDate", label: "Date", style: StylePresets.date },
+        { prop: "amount", label: "Amount", style: StylePresets.currency },
+        { prop: "rate", label: "Growth", style: StylePresets.percent },
+        { prop: "status", label: "Status", style: StylePresets.danger },
+      ],
+      data,
+    },
+  ],
+});
+```
+
+每个视觉元素的来源：
+
+| 视觉元素                                   | 来源字段           |
+| ------------------------------------------ | ------------------ |
+| 整表深蓝表头                               | 表级 `headerStyle` |
+| 每个数据单元格的细边框                     | 表级 `dataStyle`   |
+| 最左侧 `No.` 序号列                        | 表级 `indexColumn` |
+| `yyyy-MM-dd` 日期、`#,##0.00` 金额、百分比 | 列级 `style`       |
+
+列级样式逐字段合并**覆盖** `dataStyle`（见下文「表级 dataStyle」）：`StylePresets.currency` 只声明 `numFormat` + `alignment`，因此它的单元格既保留 `dataStyle` 的整表边框，又获得列级数字格式。
+
+## 预设定制（spread 派生）
+
+预设是普通的常量对象（`as const`，经 `satisfies CellStyle` 收窄类型）——不是工厂函数，也没有冻结。与其从零重写 `CellStyle`，不如用对象展开从预设派生变体：
+
+```ts
+// 千分位但不要小数
+style: { ...StylePresets.currency, numFormat: "#,##0" }
+
+// 金额加粗（currency 未设置 font，不会丢任何东西）
+style: { ...StylePresets.currency, font: { bold: true } }
+
+// 同一款表头预设换个品牌色
+headerStyle: { ...StylePresets.header, fill: { pattern: "solid", fgColor: "2E7D32" } }
+
+// 序号列：水平居中，同时保留 dataRow 的垂直居中
+// （嵌套 alignment 按下方浅合并规则展开）
+indexColumn: {
+  style: {
+    ...StylePresets.dataRow,
+    alignment: { ...StylePresets.dataRow.alignment, horizontal: "center" },
+  },
+}
+```
+
+::: warning 对象展开是浅合并
+展开会**整体替换**顶层字段。嵌套对象（`font`、`fill`、`alignment`、`border`）必须自行展开，否则同级字段会全部丢失：
+
+```ts
+// ✗ 加粗 / 字号 / 颜色全丢——font 被整体替换
+{ ...StylePresets.header, font: { size: 14 } }
+
+// ✓ 只改字号，font 其余字段保留
+{ ...StylePresets.header, font: { ...StylePresets.header.font, size: 14 } }
+```
+
+这是调用方自己的合并，发生在库介入之前——与引擎在 `dataStyle` 与列级 `style` 之间做的字段级**深合并**（见下文）是两回事。
+:::
+
+数值类预设常用的 `numFormat` 变体：
+
+| 格式码               | 渲染效果           |
+| -------------------- | ------------------ |
+| `#,##0`              | `12,999`（无小数） |
+| `0%`                 | `42%`（无小数）    |
+| `"¥"#,##0.00`        | `¥12,999.99`       |
+| `yyyy"年"M"月"d"日"` | `2026年7月1日`     |
+
+格式码中的字面量文本用双引号包裹；其余遵循 Excel 格式码语法。
 
 ## 自定义 CellStyle
 
@@ -107,6 +196,36 @@ await exportExcel({
 
 合并是**字段级**的，不是整体替换：`dataStyle` 提供基底，列级 `style` 只覆盖它声明了的字段——整表边框不会被一个只设置了 `numFormat` 的列冲掉，反之亦然。这与 `headerStyle` 的整体替换语义是刻意不同的。与其他样式一样，`dataStyle` 在流式路径（≥ 50,000 行 / 降级导出）会被丢弃并告警。
 
+## 表头样式：表级默认、列级覆盖
+
+表头同样有两个层级，但合并语义相反——**整体替换**，不做字段级合并：
+
+```ts
+sheets: [
+  {
+    name: "Sheet1",
+    headerStyle: StylePresets.header, // 所有表头格的默认样式
+    columns: [
+      { prop: "name", label: "名称" },
+      // 列级 headerStyle 对该列表头格整体替换表级默认——
+      // 不是与之合并。
+      {
+        prop: "amount",
+        label: "金额",
+        headerStyle: {
+          fill: { pattern: "solid", fgColor: "DDEBF7" },
+          font: { bold: true, color: "1F4E79" },
+        },
+      },
+    ],
+    data,
+  },
+],
+```
+
+- 分组列（带 `children`）同样接受 `headerStyle`——作用于该分组横向合并后的表头格。
+- 想在默认基础上派生而不是重写时，展开它：`headerStyle: { ...StylePresets.header, fill: { pattern: "solid", fgColor: "DDEBF7" } }`——浅合并注意事项见上文「预设定制」。
+
 ## 序号列
 
 `SheetConfig.indexColumn` 在最左侧注入序号列——无需预处理数据，也不用多写一个列配置：
@@ -131,6 +250,12 @@ sheets: [
 - 样式规则与普通列一致：表头走 `indexColumn.headerStyle`（优先于表级 `headerStyle`），数据单元格走 `indexColumn.style`（与表级 `dataStyle` 合并）。
 
 完整选项见 [API 参考](../api/02-types)。
+
+## 样式的生效范围
+
+- **样式仅在 Workbook 路径渲染**：auto 模式 50,000 行以下（主线程，或浏览器 20,000–49,999 行的 Worker + Workbook）。流式路径（≥ 50,000 行或降级导出）会剥离全部样式——`style` / `headerStyle` / `dataStyle` / `width` / `freezeRows`——并输出 console 告警。大文件导出不要依赖样式。
+- **颜色是 6 位 RGB hex、不带 `#`**（`"1F4E79"`），与 modern-xlsx 的类型约定一致。
+- **复用预设零成本**：引擎对结构相同的样式去重、共享同一样式索引，N 个列引用 `StylePresets.currency` 不会膨胀文件——无需手工共享对象。
 
 ## 与 FormatSpec 的关系
 
