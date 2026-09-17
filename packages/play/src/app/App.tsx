@@ -30,7 +30,11 @@ import {
   MoonOutlined,
   SunOutlined,
 } from "@ant-design/icons";
-import { getDemos } from "../common/registry.js";
+import {
+  getDemos,
+  groupDemos,
+  groupRepresentative,
+} from "../common/registry.js";
 import type { DemoEntry } from "../common/registry.js";
 import {
   createThemeConfig,
@@ -50,14 +54,29 @@ export function AppShell() {
   const demos = useMemo(() => getDemos(), []);
   const activeDemo = demos.find((demo) => demo.name === route);
 
-  const menuItems: MenuProps["items"] = [
-    { key: "home", icon: <AppstoreOutlined />, label: "概览" },
-    ...demos.map((demo) => ({
-      key: demo.name,
-      icon: <ExperimentOutlined />,
-      label: demo.name,
-    })),
-  ];
+  // 声明了 group 的 demo 聚合为子菜单（父项 key 带 group: 前缀、仅作展开
+  // 容器不可导航）；未分组的保持一级菜单。分组顺序按注册先后顺序。
+  const { menuItems, groupKeys } = useMemo(() => {
+    const { groups, ungrouped } = groupDemos(demos);
+    const items: MenuProps["items"] = [
+      { key: "home", icon: <AppstoreOutlined />, label: "概览" },
+      ...groups.map(([group, children]) => ({
+        key: `group:${group}`,
+        icon: <ExperimentOutlined />,
+        label: group,
+        children: children.map((demo) => ({
+          key: demo.name,
+          label: demo.menuLabel ?? demo.label,
+        })),
+      })),
+      ...ungrouped.map((demo) => ({
+        key: demo.name,
+        icon: <ExperimentOutlined />,
+        label: demo.menuLabel ?? demo.label,
+      })),
+    ];
+    return { menuItems: items, groupKeys: groups.map(([g]) => `group:${g}`) };
+  }, [demos]);
 
   const navigate = (key: string): void => {
     location.hash = key === "home" ? "#/" : `#/${key}`;
@@ -111,6 +130,9 @@ export function AppShell() {
               theme="dark"
               mode="inline"
               selectedKeys={[route === "" ? "home" : route]}
+              // 子菜单默认全部展开：直接打开 #/excel-exporter-styles 这类
+              // 深层 URL 时父菜单也要呈展开态，选中项才可见
+              defaultOpenKeys={groupKeys}
               items={menuItems}
               onClick={({ key }) => navigate(key)}
               style={{ background: "transparent", borderInlineEnd: "none" }}
@@ -172,6 +194,13 @@ export function AppShell() {
 
 function HomePage({ onOpen }: { onOpen: (name: string) => void }) {
   const demos = getDemos();
+  // 一个包一张卡：分组 demo 收敛为代表 demo（name === group 的包级页面，
+  // 如 excel-exporter 的性能对比），点击卡片即进入该默认页
+  const { groups, ungrouped } = groupDemos(demos);
+  const cards: DemoEntry[] = [
+    ...groups.map(([group, children]) => groupRepresentative(group, children)),
+    ...ungrouped,
+  ];
   return (
     <Space orientation="vertical" size={24} style={{ width: "100%" }}>
       <div>
@@ -183,7 +212,7 @@ function HomePage({ onOpen }: { onOpen: (name: string) => void }) {
           API、性能与降级行为。
         </Typography.Paragraph>
       </div>
-      {demos.length === 0 ? (
+      {cards.length === 0 ? (
         <Alert
           type="info"
           showIcon
@@ -192,7 +221,7 @@ function HomePage({ onOpen }: { onOpen: (name: string) => void }) {
         />
       ) : (
         <Row gutter={[16, 16]}>
-          {demos.map((demo) => (
+          {cards.map((demo) => (
             <Col xs={24} md={12} xl={8} key={demo.name}>
               <Card
                 hoverable

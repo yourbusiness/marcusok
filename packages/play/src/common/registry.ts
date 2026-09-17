@@ -6,6 +6,17 @@ export interface DemoEntry {
   /** 一句话说明这个 demo 演示什么，展示在首页卡片与详情页头部。 */
   description?: string;
   /**
+   * 侧边栏父菜单名：同一 group 的 demo 聚合为一个子菜单，父项本身不可
+   * 点击（路由仍以 name 定位，分组只影响菜单呈现）。不设置则为一级菜单。
+   */
+  group?: string;
+  /**
+   * 菜单里的显示名；分组场景下 label 通常带包名前缀（如
+   * "excel-exporter — …"），不适合直接当子菜单项文案，用它给菜单一个
+   * 简短名字。缺省回退 label。
+   */
+  menuLabel?: string;
+  /**
    * Lazy-load the demo implementation. The entry module (index.ts) must
    * stay lightweight — metadata only — so the home page never pulls heavy
    * dependencies. Put the actual UI in a separate *.demo.tsx file and
@@ -33,4 +44,39 @@ export function registerDemo(entry: DemoEntry): void {
 
 export function getDemos(): readonly DemoEntry[] {
   return [...demos.values()];
+}
+
+/**
+ * 按 group 聚合 demo（保持注册顺序）：侧边栏菜单与首页卡片共用这套分组。
+ * 每个分组的代表 demo 是 name === group 的那个（仓库约定：包级 demo 以包名
+ * 命名，registry 测试强制其存在）——分组卡片的文案与点击跳转都落在它身上；
+ * 没有同名 demo 时回退到组内第一个。
+ */
+export function groupDemos(entries: readonly DemoEntry[]): {
+  groups: [string, DemoEntry[]][];
+  ungrouped: DemoEntry[];
+} {
+  const groups = new Map<string, DemoEntry[]>();
+  const ungrouped: DemoEntry[] = [];
+  for (const demo of entries) {
+    if (demo.group) {
+      const list = groups.get(demo.group) ?? [];
+      list.push(demo);
+      groups.set(demo.group, list);
+    } else {
+      ungrouped.push(demo);
+    }
+  }
+  return { groups: [...groups.entries()], ungrouped };
+}
+
+/**
+ * 分组的代表 demo：name === group 者优先，否则组内第一个。分组由 groupDemos
+ * 产出、必非空，因此返回值恒有定义。
+ */
+export function groupRepresentative(
+  group: string,
+  members: DemoEntry[],
+): DemoEntry {
+  return members.find((d) => d.name === group) ?? members[0]!;
 }
