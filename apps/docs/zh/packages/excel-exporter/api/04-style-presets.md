@@ -10,6 +10,7 @@
 | `date`     | `yyyy-MM-dd`       | 居中                                       | 日期列             |
 | `datetime` | `yyyy-MM-dd HH:mm` | 居中                                       | 日期时间列         |
 | `dataRow`  | —                  | 左对齐、垂直居中、底部细线 `D0D0D0`        | 数据行             |
+| `bordered` | —                  | 四边细线 `D0D0D0`                          | 整表边框           |
 | `danger`   | —                  | 红色加粗 `C00000`、居中                    | 风险/异常值        |
 
 ## 用法
@@ -30,7 +31,7 @@ columns: [
 ```ts
 import type { StylePresetName } from "@marcusok/excel-exporter";
 
-const name: StylePresetName = "currency"; // "header" | "currency" | "percent" | "date" | "datetime" | "dataRow" | "danger"
+const name: StylePresetName = "currency"; // "header" | "currency" | "percent" | "date" | "datetime" | "dataRow" | "bordered" | "danger"
 ```
 
 > 注意：`style` 应用于数据单元格，不作用于表头。需要表头样式时，可直接用 `headerStyle` 字段（工作表级 `SheetConfig.headerStyle` 设默认，列级 `ColumnConfig.headerStyle` 覆盖），例如 `headerStyle: StylePresets.header`。

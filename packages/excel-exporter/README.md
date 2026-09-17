@@ -22,7 +22,7 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 pnpm add @marcusok/excel-exporter
 ```
 
-That is the entire setup. The package has **zero runtime dependencies** — the engine (modern-xlsx JS glue + fflate) is bundled in at build time, and the 1.9MB `modern-xlsx.wasm` binary ships under this package's own `exports` map (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`), so the binary always matches the JS glue. No engine package to install, no `engine-strict` conflicts from upstream `engines` ranges, no fallback package, nothing to configure in `main.ts` or your bundler.
+That is the entire setup. The package has **zero runtime dependencies** — the engine (modern-xlsx JS glue + fflate) is bundled in at build time, and the 1.9MB `modern-xlsx.wasm` binary ships under this package's own `exports` map (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`), so the binary always matches the JS glue. No engine package to install, no `engine-strict` conflicts from upstream `engines` ranges, no fallback package, nothing to wire in `main.ts`. Bundler config is needed in exactly one case — Vite's dev server (see [How assets resolve](#how-assets-resolve-zero-configuration) below).
 
 ## Usage
 
@@ -72,7 +72,15 @@ Two files ship alongside the code and are located automatically:
 
 Both default to `new URL(<file>, import.meta.url)` relative to the package entry:
 
-- **Bundlers** (Vite dev's dependency pre-bundling and production builds — verified on Vite 8; webpack 5 documents the same `new URL(..., import.meta.url)` asset pattern) rewrite the expression and emit the file as a hashed asset. Nothing to import, copy or configure.
+- **Bundlers** — production builds (Vite, webpack 5) rewrite the expression and emit the file as a hashed asset; nothing to import, copy or configure. **One exception: Vite's dev server.** Dependency pre-bundling (`optimizeDeps`) does not rewrite the expression inside pre-bundled dependencies, so the URL points into `/node_modules/.vite/deps/` where the file does not exist — the HTML fallback returns a page instead, WASM compilation fails, and exports silently degrade to the style-less stream (styles/widths/freeze stripped, `result.error` mentions `Fallback: styles stripped`). Fix it once in `vite.config.ts`, then restart the dev server:
+  ```ts
+  import { defineConfig } from "vite";
+
+  export default defineConfig({
+    optimizeDeps: { exclude: ["@marcusok/excel-exporter"] },
+  });
+  ```
+  Details and alternative wiring (`?url` imports + `configureWasm`): see the [Installation guide](https://yourbusiness.github.io/marcusok/packages/excel-exporter/guide/02-installation).
 - **Node** reads the binary from disk next to the installed package and initializes it synchronously (`initWasmSync`) — no fetch, no boilerplate (see [Node Usage](#node-usage)).
 
 `configureWasm` remains as an optional escape hatch for setups where the defaults cannot work — self-hosted copies on a CDN, Service Worker environments, or bundlers without asset-URL support:
@@ -143,7 +151,30 @@ On the Worker path the main thread only performs one structured-clone `postMessa
 
 ### Style Presets
 
-[`src/style-presets.ts`](./src/style-presets.ts) provides 7 presets: `header` (bold, dark-blue background with white text), `currency` (thousands separator, two decimals), `date`/`datetime`, `percent`, `dataRow` (left-aligned, light-gray bottom border), `danger` (red bold). Custom `CellStyle` is supported (font/fill/alignment/borders/number format); colors are 6-digit RGB hex (e.g. `'FF0000'`).
+[`src/style-presets.ts`](./src/style-presets.ts) provides 8 presets: `header` (bold, dark-blue background with white text), `currency` (thousands separator, two decimals), `date`/`datetime`, `percent`, `dataRow` (left-aligned, light-gray bottom border), `bordered` (thin light-gray box on all four sides), `danger` (red bold). Custom `CellStyle` is supported (font/fill/alignment/borders/number format); colors are 6-digit RGB hex (e.g. `'FF0000'`).
+
+### Table-wide styling & index column
+
+Two sheet-level fields cover the whole table in one place:
+
+- **`dataStyle`** — base `CellStyle` for every data cell. A column's own `style` deep-merges over it field by field (a table-wide border survives a column that only sets `numFormat`, and vice versa), so `dataStyle: StylePresets.bordered` plus a few column tweaks is the idiomatic bordered-table setup. Headers stay with `headerStyle`.
+- **`indexColumn`** — injects a leading row-number column (`true`, or `{ label, width, start, style, headerStyle }`): values come from the row number (never read from `data`), existing `merges` shift right automatically, and the feature works on every export path — workbook, worker and the style-less stream alike.
+
+```ts
+sheets: [
+  {
+    name: "Sheet1",
+    headerStyle: StylePresets.header, // headers
+    dataStyle: StylePresets.bordered, // all data cells
+    indexColumn: { label: "No.", width: 6 },
+    columns: [
+      { prop: "name", label: "Name" },
+      { prop: "amount", label: "Amount", style: StylePresets.currency },
+    ],
+    data,
+  },
+];
+```
 
 ### Value Formatting
 

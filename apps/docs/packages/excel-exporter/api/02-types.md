@@ -2,15 +2,17 @@
 
 ## SheetConfig
 
-| Field          | Type                        | Required | Description                                                               |
-| -------------- | --------------------------- | -------- | ------------------------------------------------------------------------- |
-| `name`         | `string`                    | yes      | Non-empty, ≤ 31 chars, no `: \ / ? * [ ]`, no leading/trailing apostrophe |
-| `columns`      | `ColumnConfig[]`            | yes      | Column definitions                                                        |
-| `data`         | `Record<string, unknown>[]` | yes      | Row data                                                                  |
-| `headerStyle?` | `CellStyle`                 | —        | Default header style; overridden by column-level `headerStyle`            |
-| `freezeRows?`  | `number`                    | —        | Freeze the first N header rows; validated as a non-negative integer       |
-| `merges?`      | `MergeRange[]`              | —        | Merged cells (relative to the data area)                                  |
-| `autoFilter?`  | `boolean`                   | —        | Header auto filter                                                        |
+| Field          | Type                            | Required | Description                                                                                              |
+| -------------- | ------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `name`         | `string`                        | yes      | Non-empty, ≤ 31 chars, no `: \ / ? * [ ]`, no leading/trailing apostrophe                                |
+| `columns`      | `ColumnConfig[]`                | yes      | Column definitions                                                                                       |
+| `data`         | `Record<string, unknown>[]`     | yes      | Row data                                                                                                 |
+| `headerStyle?` | `CellStyle`                     | —        | Default header style; overridden by column-level `headerStyle`                                           |
+| `dataStyle?`   | `CellStyle`                     | —        | Base style for every data cell; column `style` deep-merges over it field by field (see the Styles guide) |
+| `indexColumn?` | `boolean \| IndexColumnOptions` | —        | Inject a leading row-number column; `true` = all defaults. Merges shift right automatically              |
+| `freezeRows?`  | `number`                        | —        | Freeze the first N header rows; validated as a non-negative integer                                      |
+| `merges?`      | `MergeRange[]`                  | —        | Merged cells (relative to the data area)                                                                 |
+| `autoFilter?`  | `boolean`                       | —        | Header auto filter                                                                                       |
 
 ## ColumnConfig
 
@@ -27,6 +29,20 @@
 | `format?`      | `FormatSpec \| Function` | —            | Value formatting; leaf columns only; functions run on main-thread paths and are stripped on the browser worker path (see the FormatSpec page) |
 
 A column with `children` is a group: no data cells, header rows only. Header row count = max tree depth; leaf headers span the remaining header rows vertically, group headers span their leaf subtree horizontally — merges are generated automatically (no manual `merges` needed for headers).
+
+## IndexColumnOptions
+
+Options for `SheetConfig.indexColumn`; the shorthand `true` equals `{}`.
+
+| Field          | Type        | Default | Description                                                                                      |
+| -------------- | ----------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `label?`       | `string`    | `"No."` | Header text of the index column                                                                  |
+| `width?`       | `number`    | `6`     | Column width (Excel character units; `0` hides the column)                                       |
+| `start?`       | `number`    | `1`     | Number shown on the first data row; row i displays `start + i`. Non-negative integer (validated) |
+| `style?`       | `CellStyle` | —       | Data-cell style of the index column; merged over sheet-level `dataStyle` like any column style   |
+| `headerStyle?` | `CellStyle` | —       | Header style of the index column; overrides sheet-level `headerStyle`                            |
+
+The index column's values are generated from the row number and never read from `data`; a user column declaring the reserved `__index__` prop is rejected with a clear error. Existing `merges` are shifted one column right so they keep pointing at their original targets.
 
 ## MergeRange
 

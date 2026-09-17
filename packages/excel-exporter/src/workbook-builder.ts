@@ -5,7 +5,8 @@ import {
   type Worksheet,
 } from "modern-xlsx";
 import type { CellStyle, SheetConfig, ColumnConfig } from "./types";
-import { buildStyleIndex } from "./style-utils";
+import { buildStyleIndex, mergeStyles } from "./style-utils";
+import { INDEX_PROP, indexColumnStart } from "./sheet-normalize";
 import { flattenColumnTree, type HeaderCell } from "./column-tree";
 import { getWasmLoader } from "./wasm-loader";
 import {
@@ -56,8 +57,12 @@ export class WorkbookBuilder {
     // so the cell renders correctly without forcing the caller to also set
     // style.numFormat (otherwise dates show as raw serials, numbers as text).
     const columns = leaves.map(withAutoNumFormat);
-    const rows = config.data.map((item) =>
+    // 序号列（INDEX_PROP）的值由行号生成、不读 data——map 的 rowIndex 正好
+    // 提供，零数据复制（大数据量下避免 data.map 展开整表对象）。
+    const start = indexColumnStart(config);
+    const rows = config.data.map((item, rowIndex) =>
       columns.map((col) => {
+        if (col.prop === INDEX_PROP) return rowIndex + start;
         const v = resolveCellFormat(col, item);
         // Normalize exactly like displayValue on the stream path, so a
         // dataset crossing the 50k threshold (or degrading) keeps identical cell
@@ -118,12 +123,15 @@ export class WorkbookBuilder {
 
     // Column styles: apply to data cells only, matching the `style: not the
     // label` contract in types.ts. Header styling is handled separately above
-    // via headerStyle. Data rows start at sheet row headerRowCount (0-based), so
-    // slice(headerRowCount) iterates only data rows; mutating styleIndex is a
-    // plain JS property write, bypassing ws.cell(ref) ref-parsing overhead.
+    // via headerStyle. Sheet-level dataStyle is the base layer, the column's
+    // own style deep-merges over it (see mergeStyles). Data rows start at sheet
+    // row headerRowCount (0-based), so slice(headerRowCount) iterates only data
+    // rows; mutating styleIndex is a plain JS property write, bypassing
+    // ws.cell(ref) ref-parsing overhead.
     columns.forEach((c, i) => {
-      if (c.style) {
-        const idx = this.cachedStyleIndex(c.style);
+      const effective = mergeStyles(config.dataStyle, c.style);
+      if (effective) {
+        const idx = this.cachedStyleIndex(effective);
         for (const row of ws.rows.slice(headerRowCount)) {
           const cell = row.cells[i];
           if (cell) cell.styleIndex = idx;

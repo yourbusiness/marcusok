@@ -30,4 +30,4 @@ if (result.success && result.error) {
 }
 ```
 
-兜底不是常规路径，而是异常时的保险。出现兜底请优先排查 wasm 资产是否 404（打开 Network 面板），以及使用 `configureWasm` 覆盖时 URL 是否在首次导出前配置。
+兜底不是常规路径，而是异常时的保险。出现兜底请优先排查 wasm 资产是否 404（打开 Network 面板），以及使用 `configureWasm` 覆盖时 URL 是否在首次导出前配置。还有一种更隐蔽的变体：wasm 请求显示 **200/304 但响应是 HTML**（`content-type: text/html`；底层编译错误含 `expected magic word 00 61 73 6d, found 3c 21 64 6f`）——这是 Vite 开发服务器的依赖预构建落入了 HTML fallback，修复方法是在 `optimizeDeps.exclude` 中排除本包，详见[安装与配置 → Vite 开发服务器](/zh/packages/excel-exporter/guide/02-installation)。另请注意：首次尝试失败后，后续导出只会报 `WASM load previously failed` 而非原始错误——真实原因只出现在**第一次**导出（或刷新页面后首次导出）的 console 警告里。

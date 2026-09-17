@@ -306,6 +306,8 @@ export default function BasicExportDemo() {
         sheets: [
           {
             name: "示例表",
+            // 演示序号列：库内注入最左 1..N 列，结构特性、全路径（含 stream）生效
+            indexColumn: true,
             columns: exportColumns,
             data: dataset,
             // 多级表头时冻结全部表头行并把筛选锚定在最后一行表头；
@@ -415,7 +417,8 @@ export default function BasicExportDemo() {
         配置行数与模式后导出，展示文件大小、耗时、吞吐等指标；多次导出会记录在下方
         历史中对比（行数 ≥ 20,000 走 Worker，≥ 50,000 走流式）。「多级分组」演示
         children 三级表头（自动合并表头格），「数据区合并」演示 merges（每 10
-        行纵向合并城市列）——两者在 stream 路径同样生效（样式除外）。
+        行纵向合并城市列）——两者与最左侧的序号列（indexColumn）在 stream
+        路径同样生效（样式除外）。
       </Typography.Paragraph>
 
       <Card>

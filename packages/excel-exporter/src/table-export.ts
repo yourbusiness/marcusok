@@ -4,6 +4,7 @@ import type {
   ExportMode,
   ExportOptions,
   ExportPhase,
+  IndexColumnOptions,
   MergeRange,
   SheetConfig,
 } from "./types";
@@ -38,6 +39,10 @@ export interface TableSheetInput {
   freezeRows?: number;
   autoFilter?: boolean;
   merges?: MergeRange[];
+  /** Base style for every data cell; column `style` deep-merges over it. */
+  dataStyle?: CellStyle;
+  /** Inject a leading row-number column; `true` for defaults. */
+  indexColumn?: boolean | IndexColumnOptions;
 }
 
 export interface TableExportOptions extends TableSheetInput {
@@ -126,6 +131,10 @@ export function tableToSheet(input: TableSheetInput): SheetConfig {
     ...(input.freezeRows !== undefined && { freezeRows: input.freezeRows }),
     ...(input.autoFilter !== undefined && { autoFilter: input.autoFilter }),
     ...(input.merges !== undefined && { merges: input.merges }),
+    ...(input.dataStyle !== undefined && { dataStyle: input.dataStyle }),
+    ...(input.indexColumn !== undefined && {
+      indexColumn: input.indexColumn,
+    }),
   };
 }
 

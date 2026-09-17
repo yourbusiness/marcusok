@@ -3,6 +3,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { WorkbookBuilder } from "../workbook-builder";
 import { exportAsStream } from "../streaming-builder";
 import { StylePresets } from "../style-presets";
+import { applyIndexColumn } from "../sheet-normalize";
 import { readBuffer, makeData } from "./setup";
 
 describe("WorkbookBuilder round-trip", () => {
@@ -374,5 +375,209 @@ describe("WorkbookBuilder round-trip", () => {
     const bytes = await builder.toBuffer();
     const wb = await readBuffer(bytes);
     expect(wb.getSheet("EmptyBorder")!.cell("A2").value).toBe(1);
+  });
+});
+
+describe("dataStyle (sheet-level base style)", () => {
+  it("applies to every data cell and never to header cells", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "DataStyle",
+      dataStyle: StylePresets.bordered,
+      columns: [
+        { prop: "a", label: "A" },
+        { prop: "b", label: "B" },
+      ],
+      data: [
+        { a: 1, b: 2 },
+        { a: 3, b: 4 },
+      ],
+    });
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("DataStyle")!;
+    for (const ref of ["A2", "B2", "A3", "B3"]) {
+      expect(ws.cell(ref).styleIndex).not.toBeNull();
+    }
+    // dataStyle 只作用于数据区：表头不被波及（与 headerStyle 的分工一致）
+    expect(ws.cell("A1").styleIndex).toBeNull();
+    expect(ws.cell("B1").styleIndex).toBeNull();
+  });
+
+  it("deep-merges: a column style keeps the base border while overriding alignment", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "Merged",
+      dataStyle: StylePresets.bordered,
+      columns: [
+        // 列级只改对齐与数字格式：边框应继承表级基底（字段级合并，而非整体替换）
+        { prop: "a", label: "A", style: StylePresets.currency },
+        { prop: "b", label: "B" },
+      ],
+      data: [
+        { a: 1.5, b: 2 },
+        { a: 3.5, b: 4 },
+      ],
+    });
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("Merged")!;
+    const aIdx = ws.cell("A2").styleIndex;
+    const bIdx = ws.cell("B2").styleIndex;
+    expect(aIdx).not.toBeNull();
+    expect(bIdx).not.toBeNull();
+    // A 列合并了两种来源，B 列只有基底——结构不同必然是不同的样式索引
+    expect(aIdx).not.toBe(bIdx);
+    // 同列内所有数据单元格共享一个合并结果（styleIndexCache 以最终合并为 key）
+    expect(ws.cell("A3").styleIndex).toBe(aIdx);
+    expect(ws.cell("B3").styleIndex).toBe(bIdx);
+  });
+
+  it("auto numFormat injection still wins over a dataStyle numFormat", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "NumFmt",
+      dataStyle: { numFormat: "#,##0" },
+      columns: [
+        // FormatSpec(number, decimals 2) 自动注入的 numFormat 应优先于表级装饰性格式
+        { prop: "a", label: "A", format: { type: "number", decimals: 2 } },
+      ],
+      data: [{ a: 1 }],
+    });
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("NumFmt")!;
+    expect(ws.cell("A2").styleIndex).not.toBeNull();
+  });
+});
+
+describe("indexColumn (workbook path)", () => {
+  it("generates row numbers from the row index, never reading data", async () => {
+    // WorkbookBuilder 是低级直连路径，不经过 exportExcel 的入口归一化；
+    // 用 applyIndexColumn 显式展开（等价于入口对 indexColumn 的处理）。
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(
+      applyIndexColumn({
+        name: "Idx",
+        indexColumn: { label: "序号", start: 1 },
+        columns: [
+          { prop: "name", label: "名称" },
+          { prop: "amount", label: "金额" },
+        ],
+        // 数据行不带任何序号字段：值必须来自行号而非 data
+        data: [
+          { name: "a", amount: 1 },
+          { name: "b", amount: 2 },
+          { name: "c", amount: 3 },
+        ],
+      }),
+    );
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("Idx")!;
+    expect(ws.cell("A1").value).toBe("序号");
+    expect(ws.cell("B1").value).toBe("名称");
+    expect(String(ws.cell("A2").value)).toBe("1");
+    expect(String(ws.cell("A3").value)).toBe("2");
+    expect(String(ws.cell("A4").value)).toBe("3");
+    expect(ws.cell("B2").value).toBe("a");
+  });
+
+  it("honors a custom start and shifts user merges right by one column", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(
+      applyIndexColumn({
+        name: "IdxStart",
+        indexColumn: { start: 10 },
+        merges: [{ row: 0, col: 0, rowspan: 2, colspan: 1 }],
+        columns: [
+          { prop: "name", label: "名称" },
+          { prop: "amount", label: "金额" },
+        ],
+        data: [
+          { name: "a", amount: 1 },
+          { name: "b", amount: 2 },
+        ],
+      }),
+    );
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("IdxStart")!;
+    expect(String(ws.cell("A2").value)).toBe("10");
+    expect(String(ws.cell("A3").value)).toBe("11");
+    // 用户 merge 原指向第 0 数据列（name），偏移后应落在 name 列 B2:B3
+    expect(ws.mergeCells.some((r) => r === "B2:B3")).toBe(true);
+  });
+
+  it("stream path writes the same index numbers (cross-path consistency)", async () => {
+    const { bytes } = await exportAsStream([
+      applyIndexColumn({
+        name: "IdxStream",
+        indexColumn: true,
+        columns: [
+          { prop: "name", label: "名称" },
+          { prop: "amount", label: "金额" },
+        ],
+        data: [
+          { name: "a", amount: 1 },
+          { name: "b", amount: 2 },
+        ],
+      }),
+    ]);
+    const wb = await readBuffer(bytes);
+    const ws = wb.getSheet("IdxStream")!;
+    expect(ws.cell("A1").value).toBe("No.");
+    expect(String(ws.cell("A2").value)).toBe("1");
+    expect(String(ws.cell("A3").value)).toBe("2");
+    expect(ws.cell("B2").value).toBe("a");
+  });
+});
+
+describe("indexColumn with a multi-row grouped header", () => {
+  it("spans the index header vertically across all header rows", async () => {
+    // 序号列是顶层叶子列：列树最大深度为 2 时，它的表头须纵向跨满 2 行
+    // （与其他叶子列的既有行为一致，由 flattenColumnTree 自动生成）。
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(
+      applyIndexColumn({
+        name: "IdxGrouped",
+        indexColumn: { label: "序号" },
+        columns: [
+          {
+            label: "客户信息",
+            children: [
+              { prop: "name", label: "名称" },
+              { prop: "city", label: "城市" },
+            ],
+          },
+        ],
+        data: [
+          { name: "a", city: "x" },
+          { name: "b", city: "y" },
+        ],
+      }),
+    );
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("IdxGrouped")!;
+    expect(ws.cell("A1").value).toBe("序号");
+    expect(ws.cell("B1").value).toBe("客户信息");
+    expect(ws.cell("B2").value).toBe("名称");
+    expect(ws.cell("C2").value).toBe("城市");
+    expect(String(ws.cell("A3").value)).toBe("1");
+    expect(ws.cell("B3").value).toBe("a");
+    // 序号表头纵向合并 A1:A2；分组表头横向合并 B1:C1
+    expect(ws.mergeCells.some((r) => r === "A1:A2")).toBe(true);
+    expect(ws.mergeCells.some((r) => r === "B1:C1")).toBe(true);
+  });
+
+  it("indexColumnStart tolerates a stray null without throwing mid-build", async () => {
+    // JS 调用方可能传 indexColumn: null（构建器直连路径不过 validateInput）：
+    // 归一化跳过它、不注入虚拟列，indexColumnStart 也不能因此抛错。
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "NullIdx",
+      indexColumn: null as unknown as boolean,
+      columns: [{ prop: "name", label: "名称" }],
+      data: [{ name: "a" }],
+    });
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("NullIdx")!;
+    expect(ws.cell("A1").value).toBe("名称");
+    expect(ws.cell("A2").value).toBe("a");
   });
 });

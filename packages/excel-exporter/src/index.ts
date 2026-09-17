@@ -11,6 +11,7 @@ import {
 } from "./echarts-export";
 import { validateSheetName, validateMerges } from "./format-utils";
 import { columnLabel, flattenColumnTree } from "./column-tree";
+import { applyIndexColumn } from "./sheet-normalize";
 
 export * from "./types";
 export * from "./style-presets";
@@ -156,6 +157,31 @@ function validateInput(options: ExportOptions): void {
         `[excel-exporter] sheet "${sheet.name}" freezeRows must be a non-negative integer`,
       );
     }
+    // indexColumn 形状校验：非 boolean 非（非 null）object 的值（JS 调用方
+    // 可能传 null / 字符串 / 数字）若放行，会被归一化与构建器各自按不同
+    // 方式静默吞掉——与 freezeRows 等字段一致，前置报错。
+    if (
+      sheet.indexColumn !== undefined &&
+      typeof sheet.indexColumn !== "boolean" &&
+      (typeof sheet.indexColumn !== "object" || sheet.indexColumn === null)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" indexColumn must be a boolean or an options object`,
+      );
+    }
+    // indexColumn.start 与 freezeRows 同类数值校验：非整数/负数只会在构建期
+    // 产出 1.5、-1 这类怪序号，前置拦截。
+    if (
+      typeof sheet.indexColumn === "object" &&
+      sheet.indexColumn !== null &&
+      sheet.indexColumn.start !== undefined &&
+      (!Number.isInteger(sheet.indexColumn.start) ||
+        sheet.indexColumn.start < 0)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" indexColumn.start must be a non-negative integer`,
+      );
+    }
     for (const col of leaves) {
       // OOXML 中 width=0 合法（隐藏列），负数与非有限数非法；只有叶子列
       // 消费 width，分组列上的 width 本就被忽略。
@@ -242,6 +268,10 @@ export async function exportExcel(
   // below only sees well-formed input.
   try {
     validateInput(options);
+    // 序号列归一化紧跟校验：INDEX_PROP 冲突在此以结构化 { success: false }
+    // 失败（applyIndexColumn 抛错）。只在此处展开一次，worker / stream 路由
+    // 拿到的 sheets 已含虚拟列，构建器只需特判 INDEX_PROP 取行号。
+    options = { ...options, sheets: options.sheets.map(applyIndexColumn) };
   } catch (e) {
     options.onProgress?.(1);
     return {

@@ -549,3 +549,76 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
     expect(r.error).toBeUndefined();
   });
 });
+
+describe("indexColumn validation", () => {
+  it("rejects a non-integer or negative start with a structured error", async () => {
+    for (const start of [1.5, -1]) {
+      const r = await exportExcel({
+        filename: "bad-start",
+        download: false,
+        sheets: [
+          baseSheet({
+            indexColumn: { start },
+          }),
+        ],
+      });
+      expect(r.success).toBe(false);
+      expect(r.error?.message).toMatch(
+        /indexColumn\.start must be a non-negative integer/,
+      );
+    }
+  });
+
+  it("rejects a user column claiming the reserved index prop (structured, not thrown)", async () => {
+    const r = await exportExcel({
+      filename: "prop-clash",
+      download: false,
+      sheets: [
+        baseSheet({
+          indexColumn: true,
+          columns: [
+            { prop: "__index__", label: "我的序号" },
+            { prop: "a", label: "A" },
+          ],
+        }),
+      ],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(/is reserved for the index column/);
+  });
+
+  it("accepts start 0 and a valid indexColumn on the workbook path", async () => {
+    const r = await exportExcel({
+      filename: "ok-start",
+      download: false,
+      mode: "main",
+      sheets: [
+        baseSheet({
+          indexColumn: { start: 0 },
+        }),
+      ],
+    });
+    expect(r.success).toBe(true);
+    expect(r.error).toBeUndefined();
+  });
+});
+
+describe("indexColumn shape validation", () => {
+  it("rejects non-boolean non-object values (null / string / number) with a structured error", async () => {
+    for (const indexColumn of [null, "yes", 1]) {
+      const r = await exportExcel({
+        filename: "bad-index-column",
+        download: false,
+        sheets: [
+          baseSheet({
+            indexColumn: indexColumn as unknown as true,
+          }),
+        ],
+      });
+      expect(r.success).toBe(false);
+      expect(r.error?.message).toMatch(
+        /indexColumn must be a boolean or an options object/,
+      );
+    }
+  });
+});

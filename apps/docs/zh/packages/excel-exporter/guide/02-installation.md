@@ -11,7 +11,7 @@
 pnpm add @marcusok/excel-exporter
 ```
 
-这就是全部。本包**零运行时依赖**：导出引擎（modern-xlsx JS 胶水 + fflate）已在构建期打包进来，WASM 二进制通过本包自己的 `exports` 暴露——没有需要额外安装的引擎包、没有可选兜底包，也不需要在 `main.ts` 或打包器配置里加任何东西。
+这就是全部。本包**零运行时依赖**：导出引擎（modern-xlsx JS 胶水 + fflate）已在构建期打包进来，WASM 二进制通过本包自己的 `exports` 暴露——没有需要额外安装的引擎包、没有可选兜底包。打包器配置仅在一种场景下需要：Vite 开发服务器（见下方[预构建注意事项](#vite-开发服务器-预构建注意事项)）。
 
 ## 浏览器：资源自动定位
 
@@ -24,7 +24,7 @@ pnpm add @marcusok/excel-exporter
 
 定位顺序：
 
-1. **打包器**——两个 URL 默认为相对包入口的 `new URL(<文件>, import.meta.url)`。Vite 在开发态（依赖预构建）会改写该表达式、构建时发射 hash 资产；webpack 5 文档支持同样的资产模式。无需插件、无需 `?url` 导入、无需拷贝。
+1. **打包器**——两个 URL 默认为相对包入口的 `new URL(<文件>, import.meta.url)`。生产构建会改写该表达式并发射 hash 资产（Vite、webpack 5 文档支持同样的资产模式）；无需插件、无需 `?url` 导入、无需拷贝。唯一例外：**Vite 开发服务器**不会改写被预构建依赖内部的该表达式——见下方注意事项。
 2. **Node**——直接从安装目录旁的磁盘读取二进制并同步初始化（见 [Node / SSR](#node-ssr)）。
 
 ### 可选：`configureWasm`
@@ -58,6 +58,26 @@ configureWasm({ wasmUrl, workerUrl });
 | `workerTimeoutMs` | `number`        | `120_000`          | Worker 导出超时；超时导出会终止共享 worker       |
 
 `configureWasm` 是合并语义：仅当 `wasmUrl` 变化时才重置已加载（或加载中）的 WASM 实例，只改超时/重试不会造成重复初始化；若此前加载失败（error 态），任意 `configureWasm` 调用都会清除错误态，下次导出按新配置重试。
+
+### Vite 开发服务器：预构建注意事项
+
+Vite 开发服务器用 esbuild 把依赖预构建进 `/node_modules/.vite/deps/`。预构建产物里 `import.meta.url` 指向 `.vite/deps/` 下的 chunk，`new URL("./modern-xlsx.wasm", import.meta.url)` 因此解析到 `/node_modules/.vite/deps/modern-xlsx.wasm`——一个不存在的路径。Vite 的 HTML fallback（对 `Accept: text/html` **和** `Accept: */*` 都生效——普通 `fetch` 发的是后者）会用 `index.html` 应答该请求（HTTP 200，`text/html`；`appType: 'mpa'` 项目下则是 404——原因相同、修复相同），WASM 拿 HTML 字节去编译即失败（`expected magic word 00 61 73 6d, found 3c 21 64 6f`——`3c 21 64 6f` 即 `<!doctype html>` 开头的 `<!do`），随后导出**静默降级为无样式流式路径**：文件照常下载、`result.success` 为 `true`，但样式、列宽、冻结窗格、自动筛选全部丢失，`result.error` 里带 `Fallback: styles stripped (fast stream)`。
+
+影响范围：**`vite build` 不受影响**——生产构建管线会把 wasm 正确发射为 hash 资产，只有开发服务器 + 默认 `optimizeDeps` 会踩坑。worker 资源（`export.worker.js`，auto 模式 ≥ 20,000 行）走同一套定位机制、同样会失败，所以该问题不限小数据量导出。一个诊断陷阱：首次尝试失败后，后续导出的 Reason 只显示 `WASM load previously failed` 而非原始错误——真实原因只出现在**第一次**导出（或刷新页面后首次导出）的 console 警告里。
+
+修复——在 `vite.config.ts` 中把本包排除出预构建：
+
+```ts
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  optimizeDeps: {
+    exclude: ["@marcusok/excel-exporter"],
+  },
+});
+```
+
+改完需重启开发服务器（`.vite/deps` 缓存要重建）。排除后 Vite 直接从 `node_modules` 服务本包的 ESM 产物，`import.meta.url` 相对解析回到真实的 `dist/` 位置，两份资源按发布状态加载。替代方案——用 `?url` 导入接进 `configureWasm`（见上文）——不动 `optimizeDeps` 也可用，代价是入口模块多两行。
 
 ## Node / SSR
 

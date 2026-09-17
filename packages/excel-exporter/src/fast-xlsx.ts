@@ -11,6 +11,7 @@ import {
   someColumn,
   columnName,
 } from "./column-tree";
+import { INDEX_PROP, indexColumnStart } from "./sheet-normalize";
 
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 const MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -145,12 +146,17 @@ function buildWorksheetXml(
   }
 
   // Data rows start after the header block.
+  const start = indexColumnStart(config);
   for (let rowIndex = 0; rowIndex < config.data.length; rowIndex++) {
     const item = config.data[rowIndex];
     const rowNumber = headerRowCount + 1 + rowIndex;
     out.push(`<row r="${rowNumber}">`);
     for (let colIndex = 0; colIndex < leaves.length; colIndex++) {
-      const v = displayValue(leaves[colIndex], item);
+      // 序号列的值由行号生成（数字单元格），与 Workbook 路径一致
+      const v =
+        leaves[colIndex].prop === INDEX_PROP
+          ? rowIndex + start
+          : displayValue(leaves[colIndex], item);
       // Skip empty cells: null/missing fields normalize to "" (see toStr), and
       // interning every "" would cost an sst entry plus a cell reference per
       // empty field. A missing <c> element reads as an empty cell in Excel.
@@ -250,6 +256,8 @@ export function exportFastXlsx(
     // degradation is visible instead of silent (headerStyle above already did).
     if (someColumn(config.columns, (c) => c.style !== undefined))
       skipped.push("style");
+    // dataStyle 是表级数据样式基底，与列级 style 同样被本路径丢弃
+    if (config.dataStyle !== undefined) skipped.push("dataStyle");
     if (config.freezeRows) skipped.push("freezeRows");
     if (config.autoFilter) skipped.push("autoFilter");
     if (skipped.length) {

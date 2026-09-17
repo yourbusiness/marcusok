@@ -162,6 +162,27 @@ export interface MergeRange {
   colspan: number;
 }
 
+/**
+ * Options for the auto-injected leading row-number column
+ * (`SheetConfig.indexColumn`). The shorthand `true` equals `{}` — every
+ * option has a default.
+ */
+export interface IndexColumnOptions {
+  /** Header text; defaults to `"No."`. */
+  label?: string;
+  /** Column width in Excel character units; defaults to `6`. */
+  width?: number;
+  /**
+   * Number shown on the first data row; row i displays `start + i`.
+   * Defaults to `1`; must be a non-negative integer (validated at export time).
+   */
+  start?: number;
+  /** Style for the index column's data cells; merged over `SheetConfig.dataStyle` like any column style. */
+  style?: CellStyle;
+  /** Style for the index column's header cell; overrides `SheetConfig.headerStyle`. */
+  headerStyle?: CellStyle;
+}
+
 /** Sheet configuration. */
 export interface SheetConfig {
   name: string; // 1-31 chars, ECMA-376 validation (no `: \ / ? * [ ]`, no leading/trailing apostrophe)
@@ -177,6 +198,23 @@ export interface SheetConfig {
   data: Record<string, unknown>[];
   /** Style applied to every header cell, unless overridden by ColumnConfig.headerStyle. */
   headerStyle?: CellStyle;
+  /**
+   * Base style applied to every data cell; a column's own `style` is
+   * deep-merged over it field by field (so a table-wide border survives a
+   * column that only sets `numFormat`, and vice versa). Header cells are not
+   * affected — use `headerStyle`. Dropped with a warning on the stream path.
+   */
+  dataStyle?: CellStyle;
+  /**
+   * Inject a leading row-number column (1..N) without touching `data` or
+   * `columns`: the column is inserted internally, values are generated from
+   * the row number (never read from `data`), and existing `merges` are
+   * shifted right by one column automatically. Works on every export path
+   * (workbook / worker / stream); styles on it follow `dataStyle` /
+   * `headerStyle` semantics. Pass `true` for defaults, or an object to
+   * customize label / width / start / styles.
+   */
+  indexColumn?: boolean | IndexColumnOptions;
   /** Number of header rows to freeze (usually 1). Maps to ws.frozenPane = { rows, cols: 0 }. */
   freezeRows?: number;
   /** Merged cell ranges. */

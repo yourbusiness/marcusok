@@ -10,6 +10,7 @@
 | `date`     | `yyyy-MM-dd`       | Centered                                                       | Date columns                    |
 | `datetime` | `yyyy-MM-dd HH:mm` | Centered                                                       | Date-time columns               |
 | `dataRow`  | —                  | Left-aligned, vertically centered, thin `D0D0D0` bottom border | Data rows                       |
+| `bordered` | —                  | Thin `D0D0D0` box on all four sides                            | Table-wide borders              |
 | `danger`   | —                  | Bold red `C00000`, centered                                    | Risk / anomalies                |
 
 ## Usage
@@ -30,7 +31,7 @@ columns: [
 ```ts
 import type { StylePresetName } from "@marcusok/excel-exporter";
 
-const name: StylePresetName = "currency"; // "header" | "currency" | "percent" | "date" | "datetime" | "dataRow" | "danger"
+const name: StylePresetName = "currency"; // "header" | "currency" | "percent" | "date" | "datetime" | "dataRow" | "bordered" | "danger"
 ```
 
 > Column `style` applies to data cells, not headers. For header styling use the `headerStyle` field directly (sheet-level `SheetConfig.headerStyle` sets the default; column-level `ColumnConfig.headerStyle` overrides it), e.g. `headerStyle: StylePresets.header`.

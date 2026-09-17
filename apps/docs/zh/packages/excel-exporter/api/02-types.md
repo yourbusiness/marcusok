@@ -2,15 +2,17 @@
 
 ## SheetConfig
 
-| 字段           | 类型                        | 必填 | 说明                                                                     |
-| -------------- | --------------------------- | ---- | ------------------------------------------------------------------------ |
-| `name`         | `string`                    | 是   | 工作表名：非空、≤ 31 字符，不含 `: \ / ? * [ ]`，且不得以单引号开头/结尾 |
-| `columns`      | `ColumnConfig[]`            | 是   | 列定义                                                                   |
-| `data`         | `Record<string, unknown>[]` | 是   | 行数据                                                                   |
-| `headerStyle?` | `CellStyle`                 | —    | 表头行默认样式，可被列级 `headerStyle` 覆盖                              |
-| `freezeRows?`  | `number`                    | —    | 冻结前 N 行表头；校验为非负整数                                          |
-| `merges?`      | `MergeRange[]`              | —    | 合并单元格（相对数据区定位）                                             |
-| `autoFilter?`  | `boolean`                   | —    | 表头自动筛选                                                             |
+| 字段           | 类型                            | 必填 | 说明                                                                     |
+| -------------- | ------------------------------- | ---- | ------------------------------------------------------------------------ |
+| `name`         | `string`                        | 是   | 工作表名：非空、≤ 31 字符，不含 `: \ / ? * [ ]`，且不得以单引号开头/结尾 |
+| `columns`      | `ColumnConfig[]`                | 是   | 列定义                                                                   |
+| `data`         | `Record<string, unknown>[]`     | 是   | 行数据                                                                   |
+| `headerStyle?` | `CellStyle`                     | —    | 表头行默认样式，可被列级 `headerStyle` 覆盖                              |
+| `dataStyle?`   | `CellStyle`                     | —    | 全部数据单元格的基底样式，列级 `style` 逐字段深合并覆盖（见样式指南）    |
+| `indexColumn?` | `boolean \| IndexColumnOptions` | —    | 注入最左侧序号列；`true` 即全部默认值。已有 merges 自动右移一列          |
+| `freezeRows?`  | `number`                        | —    | 冻结前 N 行表头；校验为非负整数                                          |
+| `merges?`      | `MergeRange[]`                  | —    | 合并单元格（相对数据区定位）                                             |
+| `autoFilter?`  | `boolean`                       | —    | 表头自动筛选                                                             |
 
 ## ColumnConfig
 
@@ -27,6 +29,20 @@
 | `format?`      | `FormatSpec \| Function` | —          | 值格式化；仅叶子列；函数在主线程路径执行，浏览器 worker 路径会被剥离（详见 FormatSpec 页） |
 
 带 `children` 的列为分组列，无数据单元格，只贡献表头行。表头行数 = 列树最大深度；叶子列表头纵向跨满剩余表头行，分组列表头横向跨其子树所有叶子列，合并由库自动生成（无需手工写 `merges`）。
+
+## IndexColumnOptions
+
+`SheetConfig.indexColumn` 的选项；简写 `true` 等价于 `{}`。
+
+| 字段           | 类型        | 默认值  | 说明                                                                  |
+| -------------- | ----------- | ------- | --------------------------------------------------------------------- |
+| `label?`       | `string`    | `"No."` | 序号列表头文字                                                        |
+| `width?`       | `number`    | `6`     | 列宽（Excel 字符单位，`0` 表示隐藏列）                                |
+| `start?`       | `number`    | `1`     | 首个数据行显示的序号；第 i 行显示 `start + i`。非负整数（导出时校验） |
+| `style?`       | `CellStyle` | —       | 序号列数据单元格样式；与表级 `dataStyle` 的合并规则同普通列           |
+| `headerStyle?` | `CellStyle` | —       | 序号列表头样式；优先于表级 `headerStyle`                              |
+
+序号列的值由行号生成、从不读取 `data`；用户列声明保留 prop `__index__` 会被明确报错拒绝。已有 `merges` 自动右移一列，仍指向原目标。
 
 ## MergeRange
 

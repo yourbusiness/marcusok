@@ -38,6 +38,16 @@ export const StylePresets = {
     border: { bottom: { style: "thin", color: "D0D0D0" } },
   } satisfies CellStyle,
 
+  /** Bordered: thin light-grey box on all four sides. */
+  bordered: {
+    border: {
+      top: { style: "thin", color: "D0D0D0" },
+      bottom: { style: "thin", color: "D0D0D0" },
+      left: { style: "thin", color: "D0D0D0" },
+      right: { style: "thin", color: "D0D0D0" },
+    },
+  } satisfies CellStyle,
+
   /** Danger: bold red text, centered. */
   danger: {
     font: { color: "C00000", bold: true },

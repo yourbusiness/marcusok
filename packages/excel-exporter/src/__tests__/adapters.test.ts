@@ -374,3 +374,26 @@ describe("echartsToSheet header collisions", () => {
     ).toThrow(/collides with the internal series keys/);
   });
 });
+
+describe("dataStyle / indexColumn passthrough (exportTable)", () => {
+  it("passes sheet-level dataStyle and indexColumn into SheetConfig", () => {
+    const sheet = tableToSheet({
+      sheetName: "T",
+      dataStyle: StylePresets.bordered,
+      indexColumn: { label: "序号", width: 8 },
+      columns: [{ dataIndex: "name", title: "名称" }],
+      data: [{ name: "a" }],
+    });
+    expect(sheet.dataStyle).toBe(StylePresets.bordered);
+    expect(sheet.indexColumn).toEqual({ label: "序号", width: 8 });
+  });
+
+  it("keeps both fields absent when the caller does not set them", () => {
+    const sheet = tableToSheet({
+      columns: [{ prop: "name", label: "名称" }],
+      data: [{ name: "a" }],
+    });
+    expect(sheet.dataStyle).toBeUndefined();
+    expect(sheet.indexColumn).toBeUndefined();
+  });
+});
