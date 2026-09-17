@@ -1,6 +1,13 @@
 name: CI
 on:
   pull_request:
+    # changesets 用 PAT 创建/推送的 release PR，其触发的 workflow 会被
+    # GitHub 平台级策略标记为"待人工批准"（防 token 滥用，无仓库设置可
+    # 关闭），每次发版都得手动 re-run。该 PR 内容纯 bot 生成（版本号 +
+    # CHANGELOG），质量门由合并后 main 的 push CI、release.yml 与
+    # deploy.yml 自带的 format/lint/typecheck/test 承担，故直接跳过。
+    branches-ignore:
+      - "changeset-release/**"
   push:
     branches: [main]
 concurrency:
