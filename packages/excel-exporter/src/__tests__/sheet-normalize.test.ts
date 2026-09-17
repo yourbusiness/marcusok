@@ -27,13 +27,13 @@ describe("applyIndexColumn", () => {
     expect(applyIndexColumn(falsy)).toBe(falsy);
   });
 
-  it("expands the shorthand true into defaults: No. header, width 6, first leaf", () => {
+  it("expands the shorthand true into defaults: 序号 header, width 6, first leaf", () => {
     const sheet = baseSheet({ indexColumn: true });
     const out = applyIndexColumn(sheet);
     expect(out.columns).toHaveLength(3);
     expect(out.columns[0]).toEqual({
       prop: INDEX_PROP,
-      label: "No.",
+      label: "序号",
       width: 6,
     });
     expect(out.columns[1]).toEqual({ prop: "name", label: "名称" });

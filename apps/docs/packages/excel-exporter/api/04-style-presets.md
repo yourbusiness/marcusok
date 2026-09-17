@@ -9,8 +9,8 @@
 | `percent`  | `0.00%`            | Right-aligned                                                  | Ratios, growth rates            |
 | `date`     | `yyyy-MM-dd`       | Centered                                                       | Date columns                    |
 | `datetime` | `yyyy-MM-dd HH:mm` | Centered                                                       | Date-time columns               |
-| `dataRow`  | —                  | Left-aligned, vertically centered, thin `D0D0D0` bottom border | Data rows                       |
-| `bordered` | —                  | Thin `D0D0D0` box on all four sides                            | Table-wide borders              |
+| `dataRow`  | —                  | Left-aligned, vertically centered, thin `BFBFBF` bottom border | Data rows                       |
+| `bordered` | —                  | Thin `BFBFBF` box on all four sides                            | Table-wide borders              |
 | `danger`   | —                  | Bold red `C00000`, centered                                    | Risk / anomalies                |
 
 ## Full definitions
@@ -33,14 +33,14 @@ export const StylePresets = {
   },
   dataRow: {
     alignment: { horizontal: "left", vertical: "center" },
-    border: { bottom: { style: "thin", color: "D0D0D0" } },
+    border: { bottom: { style: "thin", color: "BFBFBF" } },
   },
   bordered: {
     border: {
-      top: { style: "thin", color: "D0D0D0" },
-      bottom: { style: "thin", color: "D0D0D0" },
-      left: { style: "thin", color: "D0D0D0" },
-      right: { style: "thin", color: "D0D0D0" },
+      top: { style: "thin", color: "BFBFBF" },
+      bottom: { style: "thin", color: "BFBFBF" },
+      left: { style: "thin", color: "BFBFBF" },
+      right: { style: "thin", color: "BFBFBF" },
     },
   },
   danger: {

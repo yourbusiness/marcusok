@@ -64,13 +64,19 @@ describe("WorkbookBuilder round-trip", () => {
     // Column style applied: B (dataRow) and C (currency) have non-null styleIndex
     expect(ws.cell("B2").styleIndex).not.toBeNull();
     expect(ws.cell("C2").styleIndex).not.toBeNull();
-    // A has no style config -> default (null or 0)
-    expect(ws.cell("A2").styleIndex).toBeNull();
+    // A has no column style -> it still carries the library base style (centered),
+    // which is structurally distinct from B/C's merged styles.
+    const aIdx = ws.cell("A2").styleIndex;
+    expect(aIdx).not.toBeNull();
+    expect(aIdx).not.toBe(ws.cell("B2").styleIndex);
+    expect(aIdx).not.toBe(ws.cell("C2").styleIndex);
 
     // Style applies to DATA cells only, never the header row (regression guard
-    // for the bug where the header cell inherited the column data style).
-    expect(ws.cell("B1").styleIndex).toBeNull();
-    expect(ws.cell("C1").styleIndex).toBeNull();
+    // for the bug where the header cell inherited the column data style). Header
+    // cells now carry the base style as well, so compare indices instead of
+    // asserting null.
+    expect(ws.cell("B1").styleIndex).not.toBe(ws.cell("B2").styleIndex);
+    expect(ws.cell("C1").styleIndex).not.toBe(ws.cell("C2").styleIndex);
 
     // Merge: A2:A3 (row 0 data-area, rowspan 2 -> rows 2-3 in Excel)
     expect(ws.mergeCells.some((r) => r === "A2:A3")).toBe(true);
@@ -189,8 +195,9 @@ describe("WorkbookBuilder round-trip", () => {
     expect(ws.cell("A1").styleIndex).not.toBeNull();
     expect(ws.cell("B1").styleIndex).not.toBeNull();
     expect(ws.cell("B2").styleIndex).not.toBeNull();
-    // Data cells never take header styles.
-    expect(ws.cell("A3").styleIndex).toBeNull();
+    // Data cells never take header styles: the data cell carries only the base
+    // style, so its index differs from the leaf header's own style.
+    expect(ws.cell("A3").styleIndex).not.toBe(ws.cell("A1").styleIndex);
   });
 
   it("handles multiple sheets", async () => {
@@ -262,8 +269,10 @@ describe("WorkbookBuilder round-trip", () => {
     // Full precision is preserved in the stored cell (regression guard for the
     // toFixed truncation bug): value is 1234.567, not the display-rounded 1234.57.
     expect(ws.cell("B2").value).toBe(1234.567);
-    // Plain column (no format, no style) stays unstyled.
-    expect(ws.cell("C2").styleIndex).toBeNull();
+    // Plain column (no format, no style) gets no auto-injected numFormat -- only
+    // the base style, so its index differs from the two typed columns.
+    expect(ws.cell("C2").styleIndex).not.toBeNull();
+    expect(ws.cell("C2").styleIndex).not.toBe(ws.cell("A2").styleIndex);
   });
 
   it("normalizes non-primitive values to the same strings as the stream path", async () => {
@@ -378,6 +387,63 @@ describe("WorkbookBuilder round-trip", () => {
   });
 });
 
+describe("BaseCellStyle (library default centering)", () => {
+  it("centers cells that declare no alignment, and yields to explicit values", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "Base",
+      columns: [
+        { prop: "plain", label: "Plain" }, // 无任何样式 -> 纯基底
+        // 显式左对齐：水平覆盖基底，垂直仍由基底兜底
+        {
+          prop: "left",
+          label: "Left",
+          style: { alignment: { horizontal: "left" } },
+        },
+        // 预设右对齐（currency）：同上，且带 numFormat
+        { prop: "cur", label: "Cur", style: StylePresets.currency },
+      ],
+      data: [{ plain: "x", left: "y", cur: 1.5 }],
+    });
+    const bytes = await builder.toBuffer();
+    const stylesXml = strFromU8(unzipSync(bytes)["xl/styles.xml"]);
+
+    // 基底：未声明对齐的单元格落到水平 + 垂直居中
+    expect(stylesXml).toContain(
+      '<alignment horizontal="center" vertical="center"/>',
+    );
+    // 显式声明优先：水平被覆盖，垂直仍由基底补上
+    expect(stylesXml).toContain(
+      '<alignment horizontal="left" vertical="center"/>',
+    );
+    expect(stylesXml).toContain(
+      '<alignment horizontal="right" vertical="center"/>',
+    );
+
+    // 表头同样吃基底（本表未配 headerStyle）：各列表头共享同一基底样式索引
+    const ws = (await readBuffer(bytes)).getSheet("Base")!;
+    expect(ws.cell("A1").styleIndex).not.toBeNull();
+    expect(ws.cell("B1").styleIndex).toBe(ws.cell("A1").styleIndex);
+  });
+
+  it("dataStyle overrides the base alignment for every data cell", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "Override",
+      // 调用方要 Excel 原生左对齐时的正路：用 dataStyle 覆盖基底
+      dataStyle: { alignment: { horizontal: "left" } },
+      columns: [{ prop: "a", label: "A" }],
+      data: [{ a: 1 }],
+    });
+    const stylesXml = strFromU8(
+      unzipSync(await builder.toBuffer())["xl/styles.xml"],
+    );
+    expect(stylesXml).toContain(
+      '<alignment horizontal="left" vertical="center"/>',
+    );
+  });
+});
+
 describe("dataStyle (sheet-level base style)", () => {
   it("applies to every data cell and never to header cells", async () => {
     const builder = await WorkbookBuilder.create();
@@ -398,9 +464,10 @@ describe("dataStyle (sheet-level base style)", () => {
     for (const ref of ["A2", "B2", "A3", "B3"]) {
       expect(ws.cell(ref).styleIndex).not.toBeNull();
     }
-    // dataStyle 只作用于数据区：表头不被波及（与 headerStyle 的分工一致）
-    expect(ws.cell("A1").styleIndex).toBeNull();
-    expect(ws.cell("B1").styleIndex).toBeNull();
+    // dataStyle 只作用于数据区：表头不被波及（与 headerStyle 的分工一致）。
+    // 表头现在也带库级基底，故与数据格的合并结果比较，而非断言为 null。
+    expect(ws.cell("A1").styleIndex).not.toBe(ws.cell("A2").styleIndex);
+    expect(ws.cell("B1").styleIndex).not.toBe(ws.cell("B2").styleIndex);
   });
 
   it("deep-merges: a column style keeps the base border while overriding alignment", async () => {
@@ -521,7 +588,7 @@ describe("indexColumn (workbook path)", () => {
     ]);
     const wb = await readBuffer(bytes);
     const ws = wb.getSheet("IdxStream")!;
-    expect(ws.cell("A1").value).toBe("No.");
+    expect(ws.cell("A1").value).toBe("序号");
     expect(String(ws.cell("A2").value)).toBe("1");
     expect(String(ws.cell("A3").value)).toBe("2");
     expect(ws.cell("B2").value).toBe("a");

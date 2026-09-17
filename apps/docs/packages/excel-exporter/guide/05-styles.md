@@ -11,8 +11,8 @@ A column-level `style` (`CellStyle`) applies to all **data cells** of that colum
 | `StylePresets.percent`  | `0.00%`                                                                                                                  | Percentage format, right-aligned                                                               |
 | `StylePresets.date`     | `yyyy-MM-dd`                                                                                                             | Date format, centered                                                                          |
 | `StylePresets.datetime` | `yyyy-MM-dd HH:mm`                                                                                                       | Date-time format, centered                                                                     |
-| `StylePresets.dataRow`  | left + thin bottom border                                                                                                | Left-aligned, vertically centered, thin `D0D0D0` bottom border                                 |
-| `StylePresets.bordered` | thin box on all four sides                                                                                               | Thin `D0D0D0` borders on all sides — pairs with sheet-level `dataStyle` for table-wide borders |
+| `StylePresets.dataRow`  | left + thin bottom border                                                                                                | Left-aligned, vertically centered, thin `BFBFBF` bottom border                                 |
+| `StylePresets.bordered` | thin box on all four sides                                                                                               | Thin `BFBFBF` borders on all sides — pairs with sheet-level `dataStyle` for table-wide borders |
 | `StylePresets.danger`   | <span style="display:inline-block;width:12px;height:12px;background:#C00000;border-radius:2px"></span> red bold          | Bold red text `C00000`, centered                                                               |
 
 ```ts
@@ -66,7 +66,7 @@ await exportExcel({
       name: "Orders",
       headerStyle: StylePresets.header, // dark-blue headers, whole table
       dataStyle: StylePresets.bordered, // thin borders on every data cell
-      indexColumn: { label: "No.", width: 6 }, // leading row-number column
+      indexColumn: true, // leading row-number column (header defaults to "序号")
       freezeRows: 1,
       autoFilter: true,
       columns: [
@@ -87,7 +87,7 @@ Where each visual element comes from:
 | ------------------------------------------------ | ------------------------ |
 | Dark-blue header, whole table                    | sheet `headerStyle`      |
 | Thin border on every data cell                   | sheet `dataStyle`        |
-| Leading `No.` column                             | sheet `indexColumn`      |
+| Leading `序号` column                            | sheet `indexColumn`      |
 | `yyyy-MM-dd` dates, `#,##0.00` amounts, percents | the column's own `style` |
 
 The column styles merge **over** `dataStyle` field by field (see [below](#sheet-level-datastyle)): `StylePresets.currency` only sets `numFormat` + `alignment`, so its cells keep the table-wide border from `dataStyle` and gain the number format from the column.
@@ -152,7 +152,7 @@ const highlight: CellStyle = {
   alignment: { horizontal: "center", vertical: "center", wrapText: true },
   border: {
     bottom: { style: "medium", color: "1F4E79" },
-    right: { style: "thin", color: "D0D0D0" },
+    right: { style: "thin", color: "BFBFBF" },
   },
   numFormat: "#,##0.00",
 };
@@ -169,6 +169,35 @@ Field reference:
 | `numFormat` | Excel format codes such as `"#,##0.00"`, `"yyyy-mm-dd"`, `"0.00%"`                                   |
 
 > Colors are 6-digit RGB hex **without** `#`, matching modern-xlsx's type contract.
+
+## Default alignment
+
+Every cell is **centered by default**. A base style — `BaseCellStyle`, horizontal and vertical `center`, also exported from the package — is laid underneath every cell, headers and data alike, so a table no longer mixes Excel's native alignment (text left, numbers right) column by column.
+
+Explicit declarations always win, and the merge is field-level: declaring only `horizontal` still inherits the base's `vertical`.
+
+| Declaration                             | Result                           |
+| --------------------------------------- | -------------------------------- |
+| _(none)_                                | centered on both axes            |
+| `alignment: { horizontal: "left" }`     | left, still vertically centered  |
+| `StylePresets.currency` (right-aligned) | right, still vertically centered |
+
+The base sits below both `dataStyle` and `headerStyle`, so either one overrides it. To restore Excel's native alignment, declare both axes explicitly:
+
+```ts
+sheets: [
+  {
+    name: "Native",
+    headerStyle: { alignment: { horizontal: "left", vertical: "bottom" } },
+    dataStyle: { alignment: { horizontal: "left", vertical: "bottom" } },
+    // ...columns, data
+  },
+];
+```
+
+Presets declare their own alignment, so they keep it: `StylePresets.dataRow` is **left**-aligned by design and stays left under the base. If you want it centered too, derive a variant — `{ ...StylePresets.dataRow, alignment: { horizontal: "center", vertical: "center" } }`.
+
+> The base is a style, so the stream path (≥ 50,000 rows or a degraded export) drops it along with everything else — see [Where styles apply](#where-styles-apply-and-where-they-don-t).
 
 ## Sheet-level dataStyle
 
@@ -234,7 +263,7 @@ sheets: [
 sheets: [
   {
     name: "Sheet1",
-    indexColumn: true, // or { label: "No.", width: 6, start: 1, style, headerStyle }
+    indexColumn: true, // or { label: "行号", width: 8, start: 1, style, headerStyle }
     columns: [
       { prop: "name", label: "Name" },
       { prop: "amount", label: "Amount" },
@@ -245,6 +274,7 @@ sheets: [
 ```
 
 - Works on **every export path** (workbook / worker / stream): it is structure, not styling, so even the style-less stream keeps the numbers.
+- The header label defaults to `"序号"` and the width to `6`; use the object form to customize them and the styles.
 - Existing `merges` are shifted one column right automatically, so they keep pointing at their original targets.
 - Values never read `data`; a user column declaring the reserved `__index__` prop is rejected with a clear error.
 - Styling follows the same rules as any column: header via `indexColumn.headerStyle` (over sheet `headerStyle`), data cells via `indexColumn.style` (merged over sheet `dataStyle`).

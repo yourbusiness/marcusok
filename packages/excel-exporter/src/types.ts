@@ -168,7 +168,7 @@ export interface MergeRange {
  * option has a default.
  */
 export interface IndexColumnOptions {
-  /** Header text; defaults to `"No."`. */
+  /** Header text; defaults to `"序号"`. */
   label?: string;
   /** Column width in Excel character units; defaults to `6`. */
   width?: number;

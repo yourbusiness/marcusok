@@ -170,7 +170,8 @@ Variant recipes and the full styling guide (header overrides, index-column styli
 Two sheet-level fields cover the whole table in one place:
 
 - **`dataStyle`** — base `CellStyle` for every data cell. A column's own `style` deep-merges over it field by field (a table-wide border survives a column that only sets `numFormat`, and vice versa), so `dataStyle: StylePresets.bordered` plus a few column tweaks is the idiomatic bordered-table setup. Headers stay with `headerStyle`.
-- **`indexColumn`** — injects a leading row-number column (`true`, or `{ label, width, start, style, headerStyle }`): values come from the row number (never read from `data`), existing `merges` shift right automatically, and the feature works on every export path — workbook, worker and the style-less stream alike.
+- **`indexColumn`** — injects a leading row-number column (`true`, or `{ label, width, start, style, headerStyle }`): values come from the row number (never read from `data`), existing `merges` shift right automatically, and the feature works on every export path — workbook, worker and the style-less stream alike. The header label defaults to `序号` and the width to `6`.
+- **Default alignment** — every cell is centered by default: the package's `BaseCellStyle` (horizontal + vertical `center`) sits underneath all cells, headers included. Explicit `alignment` values win field by field, and either `dataStyle` or `headerStyle` overrides the base; declare both axes to restore Excel's native alignment. Presets keep their own alignment — `StylePresets.dataRow` stays left-aligned by design.
 
 ```ts
 sheets: [
@@ -178,7 +179,7 @@ sheets: [
     name: "Sheet1",
     headerStyle: StylePresets.header, // headers
     dataStyle: StylePresets.bordered, // all data cells
-    indexColumn: { label: "No.", width: 6 },
+    indexColumn: true, // header label defaults to "序号"
     columns: [
       { prop: "name", label: "Name" },
       { prop: "amount", label: "Amount", style: StylePresets.currency },

@@ -22,6 +22,8 @@ export { configureWasm, getWasmLoader } from "./wasm-loader";
 export type { LoaderOptions, LoadState } from "./wasm-loader";
 export { WorkbookBuilder } from "./workbook-builder";
 export { exportAsStream } from "./streaming-builder";
+// 库级基底样式：铺在所有单元格样式之下的默认对齐（见 style-utils 注释）
+export { BaseCellStyle } from "./style-utils";
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

@@ -44,7 +44,7 @@ export function applyIndexColumn(sheet: SheetConfig): SheetConfig {
 
   const column: ColumnConfig = {
     prop: INDEX_PROP,
-    label: opt.label ?? "No.",
+    label: opt.label ?? "序号",
     // 用 ?? 而非 ||：width 0 合法（隐藏列），不能被默认值 6 吞掉
     width: opt.width ?? 6,
     ...(opt.style !== undefined && { style: opt.style }),

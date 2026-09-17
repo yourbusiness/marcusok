@@ -3409,7 +3409,7 @@ export const StylePresets = {
   /** Data row: left-aligned, thin bottom border. */
   dataRow: {
     alignment: { horizontal: "left", vertical: "center" },
-    border: { bottom: { style: "thin", color: "D0D0D0" } },
+    border: { bottom: { style: "thin", color: "BFBFBF" } },
   } satisfies CellStyle,
 
   /** Danger: bold red text, centered. */

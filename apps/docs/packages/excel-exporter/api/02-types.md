@@ -34,13 +34,13 @@ A column with `children` is a group: no data cells, header rows only. Header row
 
 Options for `SheetConfig.indexColumn`; the shorthand `true` equals `{}`.
 
-| Field          | Type        | Default | Description                                                                                      |
-| -------------- | ----------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `label?`       | `string`    | `"No."` | Header text of the index column                                                                  |
-| `width?`       | `number`    | `6`     | Column width (Excel character units; `0` hides the column)                                       |
-| `start?`       | `number`    | `1`     | Number shown on the first data row; row i displays `start + i`. Non-negative integer (validated) |
-| `style?`       | `CellStyle` | —       | Data-cell style of the index column; merged over sheet-level `dataStyle` like any column style   |
-| `headerStyle?` | `CellStyle` | —       | Header style of the index column; overrides sheet-level `headerStyle`                            |
+| Field          | Type        | Default  | Description                                                                                      |
+| -------------- | ----------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `label?`       | `string`    | `"序号"` | Header text of the index column                                                                  |
+| `width?`       | `number`    | `6`      | Column width (Excel character units; `0` hides the column)                                       |
+| `start?`       | `number`    | `1`      | Number shown on the first data row; row i displays `start + i`. Non-negative integer (validated) |
+| `style?`       | `CellStyle` | —        | Data-cell style of the index column; merged over sheet-level `dataStyle` like any column style   |
+| `headerStyle?` | `CellStyle` | —        | Header style of the index column; overrides sheet-level `headerStyle`                            |
 
 The index column's values are generated from the row number and never read from `data`; a user column declaring the reserved `__index__` prop is rejected with a clear error. Existing `merges` are shifted one column right so they keep pointing at their original targets.
 

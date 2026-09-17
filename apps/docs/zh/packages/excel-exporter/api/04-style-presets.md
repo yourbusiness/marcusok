@@ -9,8 +9,8 @@
 | `percent`  | `0.00%`            | 右对齐                                     | 占比、增长率       |
 | `date`     | `yyyy-MM-dd`       | 居中                                       | 日期列             |
 | `datetime` | `yyyy-MM-dd HH:mm` | 居中                                       | 日期时间列         |
-| `dataRow`  | —                  | 左对齐、垂直居中、底部细线 `D0D0D0`        | 数据行             |
-| `bordered` | —                  | 四边细线 `D0D0D0`                          | 整表边框           |
+| `dataRow`  | —                  | 左对齐、垂直居中、底部细线 `BFBFBF`        | 数据行             |
+| `bordered` | —                  | 四边细线 `BFBFBF`                          | 整表边框           |
 | `danger`   | —                  | 红色加粗 `C00000`、居中                    | 风险/异常值        |
 
 ## 完整定义
@@ -33,14 +33,14 @@ export const StylePresets = {
   },
   dataRow: {
     alignment: { horizontal: "left", vertical: "center" },
-    border: { bottom: { style: "thin", color: "D0D0D0" } },
+    border: { bottom: { style: "thin", color: "BFBFBF" } },
   },
   bordered: {
     border: {
-      top: { style: "thin", color: "D0D0D0" },
-      bottom: { style: "thin", color: "D0D0D0" },
-      left: { style: "thin", color: "D0D0D0" },
-      right: { style: "thin", color: "D0D0D0" },
+      top: { style: "thin", color: "BFBFBF" },
+      bottom: { style: "thin", color: "BFBFBF" },
+      left: { style: "thin", color: "BFBFBF" },
+      right: { style: "thin", color: "BFBFBF" },
     },
   },
   danger: {

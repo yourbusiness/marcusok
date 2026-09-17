@@ -11,8 +11,8 @@
 | `StylePresets.percent`  | `0.00%`                                                                                                           | 百分比格式，右对齐                                       |
 | `StylePresets.date`     | `yyyy-MM-dd`                                                                                                      | 日期格式，居中                                           |
 | `StylePresets.datetime` | `yyyy-MM-dd HH:mm`                                                                                                | 日期时间格式，居中                                       |
-| `StylePresets.dataRow`  | 左对齐 + 底部细线                                                                                                 | 左对齐、垂直居中，底部浅灰细线 `D0D0D0`                  |
-| `StylePresets.bordered` | 四边细线框                                                                                                        | 四边浅灰细线 `D0D0D0`，适合配表级 `dataStyle` 做整表边框 |
+| `StylePresets.dataRow`  | 左对齐 + 底部细线                                                                                                 | 左对齐、垂直居中，底部浅灰细线 `BFBFBF`                  |
+| `StylePresets.bordered` | 四边细线框                                                                                                        | 四边浅灰细线 `BFBFBF`，适合配表级 `dataStyle` 做整表边框 |
 | `StylePresets.danger`   | <span style="display:inline-block;width:12px;height:12px;background:#C00000;border-radius:2px"></span> 红色加粗   | 红色加粗文字 `C00000`，居中                              |
 
 ```ts
@@ -66,7 +66,7 @@ await exportExcel({
       name: "Orders",
       headerStyle: StylePresets.header, // 整表深蓝表头
       dataStyle: StylePresets.bordered, // 每个数据单元格的细边框
-      indexColumn: { label: "No.", width: 6 }, // 最左侧序号列
+      indexColumn: true, // 最左侧序号列（表头默认「序号」）
       freezeRows: 1,
       autoFilter: true,
       columns: [
@@ -87,7 +87,7 @@ await exportExcel({
 | ------------------------------------------ | ------------------ |
 | 整表深蓝表头                               | 表级 `headerStyle` |
 | 每个数据单元格的细边框                     | 表级 `dataStyle`   |
-| 最左侧 `No.` 序号列                        | 表级 `indexColumn` |
+| 最左侧「序号」列                           | 表级 `indexColumn` |
 | `yyyy-MM-dd` 日期、`#,##0.00` 金额、百分比 | 列级 `style`       |
 
 列级样式逐字段合并**覆盖** `dataStyle`（见下文「表级 dataStyle」）：`StylePresets.currency` 只声明 `numFormat` + `alignment`，因此它的单元格既保留 `dataStyle` 的整表边框，又获得列级数字格式。
@@ -152,7 +152,7 @@ const highlight: CellStyle = {
   alignment: { horizontal: "center", vertical: "center", wrapText: true },
   border: {
     bottom: { style: "medium", color: "1F4E79" },
-    right: { style: "thin", color: "D0D0D0" },
+    right: { style: "thin", color: "BFBFBF" },
   },
   numFormat: "#,##0.00",
 };
@@ -169,6 +169,35 @@ const highlight: CellStyle = {
 | `numFormat` | Excel 数字格式码，如 `"#,##0.00"`、`"yyyy-mm-dd"`、`"0.00%"`                                            |
 
 > 颜色统一使用 6 位 RGB hex（不带 `#`），与 modern-xlsx 的类型约定一致。
+
+## 默认居中
+
+**所有单元格默认居中**：库在每一个单元格（表头与数据格一视同仁）之下铺了一层基底样式 `BaseCellStyle`（水平 + 垂直居中，随包导出可自行引用），一张表不再出现文本靠左、数字靠右交替参差的情况。
+
+显式声明始终优先，且合并是字段级的——只声明 `horizontal` 时垂直方向仍由基底兜底：
+
+| 声明                                  | 结果               |
+| ------------------------------------- | ------------------ |
+| （未声明任何对齐）                    | 水平 + 垂直居中    |
+| `alignment: { horizontal: "left" }`   | 左对齐，仍垂直居中 |
+| `StylePresets.currency`（预设右对齐） | 右对齐，仍垂直居中 |
+
+基底位于 `dataStyle` 与 `headerStyle` 之下，两者都能覆盖它。若要恢复 Excel 的原生对齐（文本靠左、数字靠右、垂直靠下），显式声明两个方向：
+
+```ts
+sheets: [
+  {
+    name: "Native",
+    headerStyle: { alignment: { horizontal: "left", vertical: "bottom" } },
+    dataStyle: { alignment: { horizontal: "left", vertical: "bottom" } },
+    // ...columns、data
+  },
+];
+```
+
+预设各自声明了对齐，因此保持自己的对齐：`StylePresets.dataRow` 的设计就是**左对齐**，在基底之上仍是左对齐。想让它也居中，派生一个变体即可——`{ ...StylePresets.dataRow, alignment: { horizontal: "center", vertical: "center" } }`。
+
+> 基底属于样式层，因此流式路径（≥ 50,000 行或降级导出）会连同其它样式一并剥离——见[样式的生效范围](#样式的生效范围)。
 
 ## 表级 dataStyle
 
@@ -234,7 +263,7 @@ sheets: [
 sheets: [
   {
     name: "Sheet1",
-    indexColumn: true, // 或 { label: "序号", width: 6, start: 1, style, headerStyle }
+    indexColumn: true, // 或 { label: "行号", width: 8, start: 1, style, headerStyle }
     columns: [
       { prop: "name", label: "名称" },
       { prop: "amount", label: "金额" },
@@ -245,6 +274,7 @@ sheets: [
 ```
 
 - **所有导出路径**（workbook / worker / stream）均支持：它是结构而非样式，连无样式流式路径也保留序号。
+- 表头文案默认「序号」、列宽默认 6；对象形态用于自定义它们与样式。
 - 已有 `merges` 自动右移一列，仍指向原目标。
 - 序号值从不读取 `data`；用户列声明保留 prop `__index__` 会被明确报错拒绝。
 - 样式规则与普通列一致：表头走 `indexColumn.headerStyle`（优先于表级 `headerStyle`），数据单元格走 `indexColumn.style`（与表级 `dataStyle` 合并）。

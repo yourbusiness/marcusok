@@ -5,7 +5,7 @@ import {
   type Worksheet,
 } from "modern-xlsx";
 import type { CellStyle, SheetConfig, ColumnConfig } from "./types";
-import { buildStyleIndex, mergeStyles } from "./style-utils";
+import { buildStyleIndex, mergeStyles, BaseCellStyle } from "./style-utils";
 import { INDEX_PROP, indexColumnStart } from "./sheet-normalize";
 import { flattenColumnTree, type HeaderCell } from "./column-tree";
 import { getWasmLoader } from "./wasm-loader";
@@ -113,29 +113,38 @@ export class WorkbookBuilder {
     // row's cells densely, so a header row with merge-covered gaps (multi-row
     // headers) misaligns `cells[c]` from absolute column c. Resolve by ref.
     headerCells.forEach((cell) => {
-      const headerStyle = cell.column.headerStyle ?? config.headerStyle;
-      if (headerStyle) {
-        const idx = this.cachedStyleIndex(headerStyle);
-        const target = ws.cell(encodeCellRef(cell.row, cell.col));
-        if (target) target.styleIndex = idx;
-      }
+      // BaseCellStyle 铺在最底层：列级 headerStyle 整体替换表级默认的语义
+      // 不变（两者之间不合并），只是两者都没声明对齐时由基底补上居中。
+      const headerStyle = mergeStyles(
+        BaseCellStyle,
+        cell.column.headerStyle ?? config.headerStyle,
+      )!;
+      const idx = this.cachedStyleIndex(headerStyle);
+      const target = ws.cell(encodeCellRef(cell.row, cell.col));
+      if (target) target.styleIndex = idx;
     });
 
     // Column styles: apply to data cells only, matching the `style: not the
     // label` contract in types.ts. Header styling is handled separately above
     // via headerStyle. Sheet-level dataStyle is the base layer, the column's
-    // own style deep-merges over it (see mergeStyles). Data rows start at sheet
-    // row headerRowCount (0-based), so slice(headerRowCount) iterates only data
-    // rows; mutating styleIndex is a plain JS property write, bypassing
-    // ws.cell(ref) ref-parsing overhead.
+    // own style deep-merges over it (see mergeStyles), and BaseCellStyle sits
+    // underneath both. Data rows start at sheet row headerRowCount (0-based),
+    // so slice(headerRowCount) iterates only data rows; mutating styleIndex is
+    // a plain JS property write, bypassing ws.cell(ref) ref-parsing overhead.
+    // slice() hoisted out of the per-column loop: with the base style every
+    // column now sets styles (no more `if (effective)` skip), so re-slicing
+    // the row array per column would add an O(rows × columns) copy.
+    const dataRows = ws.rows.slice(headerRowCount);
     columns.forEach((c, i) => {
-      const effective = mergeStyles(config.dataStyle, c.style);
-      if (effective) {
-        const idx = this.cachedStyleIndex(effective);
-        for (const row of ws.rows.slice(headerRowCount)) {
-          const cell = row.cells[i];
-          if (cell) cell.styleIndex = idx;
-        }
+      // 基底恒非空，mergeStyles 在 base 存在时必返回样式——用 ! 收窄
+      const effective = mergeStyles(
+        BaseCellStyle,
+        mergeStyles(config.dataStyle, c.style),
+      )!;
+      const idx = this.cachedStyleIndex(effective);
+      for (const row of dataRows) {
+        const cell = row.cells[i];
+        if (cell) cell.styleIndex = idx;
       }
     });
 
