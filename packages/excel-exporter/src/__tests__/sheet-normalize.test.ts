@@ -108,6 +108,22 @@ describe("applyIndexColumn", () => {
       ),
     );
   });
+
+  it("the reserved-prop check is alias-aware: legacy `key` also conflicts", () => {
+    // 保留字判定必须走 columnProp：只看 .prop 会把 key: "__index__" 当普通列，
+    // 序号列注入后它被静默遮蔽成序号——与 prop 撞名同害，同样拒绝。
+    expect(() =>
+      applyIndexColumn(
+        baseSheet({
+          indexColumn: true,
+          columns: [
+            { key: INDEX_PROP, label: "我的序号" },
+            { prop: "name", label: "名称" },
+          ],
+        }),
+      ),
+    ).toThrow(/is reserved for the index column/);
+  });
 });
 
 // 底层入口 WorkbookBuilder.addSheet / exportAsStream 只识别展开后的 __index__
@@ -129,6 +145,25 @@ describe("index-column helpers exported from the public entry", () => {
     expect(ws.cell("A1").value).toBe("序号");
     // 值由行号生成（start 10 起），不读 data
     expect(ws.cell("A2").value).toBe(10);
+    expect(ws.cell("B2").value).toBe("a");
+  });
+
+  it("a hand-written `key: __index__` column is also driven by the row number", async () => {
+    // 底层入口的保留字判定经 columnProp：legacy 别名列同样由行号驱动，
+    // 不会去 data 里读 "__index__" 字段（那里什么都没有，会得到空单元格）。
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(
+      baseSheet({
+        columns: [
+          { key: INDEX_PROP, label: "序号" },
+          { prop: "name", label: "名称" },
+        ],
+      }),
+    );
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("S")!;
+    expect(ws.cell("A2").value).toBe(1);
+    expect(ws.cell("A3").value).toBe(2);
     expect(ws.cell("B2").value).toBe("a");
   });
 });

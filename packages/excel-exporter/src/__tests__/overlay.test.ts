@@ -127,6 +127,27 @@ describe("遮罩生命周期", () => {
     vi.advanceTimersByTime(1_000);
     expect(root()).toBeNull();
   });
+
+  it("淡出进行中被新导出复用时恢复可见（回归：opacity 曾停在 0）", () => {
+    // 第一次导出关闭后开始淡出：teardown 已把 opacity 压到 "0"
+    const a = show({ minVisibleMs: 0, fadeOutMs: 100 });
+    a.close();
+    expect(root()!.style.opacity).toBe("0");
+
+    // 淡出窗口内发起第二次导出：复用同一节点，必须恢复可见并回到初始文案
+    const b = show();
+    expect(root()!.style.opacity).toBe("1");
+    expect(root()!.querySelector(".mxe-label")!.textContent).toBe("准备中…");
+    expect(root()!.dataset.mxeMode).toBe("indeterminate");
+
+    // 第一次导出的淡出定时器已被取消，到点不得摘除正在使用的节点
+    vi.advanceTimersByTime(200);
+    expect(root()).not.toBeNull();
+
+    b.close();
+    vi.advanceTimersByTime(1_000);
+    expect(root()).toBeNull();
+  });
 });
 
 describe("遮罩渲染", () => {

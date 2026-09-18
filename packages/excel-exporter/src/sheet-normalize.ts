@@ -1,11 +1,14 @@
 import type { ColumnConfig, IndexColumnOptions, SheetConfig } from "./types";
-import { flattenColumnTree } from "./column-tree";
+import { columnProp, flattenColumnTree } from "./column-tree";
 
 /**
  * prop of the virtual row-number column. Reserved: wherever a leaf column
  * carries this prop — injected by `applyIndexColumn` or written by hand on the
  * low-level builder paths — its cell values are generated from the row number
- * and never read from `data`.
+ * and never read from `data`. The reserved check goes through `columnProp`, so
+ * the legacy `key` alias is reserved too (every other consumer reads the field
+ * alias-aware; a prop-only check would treat `key: "__index__"` as a normal
+ * column and silently read it from `data`).
  */
 export const INDEX_PROP = "__index__";
 
@@ -36,7 +39,7 @@ export function applyIndexColumn(sheet: SheetConfig): SheetConfig {
   // 同名 prop 冲突宁可报错：序号列的值由行号生成、不读 data，用户列若撞名
   // 会被静默遮蔽成序号——数据悄悄丢失比报错更糟。
   const { leaves } = flattenColumnTree(sheet.columns);
-  if (leaves.some((c) => c.prop === INDEX_PROP)) {
+  if (leaves.some((c) => columnProp(c) === INDEX_PROP)) {
     throw new Error(
       `[excel-exporter] column prop "${INDEX_PROP}" is reserved for the index column; rename your column or drop indexColumn`,
     );

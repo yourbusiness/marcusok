@@ -7,7 +7,7 @@ import {
 import type { CellStyle, SheetConfig, ColumnConfig } from "./types";
 import { buildStyleIndex, mergeStyles, BaseCellStyle } from "./style-utils";
 import { INDEX_PROP, indexColumnStart } from "./sheet-normalize";
-import { flattenColumnTree, type HeaderCell } from "./column-tree";
+import { flattenColumnTree, columnProp, type HeaderCell } from "./column-tree";
 import { getWasmLoader } from "./wasm-loader";
 import {
   resolveCellFormat,
@@ -62,7 +62,9 @@ export class WorkbookBuilder {
     const start = indexColumnStart(config);
     const rows = config.data.map((item, rowIndex) =>
       columns.map((col) => {
-        if (col.prop === INDEX_PROP) return rowIndex + start;
+        // INDEX_PROP 经 columnProp 判定：legacy `key` 别名同样保留（见
+        // sheet-normalize 的保留字段说明）
+        if (columnProp(col) === INDEX_PROP) return rowIndex + start;
         const v = resolveCellFormat(col, item);
         // Normalize exactly like displayValue on the stream path, so a
         // dataset crossing the 50k threshold (or degrading) keeps identical cell

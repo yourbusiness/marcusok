@@ -443,6 +443,10 @@ export function showExportOverlay(
     // 上一轮挂起的移除（淡出 / 最短可见延时）取消：本次复用同一份 DOM。
     clearTimer(h.unmountTimer);
     h.unmountTimer = null;
+    // teardown 已把 opacity 压到 "0"、摘除只差 fadeTimer 到点——此刻取消淡出
+    // 复用节点却不恢复透明度的话，新导出的遮罩会以 opacity:0 挂完整场（不可见
+    // 且仍在拦截交互）。拉回 "1" 并按新驱动者的初始快照重渲染（回到不确定态）。
+    const wasFadingOut = h.fadeTimer !== null;
     clearTimer(h.fadeTimer);
     h.fadeTimer = null;
     h.driver = state;
@@ -455,6 +459,9 @@ export function showExportOverlay(
         h.revealTimer = setTimeout(() => {
           reveal(h, cfg.text);
         }, remaining);
+    } else if (wasFadingOut) {
+      h.dom.root.style.opacity = "1";
+      render(h.dom, state.snapshot(), cfg.text);
     }
 
     return {

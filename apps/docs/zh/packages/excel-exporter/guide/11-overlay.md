@@ -52,12 +52,12 @@ await exportExcelWithOverlay(options, {
 
 进度来自库已有的回调，所以进度条的表现不会好于背后的数据源：
 
-| 路由                 | 触发条件               | 中间进度        |
-| -------------------- | ---------------------- | --------------- |
-| main + Workbook      | 浏览器 < 20,000 行     | 无              |
-| main + Fast stream   | Node，或显式 `stream`  | 每 1,000 行一次 |
-| Worker + Workbook    | auto，20,000–49,999 行 | 无              |
-| Worker + Fast stream | auto，≥ 50,000 行      | 每 1,000 行一次 |
+| 路由                 | 触发条件                                                    | 中间进度        |
+| -------------------- | ----------------------------------------------------------- | --------------- |
+| main + Workbook      | 浏览器 < 20,000 行                                          | 无              |
+| main + Fast stream   | Node（auto ≥ 50,000 行，或显式 `stream`——Node 没有 Worker） | 每 1,000 行一次 |
+| Worker + Workbook    | auto，20,000–49,999 行                                      | 无              |
+| Worker + Fast stream | auto ≥ 50,000 行，或浏览器下的显式 `stream`                 | 每 1,000 行一次 |
 
 只有 Fast stream 路径会在 `0` 与 `1` 之间上报 `onProgress`。因此遮罩在收到第一个中间值之前渲染的是**流动扫光**，收到后才切成确定态进度条。Workbook 路由全程停留在不确定态——这是数据源的粒度决定的，不是渲染问题。
 

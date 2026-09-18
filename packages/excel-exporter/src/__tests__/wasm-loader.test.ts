@@ -166,6 +166,30 @@ describe("WasmLoader error recovery", () => {
     }
   });
 
+  it("warns that a workerUrl change does not reach an already-created worker", () => {
+    // 共享 Worker 在首次创建时读一次 workerUrl 后不再重读；loader 无法判断
+    // Worker 是否已存在（避免循环依赖），所以只要值变更就必须警告并指出
+    // terminateWorker() 这条生效路径。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const loader = makeLoader();
+      loader.updateOptions({
+        workerUrl: "https://cdn.example.com/a.worker.js",
+      });
+      // 首次设置（undefined -> 值）同样算变更：与 wasmUrl 的判定口径一致
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain("terminateWorker");
+
+      // 同地址重复配置（含 URL 对象新引用）不再刷警告
+      loader.updateOptions({
+        workerUrl: new URL("https://cdn.example.com/a.worker.js"),
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("falls back to initWasm when the mocked modern-xlsx lacks initWasmSync", async () => {
     // The mock factory in this file has no initWasmSync export (test doubles
     // often won't): Node auto-init must step aside instead of throwing when

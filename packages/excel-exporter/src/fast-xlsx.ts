@@ -10,6 +10,7 @@ import {
   a1Range,
   someColumn,
   columnName,
+  columnProp,
 } from "./column-tree";
 import { INDEX_PROP, indexColumnStart } from "./sheet-normalize";
 
@@ -152,9 +153,10 @@ function buildWorksheetXml(
     const rowNumber = headerRowCount + 1 + rowIndex;
     out.push(`<row r="${rowNumber}">`);
     for (let colIndex = 0; colIndex < leaves.length; colIndex++) {
-      // 序号列的值由行号生成（数字单元格），与 Workbook 路径一致
+      // 序号列的值由行号生成（数字单元格），与 Workbook 路径一致；INDEX_PROP
+      // 经 columnProp 判定，legacy `key` 别名同样保留
       const v =
-        leaves[colIndex].prop === INDEX_PROP
+        columnProp(leaves[colIndex]) === INDEX_PROP
           ? rowIndex + start
           : displayValue(leaves[colIndex], item);
       // Skip empty cells: null/missing fields normalize to "" (see toStr), and

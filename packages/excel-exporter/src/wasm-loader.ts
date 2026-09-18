@@ -90,6 +90,8 @@ export class WasmLoader {
     // 按 String 归一化比较：URL 对象经结构化克隆/重复构造后是全新引用，
     // `!==` 会把同一地址误判为"变更"（反复 reset 已加载状态并刷警告）。
     // 与 export.worker.ts 的 loadedWasmKey 归一化保持一致。
+    // 注意 `opts.wasmUrl === undefined` 不算变更：无法把已设置的 URL 改回
+    // 默认（改回默认需整表替换 opts，此处按增量合并的语义有意不支持）。
     const urlChanged =
       opts.wasmUrl !== undefined &&
       (this.opts.wasmUrl === undefined
@@ -107,6 +109,23 @@ export class WasmLoader {
           "effect only in a fresh JS realm (reload the page, or terminateWorker() before " +
           "the next export so a new worker is created — import it from " +
           "@marcusok/excel-exporter/worker-utils).",
+      );
+    }
+    // workerUrl 与 wasmUrl 同类限制但形态不同：共享 Worker 实例在首次创建时
+    // 读取一次 workerUrl（worker-exporter.ts getOrCreateWorker），之后不再重读。
+    // 这里无法判断 Worker 是否已创建（反向引用 worker-exporter 会造成循环依赖），
+    // 因此只要值变更就警告；若尚无 Worker 存活，terminateWorker() 是无害空操作。
+    const workerUrlChanged =
+      opts.workerUrl !== undefined &&
+      (this.opts.workerUrl === undefined
+        ? true
+        : String(opts.workerUrl) !== String(this.opts.workerUrl));
+    if (workerUrlChanged) {
+      console.warn(
+        "[excel-exporter] workerUrl changed. The shared Worker reads its script URL " +
+          "once at creation and is reused afterwards, so an already-created worker keeps " +
+          "the old URL. Call terminateWorker() (from @marcusok/excel-exporter/worker-utils) " +
+          "before the next export for the new URL to take effect.",
       );
     }
     this.opts = { ...this.opts, ...opts };

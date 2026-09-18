@@ -52,12 +52,12 @@ await exportExcelWithOverlay(options, {
 
 Progress comes from the library's existing callbacks, so the bar is only as good as the data behind it:
 
-| Route                | Condition                  | Intermediate progress |
-| -------------------- | -------------------------- | --------------------- |
-| main + Workbook      | browser < 20,000 rows      | none                  |
-| main + Fast stream   | Node, or explicit `stream` | every 1,000 rows      |
-| Worker + Workbook    | auto, 20,000–49,999 rows   | none                  |
-| Worker + Fast stream | auto, ≥ 50,000 rows        | every 1,000 rows      |
+| Route                | Condition                                                            | Intermediate progress |
+| -------------------- | -------------------------------------------------------------------- | --------------------- |
+| main + Workbook      | browser < 20,000 rows                                                | none                  |
+| main + Fast stream   | Node (auto ≥ 50,000 rows, or explicit `stream` — Node has no Worker) | every 1,000 rows      |
+| Worker + Workbook    | auto, 20,000–49,999 rows                                             | none                  |
+| Worker + Fast stream | auto ≥ 50,000 rows, or explicit `stream` in the browser              | every 1,000 rows      |
 
 Only the Fast stream path emits values between `0` and `1` (`onProgress`). The overlay therefore renders an **animated sweep** until the first intermediate value arrives, then switches to a determinate bar. Workbook routes stay indeterminate for their whole run — that is the granularity of the data source, not a rendering problem.
 
