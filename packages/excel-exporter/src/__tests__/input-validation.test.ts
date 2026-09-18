@@ -587,6 +587,35 @@ describe("indexColumn validation", () => {
     expect(r.error?.message).toMatch(/is reserved for the index column/);
   });
 
+  // 回归：序号列在 validateInput 之后才由 applyIndexColumn 注入，width 曾因此
+  // 绕过早前的 col.width 校验——NaN 会以 serde 错误让整份导出降级为无样式
+  // stream（success 仍为 true），与 >=50k 路由静默忽略 width 的行为分裂。
+  it("rejects an invalid width instead of degrading the export", async () => {
+    for (const width of [Number.NaN, -5, Number.POSITIVE_INFINITY]) {
+      const r = await exportExcel({
+        filename: "bad-index-width",
+        download: false,
+        mode: "main",
+        sheets: [baseSheet({ indexColumn: { width } })],
+      });
+      expect(r.success).toBe(false);
+      expect(r.error?.message).toMatch(
+        /indexColumn\.width must be a finite non-negative number/,
+      );
+    }
+  });
+
+  it("accepts width 0 (hidden column) on the index column", async () => {
+    const r = await exportExcel({
+      filename: "zero-index-width",
+      download: false,
+      mode: "main",
+      sheets: [baseSheet({ indexColumn: { width: 0 } })],
+    });
+    expect(r.success).toBe(true);
+    expect(r.error).toBeUndefined();
+  });
+
   it("accepts start 0 and a valid indexColumn on the workbook path", async () => {
     const r = await exportExcel({
       filename: "ok-start",

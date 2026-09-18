@@ -8,10 +8,10 @@ worker 资产（`export.worker.js`，自包含单文件 ESM）默认自动定位
 
 Worker 路径行为：
 
-- **Worker 失败会优雅降级**——Worker 路由失败时（例如 `workerUrl` 覆盖配置指向 404），导出会**先回退到主线程重试**（modern-xlsx 保留样式；≥ 50,000 行的 Fast stream 本身不依赖 WASM）；只有重试也失败时才最终降级到无样式的流式兜底（`mode: "stream"` 且 `result.error` 非空，`success` 仍为 `true`）。调用方的 Promise 正常 resolve（不会 reject），每一级降级都会在 console 打印 `[excel-exporter]` 前缀警告；
+- **Worker 失败会优雅降级**——Worker 路由失败时（例如 `workerUrl` 覆盖配置指向 404），导出会**先回退到主线程重试**（modern-xlsx 保留样式；≥ 50,000 行的 Fast stream 本身不依赖 WASM）。在 Worker + Workbook 路由上，重试再失败才继续降级到无样式的流式兜底（`mode: "stream"` 且 `result.error` 非空，`success` 仍为 `true`）；而在 Worker + stream 路由上（浏览器 ≥ 50,000 行），主线程重试本身就是对同一份输入跑同一个 fast stream，因此再失败即终局——导出以 `success: false` 结束，不再尝试第三次构建。无论哪条路由，调用方的 Promise 都正常 resolve（不会 reject），每一级降级都会在 console 打印 `[excel-exporter]` 前缀警告；
 - Worker 实例复用，请求按 `requestId` 并发分发，多次导出互不串扰；
 - **函数形式的 format 会被剥离**（结构化克隆无法传递函数）——worker 路径请使用 FormatSpec；
-- `onProgress` / `onPhase`（`init` / `build`）会从 Worker 转发回主线程。
+- `onProgress` / `onPhase` 会从 Worker 转发回主线程：`build` 在 Worker 内构建完成时上报；`init` 仅在 Worker + Workbook 路由、且 Worker 确实执行了 WASM 初始化时才上报——Worker + stream 路由不使用 WASM，完全不上报 `init`。
 
 ## 流式写入（≥ 50,000 行）
 

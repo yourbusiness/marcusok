@@ -26,7 +26,7 @@
 | CI/CD     | `.github/workflows/ci.yml`（lint/typecheck/test/build）、`release.yml`（changesets 发布 npm）       |
 | 内部文档  | 根目录 `docs/` 存放设计/流程文档（excel-export-design.md 等），属于内部文档，与公开文档站**不混用** |
 
-> 注：上表为 2026-08-03 规划时的快照。此后 workspace 已加入 `apps/*`，excel-exporter 已发布到 2.x（当前 2.1.4），CI/CD 增加了 `deploy.yml`（文档站部署）。
+> 注：上表为 2026-08-03 规划时的快照。此后 workspace 已加入 `apps/*`，excel-exporter 已发布到 2.x（当前 2.4.0），CI/CD 增加了 `deploy.yml`（文档站部署）。
 
 ### 2.2 excel-exporter 公开 API（文档站内容来源）
 
@@ -34,7 +34,7 @@
 
 - 入口：`exportExcel(options)`、`exportTable()`、`exportEcharts()`、`configureWasm()`、`getWasmLoader()`、`WorkbookBuilder`、`exportAsStream`；子路径 `./worker-utils` 另行导出 `exportInWorker` / `terminateWorker`
 - 类型：`ExportOptions`、`SheetConfig`、`ColumnConfig`、`CellStyle`、`FormatSpec`、`ExportMode`、`ExportPhase`、`ExportResult`
-- 样式：`StylePresets`（header / currency / percent / date / datetime / dataRow / danger，共 7 种）
+- 样式：`StylePresets`（header / currency / percent / date / datetime / dataRow / bordered / danger，共 8 种）
 - 能力：自动模式路由（< 20,000 行 main；≥ 20,000 行 Worker+Workbook；≥ 50,000 行 Worker+Stream；早期阈值曾是 500 行，后在 0c0fbd5 调整为 20,000）、进度回调 `onProgress`、阶段回调 `onPhase`、多级降级（Worker 失败 → 主线程重试 → 纯 JS 快速流）
 - 依赖约定：**零运行时依赖**（modern-xlsx JS 胶水与 fflate 在构建期打包进产物，2.0.0 起）；`modern-xlsx.wasm` 与 `export.worker.js` 随包发布，由 bundler 的 `new URL(<file>, import.meta.url)` 资产化自动定位，无需静态部署；SheetJS 兜底已在 2.0.0 移除（终局兜底为纯 JS 快速流）
 - 性能数据：README/设计文档中有真实基准（1 万行 ~120ms / 5 万行 ~400ms / 10 万行 ~780ms，Chrome 实测口径见 README；规划早期引用过 StreamingXlsxWriter 时代的 109/618/1,548ms，已被 fast-xlsx 实测取代）
@@ -82,7 +82,7 @@ configure-pages@v4 / upload-pages-artifact@v3 / deploy-pages@v4（实测各 Acti
 - `pnpm-workspace.yaml` 增加 `apps/*`，使 apps/docs 作为 workspace 包参与 `pnpm install`；
 - 文档站提供 `dev / build / preview` 脚本并接入 turbo：根 `pnpm build` 会一并构建文档站，**CI 每次 PR 都会验证文档可构建**，提前发现问题；
 - 文档站输出目录是 `.vitepress/dist`（不符合根 turbo 的 `dist/**` 输出规则），因此在 `apps/docs/turbo.json` 用 `{"extends": ["//"]}` 覆写 `build.outputs` 为 `[".vitepress/dist/**"]`；
-- 根 package.json 增加 `dev:docs` / `build:docs` 便捷脚本（`turbo run ... --filter=@marcusok/docs`）；
+- 根 package.json 增加 `dev:docs` / `build:docs` 便捷脚本（`build:docs` 走 `turbo run build --filter=@marcusok/docs`；`dev:docs` 走 `node scripts/dev.mjs docs`——长驻进程一律经统一启动器，避免 Windows 下 Ctrl+C 残留子进程）；
 - 文档站 v1 曾计划不接入 lint/typecheck（构建校验兜底）；现已补齐——`apps/docs` 提供 `lint`（eslint + check-i18n）与 `typecheck`（vue-tsc）脚本，vue-eslint-parser / vue-tsc / eslint-plugin-vue 由 `apps/docs` 自带（不依赖根工具链）。
 
 ## 4. 目录结构
@@ -137,7 +137,7 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 - 使用指南：
   - 安装与浏览器配置（wasm/worker 静态资源部署，给出 Vite 插件复制方案，源自包 README 已验证做法）；
   - 自动模式路由与手动指定 mode；
-  - 7 种 StylePresets 与自定义 CellStyle；
+  - 8 种 StylePresets 与自定义 CellStyle；
   - FormatSpec（enum/date/datetime/number/padding）及跨模式精度注意点（如 `decimals` 显式声明）；
   - 合并单元格、冻结行、自动筛选；
   - 进度回调 onProgress 与阶段回调 onPhase 的可视化用法；
@@ -183,7 +183,7 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 - checkout@v4（fetch-depth: 0）/ pnpm/action-setup@v4 / setup-node@v4（node-version-file: .nvmrc，cache: pnpm，与 ci.yml 一致）；
 - `actions/cache@v4` 缓存 `apps/docs/.vitepress/cache`（key 只哈希源码，排除生成物）；
 - `configure-pages@v6`；`pnpm install --frozen-lockfile`；
-- 部署前质量门禁：`pnpm lint` / `pnpm typecheck` / `RUN_PERF=0 pnpm test`（该工作流与 CI 并行运行、无法 `needs` CI，故重跑一遍非构建检查作为上线门禁）；
+- 部署前质量门禁：`pnpm format:check` / `pnpm lint` / `pnpm typecheck` / `RUN_PERF=0 pnpm test`（该工作流与 CI 并行运行、无法 `needs` CI，故重跑一遍非构建检查作为上线门禁）；
 - `pnpm exec turbo run build --filter=@marcusok/docs`；
 - 上传 `apps/docs/.vitepress/dist`（`upload-pages-artifact@v5`）→ `deploy-pages@v5`。
 

@@ -233,8 +233,11 @@ export const packages: PackageEntry[] = [
         en: "Export modes",
       },
       {
+        // Keep in sync with StylePresets in packages/excel-exporter/src/style-presets.ts
+        // (8 since `bordered` was added; the value is hand-maintained because the
+        // registry must stay importable from the browser bundle).
         key: "presets",
-        value: 7,
+        value: 8,
         decimals: 0,
         zh: "内置样式预设",
         en: "Style presets",

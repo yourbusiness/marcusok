@@ -197,7 +197,7 @@ registry-url: https://registry.npmjs.org
 
 - 根 [package.json](../package.json) 里装了 `@changesets/cli`，还定义了两个脚本：
   - `"version-packages": "changeset version"` —— 用来"消化小纸条、算版本、写日志"。
-  - `"release": "turbo run lint typecheck test build && changeset publish"` —— 先跑完整检查，再发布到 npm。
+  - `"release": "pnpm format:check && turbo run lint typecheck test build && changeset publish"` —— 先跑完整检查（含格式兜底），再发布到 npm。
 - 配置文件 [.changeset/config.json](../.changeset/config.json)：
 
 ```json
@@ -231,7 +231,7 @@ registry-url: https://registry.npmjs.org
 **情况 B：没有待处理的小纸条了，但是那个"发布准备 PR"已经被合并进来了**
 → 它执行 `publish` 那条命令（这里是 `pnpm release`）：
 
-- 先跑 `turbo run lint typecheck test build`（完整质检 + 构建）。
+- 先跑 `pnpm format:check && turbo run lint typecheck test build`（完整质检 + 格式兜底 + 构建）。
 - 再跑 `changeset publish`，把构建好的包真正上传到 npm，并打上 git tag。
 
 两种情况是**自动二选一**的，你不用操心。
@@ -240,7 +240,7 @@ registry-url: https://registry.npmjs.org
 
 不要以为这是理论，本项目已经实打实发布过了。看 git 历史：
 
-- **git tag（版本标签）**：`@marcusok/excel-exporter@0.1.1`、`@marcusok/excel-exporter@0.1.2`（写作本文时只有这两个；此后随每次发布累积，现已到 2.1.4）。这些 tag 正是 `changeset publish` 自动打的。
+- **git tag（版本标签）**：`@marcusok/excel-exporter@0.1.1`、`@marcusok/excel-exporter@0.1.2`（写作本文时只有这两个；此后随每次发布累积，现已到 2.4.0）。这些 tag 正是 `changeset publish` 自动打的。
 - **真实的发布提交**：`3a5782f chore: release packages`，作者署名是 `github-actions[bot]`（机器人），正好对应 release.yml 里的 `commit: "chore: release packages"`。这条提交做的事，和 changeset 文档描述的一模一样：
   - 删掉了 `.changeset/solid-worlds-design.md`（消化掉那张小纸条）。
   - 更新了 [packages/excel-exporter/CHANGELOG.md](../packages/excel-exporter/CHANGELOG.md)（追加 0.1.2 的更新记录）。
@@ -283,7 +283,9 @@ env:
 
 翻译成人话：GitHub 有个**防递归规则**——用默认的 `GITHUB_TOKEN` 创建的提交/PR，**不会触发其他 workflow**（比如不会触发 ci.yml）。这是 GitHub 故意的，防止"机器人的动作又触发机器人，无限循环"。
 
-但本项目希望：机器人创建的"发布准备 PR"也能正常跑 CI 检查。所以建议配一个 **PAT（Personal Access Token，个人访问令牌）**，存成 secret `CHANGESETS_GITHUB_TOKEN`。PAT 创建的提交不受那条防递归规则限制，能正常触发 CI。如果没配 PAT，就退回用默认 `GITHUB_TOKEN`，只是那 PR 不会触发 CI 而已（功能不丢，只是少了 PR 上的 CI 检查）。
+配一个 **PAT（Personal Access Token，个人访问令牌）** 存成 secret `CHANGESETS_GITHUB_TOKEN`，可以让机器人创建的"发布准备 PR"绕过这条规则、正常触发 workflow。**但本项目当前并不靠它跑 CI**：`ci.yml` 自 `538ffca` 起对 `pull_request` 显式 `branches-ignore: changeset-release/**`——用 PAT 创建的这个 PR 会被 GitHub 平台级策略标记为"待人工批准"（防 token 滥用，无仓库设置可关闭），每次发版都得手动 re-run，于是干脆跳过（该 PR 内容纯 bot 生成，质量门由合并后 main 的 push CI、`release.yml` 的 `pnpm release` 与 `deploy.yml` 共同承担）。
+
+所以准确的说法是：**无论配不配 PAT，这个发版 PR 上都不会有 CI 检查**。PAT 目前属于"保留能力"——若将来取消那条 `branches-ignore`，它能立刻让 PR 触发 CI；未配置时 `release.yml` 回退到默认 `GITHUB_TOKEN`，除少了触发能力外功能不丢。
 
 这把钥匙让 changesets 能：提交代码、创建 PR、打 tag。
 
@@ -325,7 +327,7 @@ env:
 
 5. 你（或 reviewer）看了这个 PR 觉得 OK，**点合并**。它一进 main，**release.yml 再次启动**。
 6. 这次 changesets/action 发现"小纸条都消化完了，没有待处理的了"，于是执行 `pnpm release`：
-   - 先 `turbo run lint typecheck test build`——完整质检 + 构建。
+   - 先 `pnpm format:check && turbo run lint typecheck test build`——完整质检 + 格式兜底 + 构建。
    - 再 `changeset publish`——把 `dist/` 上传到 npm，打上 git tag `@marcusok/excel-exporter@0.1.3`。
 7. 全世界的人现在可以 `pnpm add @marcusok/excel-exporter@0.1.3` 用上新版了。
 

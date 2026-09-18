@@ -97,7 +97,7 @@ await exportExcel({
 
 ## 自动筛选
 
-`autoFilter: true` 为表头范围添加筛选下拉。
+`autoFilter: true` 在**最后一行表头**添加筛选下拉，范围覆盖该行及其下全部数据行（Excel 的筛选语义）。
 
 ## 进度与阶段回调
 

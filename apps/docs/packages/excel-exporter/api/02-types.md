@@ -28,7 +28,7 @@
 | `headerStyle?` | `CellStyle`              | —            | Header style for this column (group header cells included); wins over sheet-level `headerStyle`                                               |
 | `format?`      | `FormatSpec \| Function` | —            | Value formatting; leaf columns only; functions run on main-thread paths and are stripped on the browser worker path (see the FormatSpec page) |
 
-A column with `children` is a group: no data cells, header rows only. Header row count = max tree depth; leaf headers span the remaining header rows vertically, group headers span their leaf subtree horizontally — merges are generated automatically (no manual `merges` needed for headers).
+A column with `children` is a group: no data cells, header rows only. Header row count = 1 + the deepest column's tree depth (so 1 for a flat column list); leaf headers span the remaining header rows vertically, group headers span their leaf subtree horizontally — merges are generated automatically (no manual `merges` needed for headers).
 
 ## IndexColumnOptions
 
@@ -43,6 +43,8 @@ Options for `SheetConfig.indexColumn`; the shorthand `true` equals `{}`.
 | `headerStyle?` | `CellStyle` | —        | Header style of the index column; overrides sheet-level `headerStyle`                            |
 
 The index column's values are generated from the row number and never read from `data`; a user column declaring the reserved `__index__` prop is rejected with a clear error. Existing `merges` are shifted one column right so they keep pointing at their original targets.
+
+`exportExcel` expands this field automatically (once, before mode routing), which is what makes it work on every route. The lower-level entry points — `WorkbookBuilder.addSheet()` and `exportAsStream()` — do **not** expand it: they only understand an already-expanded `__index__` column, so pass `applyIndexColumn(sheet)` (exported from the package, along with the reserved `INDEX_PROP`) when calling them directly. Otherwise `indexColumn` is silently ignored, exactly as an unexpanded field would be.
 
 ## MergeRange
 

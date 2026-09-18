@@ -35,11 +35,16 @@ jobs:
           commit: "chore: release packages"
           title: "chore: release packages"
         env:
-          # PAT so the Version PR triggers ci.yml. The default GITHUB_TOKEN is
-          # exempt from GitHub's anti-recursion rule (it cannot trigger other
-          # workflows). Create a fine-grained PAT (contents:write,
-          # pull-requests:write) and store it as repo secret
-          # CHANGESETS_GITHUB_TOKEN. Falls back to GITHUB_TOKEN if unset.
+          # PAT so the Version PR can trigger other workflows: the default
+          # GITHUB_TOKEN is exempt from GitHub's anti-recursion rule (it cannot
+          # trigger workflows). NOTE this currently buys no CI on that PR --
+          # ci.yml deliberately branches-ignores `changeset-release/**`, because
+          # a PAT-authored PR is flagged "awaiting approval" by GitHub's abuse
+          # policy and would need a manual re-run every release. Kept so the
+          # capability is there if that branches-ignore is ever removed.
+          # Create a fine-grained PAT (contents:write, pull-requests:write) and
+          # store it as repo secret CHANGESETS_GITHUB_TOKEN. Falls back to
+          # GITHUB_TOKEN if unset.
           GITHUB_TOKEN: ${{ secrets.CHANGESETS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"

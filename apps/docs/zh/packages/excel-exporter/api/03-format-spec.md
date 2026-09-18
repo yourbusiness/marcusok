@@ -30,7 +30,7 @@ type FormatSpec =
 { type: "datetime", pattern: "yyyy-MM-dd HH:mm:ss" }
 ```
 
-接受 `Date` / 可解析字符串 / 时间戳。Workbook 路径写入 Excel 日期序列并自动注入 `numFormat`；Stream 路径输出 pattern 格式化字符串。统一按 **UTC 分量**解释（与 Workbook 序列的 `dateToSerial` 口径一致，跨路径/跨时区显示相同）；ISO 日期字符串按 ECMA-262 解析为 UTC 午夜，详见[值格式化的时区约定](/zh/packages/excel-exporter/guide/04-formatting)。pattern 支持的 token 跨路径有差异：Stream 路径只解析 `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss`，其余内容按字面输出；Workbook 路径可渲染任意合法 Excel 格式码——详见[值格式化的说明](/zh/packages/excel-exporter/guide/04-formatting)。
+接受 `Date` / 可解析字符串 / 时间戳。Workbook 路径写入 Excel 日期序列并自动注入 `numFormat`；Stream 路径输出 pattern 格式化字符串。统一按 **UTC 分量**解释（与 Workbook 序列的 `dateToSerial` 口径一致，跨路径/跨时区显示相同）；ISO 日期字符串按 ECMA-262 解析为 UTC 午夜，详见[值格式化的时区约定](/zh/packages/excel-exporter/guide/04-formatting)。pattern 支持的 token 跨路径有差异：Stream 路径会先把整串转小写，只解析 `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss`，其余内容小写后原样输出——不解析引号字面量，`yyyy"年"M"月"` 会渲染成 `2026"年"m"月"`；Workbook 路径可渲染任意合法 Excel 格式码（含引号字面量）——详见[值格式化的说明](/zh/packages/excel-exporter/guide/04-formatting)。
 
 ### number
 

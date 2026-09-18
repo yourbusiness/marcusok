@@ -26,9 +26,11 @@
 
 > 🔄 **v2.13（梳理修复：降级链防护缺口 + 数值字段跨路径校验 + wasm-loader 状态机，2026-09-16）**：① **代码修复六处**——`index.ts` Node stream 路由（无 `window` 的 `mode:"stream"` / auto ≥50k）build 期抛错改为直接失败（原走 `finishWithStream` 对同一输入重跑一遍确定性失败的 fast stream，全量构建白跑两遍；与 worker 链 `retryOnMainThread` 的既有防护对齐）；`validateInput` 补数值字段前置校验（`width` 有限非负——0 合法为隐藏列、`freezeRows` 非负整数、`format.decimals` 0–100 整数、`padding.length` 0–10000 整数），修复跨路径分裂（原 Workbook 路径以晦涩 serde 错误失败并整份降级无样式 stream，stream 路径却静默忽略或抛 `toFixed` RangeError，同一输入在 50k 阈值上下行为相反）；`table-export.ts` 的 `toColumnConfig` 在转换阶段做环检测（原 `exportTable` 循环 `children` 先于 `flattenColumnTree` 的 `assertAcyclic` 无限递归，用户拿到栈溢出而非清晰错误）；`wasm-loader.ts` 状态写入收敛到 `ensureLoaded` 的 promise 身份校验处（原 `loadWithRetry` 每个 attempt 无条件写 `loading`，被取代的旧加载会把新加载的 `ready` 覆盖掉且无人写回，`isReady()` 误报）、`wasmUrl` 比较按 `String` 归一化（URL 对象同地址不再被 `!==` 误判为变更而反复 reset；与 `export.worker.ts` 的 `loadedWasmKey` 归一化对齐）、caveat/警告补“初始化进行中”档（modern-xlsx `initPromise` in-flight 期间换 URL/重试拿到同一 pending promise）、非 Error rejection 的消息 `String()` 兜底；`export.worker.ts` 的 `error` 字段同样兜底非 Error throw。`types.ts` 注释修正两处（worker 路由 `duration` 实际含主线程序列化与 worker 往返，非“仅 worker 内”；`autoFilter` 实际范围是末表头行+数据行，非“header range”字面义）。② **工程**——`copy-wasm` 自 `build` 脚本后置移入 tsup 主配置 `onSuccess`（`build` 简化为 `tsup`）：主配置 `clean:true` 在 dev watch 首次构建清空 dist 后无 copy 步骤回补，开着 `pnpm dev` 时 `dist/modern-xlsx.wasm` 缺失连坐 Node 自动初始化与集成测试；onSuccess 对一次性构建与每次 watch 重建均生效。③ **测试**——新增 `export-worker.test.ts` 直接驱动 worker 消息协议（此前 worker 链仅测超时一支：成功路径、init 幂等（loadedWasmKey 字符串归一化）、transfer、错误字符串化均零覆盖，两端 `WorkerResponse` 形状不同仅靠约定对齐）；A1/A3/A4/A5/A6/A9 各配回归用例。④ **快照同步**——4.2（2.1.4；`build` 简化）、4.3（onSuccess）、4.4（types.ts 注释）、4.5（wasm-loader 全量）、4.9（export.worker）、4.10（index.ts 全量）、3.3（`preview:docs` 滞留行——该行 2026-08-04 起即与 v2.11“已对齐”声明矛盾）。⑤ **文档站同步**——guide/08（zh/en）补 Node stream 终局语义与新校验清单、api/02（width/freezeRows 校验语义）、api/03（decimals 0–100）、guide/05（zh/en）补 `headerStyle` 交叉引用；zh 镜像漂移修复（zh/09 删除 en 侧不存在的独立句、en/10 补 zh 侧已有的 3 行表头结构示意表）。
 
-> 🔄 **v2.14（梳理修复：进度契约边界 + 文档口径收敛 + 工程门补齐，2026-09-16）**：① **代码**——`fast-xlsx.ts` 进度 checkpoint 钳制：总行数为 1000 整数倍时末个 checkpoint 值恰为 1，与 `exportExcel` 的 terminal 1 连发两次（`onProgress` 契约承诺 1 只出现一次），改为到齐终点时跳过该 checkpoint，把 1 留给 terminal（新增回归用例 2 个：引擎层 + 入口层，153 全量 / CI 实跑 149）；`types.ts` 注释两处——pattern-token 段 "emits anything else verbatim" 精确化（超集 token 非原样透传：`mmm` 的 `mm` 前缀被解析、残留 `m` 原样输出，`"mmm"` → `"09m"`，而 Workbook 路径 numFormat 渲染月份缩写）、`onProgress` 段补钳制说明；`wasm-loader.ts` 三处 `terminateWorker()` 提及补导入路径（`@marcusok/excel-exporter/worker-utils` 子路径，不在主入口——运行时警告原先让用户调用一个主入口拿不到的函数）；`fast-xlsx.ts` 内部清理（`buildWorksheetXml` 参数必传化，消除"声明可选、实现非空断言"；`columnName` 去重，复用 `column-tree.ts` 导出）。② **文档口径**——worker 路由 `duration` 旧口径三处收敛（v2.13 改了 4.4 快照但漏改 4.14 正文与文档站 guide/10 zh/en："只覆盖 Worker 内耗时"→ 主线程从 `exportInWorker` 起表、含序列化与 Worker 往返、直到 Blob 构造）；文档站 zh/09 章节顺序对齐 en（"配合框架"与"显式初始化"互换回正、打包器注意事项归位显式初始化小节）；api/01（zh/en）补 `exportTable`（默认 sheet 名/`freezeRows` 等透传）与 `exportEcharts`（`layout` 选项、空 `xAxis.data` 走 item 布局、默认 sheet 名）细节；7.1 表补 v2.13 新增的 `export-worker.test.ts`（现行 15 个测试文件）；附录 F 计数更新（153/149）。③ **工程**——deploy.yml 质量门补 `format:check`（与 ci.yml 对齐，否则仅格式违规的提交在 CI 标红的同时文档站照常部署）并补 `.nvmrc`/`.npmrc` 触发路径；根 `release` 脚本补 `format:check` 前置；play 补 `@types/node` devDependency（`vite.config.ts`/`workspace-resolver.ts` 用 `node:` 模块，原先靠根目录 `@types` 泄漏过检）；`scripts/dev.mjs` 构建阶段的 turbo 子进程纳入 `children` 清理集合（Ctrl+C 由本脚本按进程树强杀，兑现头注释承诺）+ `main()` 失败兜底为友好中文错误（原以 unhandled rejection 裸栈崩溃）；`.prettierignore` 去除 `.turbo` 重复行；3.5 快照补齐 `.npmrc` 的 NOTE 注释行。
+> 🔄 **v2.14（梳理修复：进度契约边界 + 文档口径收敛 + 工程门补齐，2026-09-16）**：① **代码**——`fast-xlsx.ts` 进度 checkpoint 钳制：总行数为 1000 整数倍时末个 checkpoint 值恰为 1，与 `exportExcel` 的 terminal 1 连发两次（`onProgress` 契约承诺 1 只出现一次），改为到齐终点时跳过该 checkpoint，把 1 留给 terminal（新增回归用例 2 个：引擎层 + 入口层，153 全量 / CI 实跑 149）；`types.ts` 注释两处——pattern-token 段 "emits anything else verbatim" 精确化（超集 token 非原样透传：`mmm` 的 `mm` 前缀被解析、残留 `m` 原样输出，`"mmm"` → `"09m"`，而 Workbook 路径 numFormat 渲染月份缩写）、`onProgress` 段补钳制说明；`wasm-loader.ts` 三处 `terminateWorker()` 提及补导入路径（`@marcusok/excel-exporter/worker-utils` 子路径，不在主入口——运行时警告原先让用户调用一个主入口拿不到的函数）；`fast-xlsx.ts` 内部清理（`buildWorksheetXml` 参数必传化，消除"声明可选、实现非空断言"；`columnName` 去重，复用 `column-tree.ts` 导出）。② **文档口径**——worker 路由 `duration` 旧口径三处收敛（v2.13 改了 4.4 快照但漏改 4.14 正文与文档站 guide/10 zh/en："只覆盖 Worker 内耗时"→ 主线程从 `exportInWorker` 起表、含序列化与 Worker 往返、直到 Blob 构造）；文档站 zh/09 章节顺序对齐 en（"配合框架"与"显式初始化"互换回正、打包器注意事项归位显式初始化小节）；api/01（zh/en）补 `exportTable`（默认 sheet 名/`freezeRows` 等透传）与 `exportEcharts`（`layout` 选项、空 `xAxis.data` 走 item 布局、默认 sheet 名）细节；7.1 表补 v2.13 新增的 `export-worker.test.ts`（当时 15 个测试文件；v2.16 起为 16 个）；附录 F 计数更新（153/149，v2.16 起刷新为 186/182）。③ **工程**——deploy.yml 质量门补 `format:check`（与 ci.yml 对齐，否则仅格式违规的提交在 CI 标红的同时文档站照常部署）并补 `.nvmrc`/`.npmrc` 触发路径；根 `release` 脚本补 `format:check` 前置；play 补 `@types/node` devDependency（`vite.config.ts`/`workspace-resolver.ts` 用 `node:` 模块，原先靠根目录 `@types` 泄漏过检）；`scripts/dev.mjs` 构建阶段的 turbo 子进程纳入 `children` 清理集合（Ctrl+C 由本脚本按进程树强杀，兑现头注释承诺）+ `main()` 失败兜底为友好中文错误（原以 unhandled rejection 裸栈崩溃）；`.prettierignore` 去除 `.turbo` 重复行；3.5 快照补齐 `.npmrc` 的 NOTE 注释行。
 
 > 🔄 **v2.15（API 命名对齐 Element Plus：`prop`/`label` 正式化 + `key`/`header` 兼容别名，2026-09-17）**：① **API 变更（minor，2.2.0）**——`ColumnConfig` 正式字段改为 `prop`（数据行字段名）与 `label`（表头文字），与 Element Plus 命名一致；旧名 `key`/`header` 降级为 deprecated 别名继续可用（运行时 `prop ?? key`、`label ?? header`，新旧同给时新名优先）。类型层四字段全部可选化，"`label`/`header` 至少提供一个"改由导出时校验兜底（`flattenColumnTree` 新增缺 label 前置报错，避免类型可选化后 undefined 混入 headerGrid）。兼容读取统一收敛到 `column-tree.ts` 新增的 `columnProp`/`columnLabel` 辅助，消费方不直接访问字段。② **代码同步**——format-utils（3 处取数走 `columnProp`）、column-tree（leaf prop 校验、label 非空校验、headerGrid 填充）、worker-exporter 警告与 index.ts 三处校验文案（列名引用改 `columnLabel`）、table-export（`TableColumnInput` 优先级改为 `prop ?? key ?? dataIndex` / `label ?? header ?? title`，产出直书新名）、echarts-export（内部构造列全量新名）；错误消息 "non-empty string key"→"prop"。③ **测试**——14 个测试文件字面量同步；新增兼容用例 4 个（column-tree 旧名别名/新旧优先级/缺 label、table-export 优先级与旧名单用、WorkbookBuilder 旧名端到端；157 全量 / CI 实跑 153）。④ **快照同步**——4.4（types.ts ColumnConfig、format-utils）、4.9（stripColumn 警告）、4.10（validateInput 校验、exportExcel JSDoc）及文中全部列字面量（含 4.6/4.12/附录等历史段，字段名直译、结构不动）。⑤ **外围同步**——包 README（含命名兼容说明段）、文档站 24 页 zh/en（api/02 字段表补 `prop`/`label` 行并标注旧名别名）、play `basic-export.demo.tsx`、docs 站 `datasets.ts`（`MockColumn` 改 `prop`/`label`，数据集 id 的 `key` 不动）与 `ExportDemo.vue`/`MockPreview.vue`。
+
+> 🔄 **v2.16（全仓梳理修复：exportTable 透传缺口 + 序号列 width 校验 + 底层入口补偿 + 文档口径收敛，2026-09-18）**：① **代码修复三处**——`table-export.ts` 的 `tableExportToOptions` 补传 `dataStyle` / `indexColumn`（原解构与 `tableToSheet` 调用双双漏掉这两个字段：`TableExportOptions extends TableSheetInput` 使漏传不触发类型错误，`exportTable({ indexColumn: true })` 静默失效，与 2.3.0 CHANGELOG「exportTable accepts both new fields too」的承诺相反；原测试 describe 名写着 exportTable 却只断言 `tableToSheet`，未能拦住）；`validateInput` 补 `indexColumn.width` 校验（有限非负——序号列在**校验之后**才由 `applyIndexColumn` 注入，NaN 会绕过早前的 `col.width` 校验、以 serde 错误让整份导出降级为无样式 stream，而 ≥50k 路由又把 width 当被丢弃的特性静默忽略，正是 `col.width` 校验当初要消除的那种跨路径分裂）；主入口新增导出 `applyIndexColumn` / `INDEX_PROP`（`WorkbookBuilder.addSheet` / `exportAsStream` 只识别展开后的 `__index__` 列、不自己展开 `indexColumn`，此前直连底层 API 的调用方没有任何公开补偿手段）。② **注释口径**——`types.ts` 与 `format-utils.ts` 更正 stream 路径 pattern 的描述：pattern 先整串转小写再扫描，六 token 之外的字符「小写后原样」输出且**不解析引号字面量**（原「emits anything else verbatim」与实现不符；`yyyy"年"M"月"d"日"` 在 stream 路径渲染为 `2026"年"m"月"d"日"`，Workbook 路径仍为 `2026年7月1日`）。③ **测试**——新增回归 6 个（exportTable 透传与端到端序号列、indexColumn.width 非法值/0 合法、主入口导出与底层展开），186 全量 / CI 实跑 182。④ **文档站同步（zh/en 各 12 页）**——预设数量 7→8（含 registry 首页统计卡，该值手工维护、无自动校验）、guide/06 降级链区分 Worker+Workbook（重试失败继续降级）与 Worker+stream（重试即同一 fast stream，失败即终局 `success:false`）、guide/10 autoFilter 范围改为「末行表头 + 全部数据行」、guide/06 的 phase 转发说明与 guide/10 对齐、api/02 表头行数改为「1 + 最大深度」并补底层入口说明、api/01 与 README 补 `dataStyle`/`indexColumn` 透传、echarts `layout` 适用范围与散点 X/Y 表头、`/styles` 子路径、pattern 字面量差异，zh guide/08 补锚点。⑤ **内部文档订正**——`release` 脚本补 `format:check` 前缀（changeset-walkthrough / release-publish-logic / release-workflow-analysis / release-guide / debug 共 6 份同步）、`ci.yml` 的 `branches-ignore: changeset-release/**` 与 PAT 口径（release-guide / release-workflow-analysis / release-publish-logic / `release.yml` 注释——原文「配 PAT 让发版 PR 跑 CI」与实际配置相反）、性能阈值「2 秒」→ 1000ms、测试文件数 15→16（补 `sheet-normalize.test.ts`）与 4.1 目录树漏列的 `src/sheet-normalize.ts`（全文原 0 次提及）、附录 F 计数刷新为本次实测口径、`@types/node` 声明描述、§7.2 快照 `header:`→`label:`、版本号 2.1.4→2.4.0、预设 7→8、deploy.yml 门禁补 `format:check`、两处断链修复。
 
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
@@ -155,7 +157,7 @@
 >
 > 1. `wasm-lite/` 目录**真实存在**，内含 `modern_xlsx_wasm.js` + `modern_xlsx_wasm_bg.wasm`（1,877,118 B ≈ 1.88MB，独立于主 wasm）。`./lite` 入口 `dist/index-lite.mjs` 即 `import from "../wasm-lite/modern_xlsx_wasm.js"`。v1.9 的"wasm-lite/* 1.88MB"原本正确，v2.0 误删。
 > 2. **两个文件名并存**：`dist/modern-xlsx.wasm`（2,000,604 B，主/lite 入口 `detectWasmUrl()` 引用它）与 `wasm/modern_xlsx_wasm_bg.wasm`（2,000,604 B，wasm-bindgen glue 默认 `new URL("modern_xlsx_wasm_bg.wasm", import.meta.url)`）。`dist/modern-xlsx.worker.js` 内部 glue 用 `modern_xlsx_wasm_bg.wasm`，而 6.2 部署策略与 `configureWasm({ wasmUrl })` 用 `modern-xlsx.wasm`——两者都是有效文件，非"非此即彼"。
-> 3. 本库通过显式 `wasmUrl` 注入，部署用 `dist/modern-xlsx.wasm`。该文件可被主入口加载，已由 [setup.ts](packages/excel-exporter/src/__tests__/setup.ts) 的 `initWasmSync(readFileSync(dist/modern-xlsx.wasm))` 验证（Vitest 套件全过）。
+> 3. 本库通过显式 `wasmUrl` 注入，部署用 `dist/modern-xlsx.wasm`。该文件可被主入口加载，已由 [setup.ts](/packages/excel-exporter/src/__tests__/setup.ts) 的 `initWasmSync(readFileSync(dist/modern-xlsx.wasm))` 验证（Vitest 套件全过）。
 
 ### 2.2 官方 Benchmark（来源：modern-xlsx v1.0.0 README，Node.js 单线程）
 
@@ -257,7 +259,7 @@ marcusok/
 │   └── config.json
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                 # PR + 直推 main：format:check + lint + commitlint + typecheck + test + build
+│       ├── ci.yml                 # PR（除 changeset-release/**）+ 直推 main：commitlint + format:check + lint + typecheck + test + build
 │       ├── release.yml            # Changesets 版本 PR + npm 发布
 │       └── deploy.yml             # 文档站部署（GitHub Pages，apps/docs/packages 路径触发）
 ├── .husky/
@@ -307,7 +309,7 @@ marcusok/
     "format:check": "prettier --check \"**/*.{ts,tsx,mjs,js,json,md,yaml,yml,vue}\"",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo run lint typecheck test build && changeset publish",
+    "release": "pnpm format:check && turbo run lint typecheck test build && changeset publish",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -333,7 +335,7 @@ marcusok/
 
 > **Node 版本说明（v2.1 修正）**：monorepo 根 `package.json` 的 `engines.node` 为 **`>=22.12.0`**，发布包 `@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 直接读它。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其运行时目标是浏览器、WASM 核心与 Node 版本无关；本仓库在 Node 22（v22.22.2 实测）下 `lint/typecheck/test/build` 全绿（127 个测试全部通过，见 `packages/excel-exporter/src/__tests__/`）。注意：modern-xlsx README 顶部声明 "Requires a runtime with WASM support (Node.js 24+, ...)"，但无专门的 "Node Usage" 章节；Node 22 可用性由本仓库测试套件实测验证，而非 README 声明。为避免 modern-xlsx 的 engines 声明在 Node 22 下 `pnpm install` 报错，`.npmrc` 设 `engine-strict=false`（见 3.5）。CI 与本地开发统一用 Node 22（`.nvmrc` 锁定）。
 
-> **`@types/node` 落在根 devDependencies**：本 monorepo 所有包共享 TS 基线（`tsconfig.base.json` 含 `DOM`+`WebWorker`），`@types/node`（`^22.10.0`，与 engines 对齐）在根声明一次即可被子包通过 workspace 符号链接继承，子包 `excel-exporter/package.json` 不重复声明。v2.0 曾把 `@playwright/test` 列入根 devDependencies，但本仓库当前**不包含浏览器集成测试**（7.3 的 Playwright 方案为未实现的未来计划），v2.1 已将其移除。
+> **`@types/node` 落在根 devDependencies**：本 monorepo 所有包共享 TS 基线（`tsconfig.base.json` 含 `DOM`+`WebWorker`），`@types/node`（`^22.10.0`，与 engines 对齐）在根声明。**注意子包仍各自重复声明**（`excel-exporter` 与 `play` 的 devDependencies 均有 `@types/node`）——不依赖 workspace 符号链接的隐式继承，各包的类型环境自洽；根声明则服务于根级配置（`eslint.config.mjs`、`turbo.json` 等）。v2.0 曾把 `@playwright/test` 列入根 devDependencies，但本仓库当前**不包含浏览器集成测试**（7.3 的 Playwright 方案为未实现的未来计划），v2.1 已将其移除。
 
 ### 3.4 `pnpm-workspace.yaml`
 
@@ -568,6 +570,8 @@ pnpm changeset pre exit         # 退出预发布模式
 name: CI
 on:
   pull_request:
+    branches-ignore:
+      - "changeset-release/**" # 发版 PR：PAT 创建会被标记「待人工批准」，故跳过
   push:
     branches: [main]
 concurrency:
@@ -654,11 +658,16 @@ jobs:
           commit: "chore: release packages"
           title: "chore: release packages"
         env:
-          # PAT so the Version PR triggers ci.yml. The default GITHUB_TOKEN is
-          # exempt from GitHub's anti-recursion rule (it cannot trigger other
-          # workflows). Create a fine-grained PAT (contents:write,
-          # pull-requests:write) and store it as repo secret
-          # CHANGESETS_GITHUB_TOKEN. Falls back to GITHUB_TOKEN if unset.
+          # PAT so the Version PR can trigger other workflows: the default
+          # GITHUB_TOKEN is exempt from GitHub's anti-recursion rule (it cannot
+          # trigger workflows). NOTE this currently buys no CI on that PR --
+          # ci.yml deliberately branches-ignores `changeset-release/**`, because
+          # a PAT-authored PR is flagged "awaiting approval" by GitHub's abuse
+          # policy and would need a manual re-run every release. Kept so the
+          # capability is there if that branches-ignore is ever removed.
+          # Create a fine-grained PAT (contents:write, pull-requests:write) and
+          # store it as repo secret CHANGESETS_GITHUB_TOKEN. Falls back to
+          # GITHUB_TOKEN if unset.
           GITHUB_TOKEN: ${{ secrets.CHANGESETS_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
@@ -686,6 +695,7 @@ packages/excel-exporter/
 │   ├── types.ts                # 类型定义（CellStyle/ColumnConfig/FormatSpec/SheetConfig/ExportPhase …）
 │   ├── format-utils.ts         # FormatSpec 解析与格式化 + validateSheetName/validateMerges
 │   ├── column-tree.ts          # 多行表头列树扁平化（分组表头/表头合并/环与复用检测）
+│   ├── sheet-normalize.ts      # 序号列展开（applyIndexColumn / INDEX_PROP，2.3.0 起）
 │   ├── wasm-loader.ts          # WASM 加载/单例/超时重试/Node 自动同步初始化
 │   ├── workbook-builder.ts     # 主线程构建器（批量写入，<5 万行即 ≤49,999 行主路径）
 │   ├── streaming-builder.ts    # 流式构建器（≥5 万行主路径；薄委托 fast-xlsx）
@@ -698,7 +708,7 @@ packages/excel-exporter/
 │   ├── style-utils.ts          # CellStyle → StyleBuilder 转换
 │   ├── style-presets.ts        # 业务预设样式（header/currency/date/percent …）
 │   ├── download.ts             # Blob 下载工具（triggerDownload / toBlobPart）
-│   └── __tests__/              # 15 个测试文件 + setup.ts（清单见 7.1）
+│   └── __tests__/              # 16 个测试文件 + setup.ts（清单见 7.1）
 ├── scripts/copy-wasm.mjs       # 构建后置：把 modern-xlsx.wasm 转发进 dist（2.0 起）
 ├── tsup.config.ts
 ├── tsconfig.json
@@ -713,7 +723,7 @@ packages/excel-exporter/
 ```json
 {
   "name": "@marcusok/excel-exporter",
-  "version": "2.1.4",
+  "version": "2.4.0",
   "type": "module",
   "description": "Excel export engine built on modern-xlsx (Rust + WASM): declarative API, auto worker/stream routing, full cell styling.",
   "license": "MIT",
@@ -778,7 +788,7 @@ packages/excel-exporter/
 }
 ```
 
-> **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照已是 2.1.4 现状（v2.11 自 2.1.1 同步 2.1.3；v2.13 同步 2.1.4：`build` 简化为 `tsup`，wasm 转发移入 tsup 主配置 onSuccess，见 4.2/4.3）。
+> **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照已是 2.4.0 现状（v2.11 自 2.1.1 同步 2.1.3；v2.13 同步 2.1.4：`build` 简化为 `tsup`，wasm 转发移入 tsup 主配置 onSuccess，见 4.2/4.3；v2.16 同步 2.4.0——版本号字段本身由 Changesets 维护，**其余字段自 2.1.4 起未变**）。
 
 **设计要点**：
 
@@ -1020,13 +1030,16 @@ export interface CellStyle {
  * fall on the previous day in non-UTC timezones.
  *
  * Pattern tokens: the stream path (>= 50,000 rows, explicit stream mode, or
- * the fallback) parses only `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (case-insensitive;
- * `mm` resolves to minutes vs month by context) and emits the remaining
- * characters verbatim, while the Workbook path hands the pattern to Excel as a
- * numFormat where every valid format code renders. Superset tokens are not
- * passed through: `mmm` parses its `mm` prefix and emits a stray `m`
- * (`"mmm"` -> `"09m"`), while Excel's numFormat renders the month
- * abbreviation. Stick to the six tokens for cross-threshold consistency.
+ * the fallback) lower-cases the whole pattern first, then parses only
+ * `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (`mm` resolves to minutes vs month by
+ * context; `yy` and the single-letter `M`/`d` are NOT tokens) and emits
+ * everything else as-is — lower-cased, and with quoted literals NOT
+ * interpreted — so `yyyy"年"M"月"d"日"` renders as `2026"年"m"月"d"日"` while
+ * the Workbook path hands the same pattern to Excel as a numFormat and renders
+ * `2026年7月1日`. Superset tokens are likewise only partially passed through:
+ * `mmm` parses its `mm` prefix and emits a stray `m` (`"mmm"` -> `"09m"`),
+ * where Excel renders the month abbreviation. Stick to the six tokens for
+ * cross-threshold consistency.
  */
 export type FormatSpec =
   | { type: "enum"; map: Record<string, string>; fallback?: string }
@@ -1109,6 +1122,27 @@ export interface MergeRange {
   colspan: number;
 }
 
+/**
+ * Options for the auto-injected leading row-number column
+ * (`SheetConfig.indexColumn`). The shorthand `true` equals `{}` — every
+ * option has a default.
+ */
+export interface IndexColumnOptions {
+  /** Header text; defaults to `"序号"`. */
+  label?: string;
+  /** Column width in Excel character units; defaults to `6`. */
+  width?: number;
+  /**
+   * Number shown on the first data row; row i displays `start + i`.
+   * Defaults to `1`; must be a non-negative integer (validated at export time).
+   */
+  start?: number;
+  /** Style for the index column's data cells; merged over `SheetConfig.dataStyle` like any column style. */
+  style?: CellStyle;
+  /** Style for the index column's header cell; overrides `SheetConfig.headerStyle`. */
+  headerStyle?: CellStyle;
+}
+
 /** Sheet configuration. */
 export interface SheetConfig {
   name: string; // 1-31 chars, ECMA-376 validation (no `: \ / ? * [ ]`, no leading/trailing apostrophe)
@@ -1124,6 +1158,23 @@ export interface SheetConfig {
   data: Record<string, unknown>[];
   /** Style applied to every header cell, unless overridden by ColumnConfig.headerStyle. */
   headerStyle?: CellStyle;
+  /**
+   * Base style applied to every data cell; a column's own `style` is
+   * deep-merged over it field by field (so a table-wide border survives a
+   * column that only sets `numFormat`, and vice versa). Header cells are not
+   * affected — use `headerStyle`. Dropped with a warning on the stream path.
+   */
+  dataStyle?: CellStyle;
+  /**
+   * Inject a leading row-number column (1..N) without touching `data` or
+   * `columns`: the column is inserted internally, values are generated from
+   * the row number (never read from `data`), and existing `merges` are
+   * shifted right by one column automatically. Works on every export path
+   * (workbook / worker / stream); styles on it follow `dataStyle` /
+   * `headerStyle` semantics. Pass `true` for defaults, or an object to
+   * customize label / width / start / styles.
+   */
+  indexColumn?: boolean | IndexColumnOptions;
   /** Number of header rows to freeze (usually 1). Maps to ws.frozenPane = { rows, cols: 0 }. */
   freezeRows?: number;
   /** Merged cell ranges. */
@@ -1834,6 +1885,53 @@ export function configureWasm(opts: LoaderOptions): void {
 ```ts
 import type { Workbook } from "modern-xlsx";
 import type { CellStyle } from "./types";
+
+/**
+ * 库级基底样式：铺在**所有**单元格（表头格与数据格）的样式解析链最底层。
+ * 原先无样式单元格遵循 Excel 的原生对齐（文本左、数字右），一张表里两种
+ * 走向显得参差；铺上这层后默认水平 + 垂直居中。
+ *
+ * 显式声明始终优先：mergeStyles 是字段级合并，表级 dataStyle / headerStyle
+ * 或列级 style / headerStyle 只要声明了 alignment（哪怕只声明 horizontal），
+ * 就会覆盖对应字段，未声明的字段仍由本基底兜底。因此想要 Excel 原生左对齐
+ * 的调用方，显式写 `dataStyle: { alignment: { horizontal: "left" } }` 即可。
+ *
+ * 与 dataStyle 的区别：dataStyle 是调用方可配可覆盖的「业务基底」，本常量是
+ * 库的默认底线；两者都在最底层，dataStyle 覆盖它。
+ *
+ * 冻结：本常量是导出的公共对象，而 mergeStyles(base, undefined) 会**原样返回
+ * base 引用**——不冻结的话，调用方一次就地修改就会改变所有后续导出的观感。
+ */
+export const BaseCellStyle: CellStyle = Object.freeze({
+  alignment: Object.freeze({ horizontal: "center", vertical: "center" }),
+});
+
+/**
+ * Field-level deep merge of two cell styles: `override`'s set fields win, the
+ * rest are inherited from `base`. Serves `SheetConfig.dataStyle` — a table-wide
+ * border survives a column that only sets `numFormat`, and vice versa. This is
+ * deliberately different from `headerStyle`, which replaces wholesale.
+ */
+export function mergeStyles(
+  base: CellStyle | undefined,
+  override: CellStyle | undefined,
+): CellStyle | undefined {
+  if (!base) return override;
+  if (!override) return base;
+  const merged: CellStyle = {};
+  if (base.font || override.font)
+    merged.font = { ...base.font, ...override.font };
+  if (base.fill || override.fill)
+    merged.fill = { ...base.fill, ...override.fill };
+  if (base.alignment || override.alignment)
+    merged.alignment = { ...base.alignment, ...override.alignment };
+  if (base.border || override.border)
+    merged.border = { ...base.border, ...override.border };
+  // numFormat 无子字段，直接择一覆盖
+  if (override.numFormat !== undefined) merged.numFormat = override.numFormat;
+  else if (base.numFormat !== undefined) merged.numFormat = base.numFormat;
+  return merged;
+}
 
 /**
  * Compile a business CellStyle into a modern-xlsx styleIndex (0-based index into
@@ -2905,6 +3003,7 @@ import {
 } from "./echarts-export";
 import { validateSheetName, validateMerges } from "./format-utils";
 import { flattenColumnTree } from "./column-tree";
+import { applyIndexColumn } from "./sheet-normalize";
 
 export * from "./types";
 export * from "./style-presets";
@@ -2915,6 +3014,11 @@ export { configureWasm, getWasmLoader } from "./wasm-loader";
 export type { LoaderOptions, LoadState } from "./wasm-loader";
 export { WorkbookBuilder } from "./workbook-builder";
 export { exportAsStream } from "./streaming-builder";
+// 序号列的展开工具（exportExcel 入口已自动调用一次）。底层入口
+// WorkbookBuilder.addSheet / exportAsStream 只识别展开后的 __index__ 列，不会
+// 自己展开 indexColumn；直连它们时须先 applyIndexColumn(sheet)，否则 indexColumn
+// 被静默忽略。INDEX_PROP 同时导出，便于调用方避开该保留字。
+export { applyIndexColumn, INDEX_PROP } from "./sheet-normalize";
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -3050,6 +3154,48 @@ function validateInput(options: ExportOptions): void {
         `[excel-exporter] sheet "${sheet.name}" freezeRows must be a non-negative integer`,
       );
     }
+    // indexColumn 形状校验：非 boolean 非（非 null）object 的值（JS 调用方
+    // 可能传 null / 字符串 / 数字）若放行，会被归一化与构建器各自按不同
+    // 方式静默吞掉——与 freezeRows 等字段一致，前置报错。
+    if (
+      sheet.indexColumn !== undefined &&
+      typeof sheet.indexColumn !== "boolean" &&
+      (typeof sheet.indexColumn !== "object" || sheet.indexColumn === null)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" indexColumn must be a boolean or an options object`,
+      );
+    }
+    // indexColumn.start 与 freezeRows 同类数值校验：非整数/负数只会在构建期
+    // 产出 1.5、-1 这类怪序号，前置拦截。
+    if (
+      typeof sheet.indexColumn === "object" &&
+      sheet.indexColumn !== null &&
+      sheet.indexColumn.start !== undefined &&
+      (!Number.isInteger(sheet.indexColumn.start) ||
+        sheet.indexColumn.start < 0)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" indexColumn.start must be a non-negative integer`,
+      );
+    }
+    // indexColumn.width 与下方 col.width 同类，但序号列是在**本校验之后**才由
+    // applyIndexColumn 注入的（见 exportExcel），不在这里单独覆盖就会绕过校验：
+    // NaN 直通引擎以 serde 错误失败并把整份导出降级为无样式 stream，而 >=50k 的
+    // stream 路由又把 width 当作被丢弃的特性静默忽略——同一输入跨阈值一边降级
+    // 一边成功，正是 col.width 校验要消除的那种分裂。
+    if (
+      typeof sheet.indexColumn === "object" &&
+      sheet.indexColumn !== null &&
+      sheet.indexColumn.width !== undefined &&
+      (typeof sheet.indexColumn.width !== "number" ||
+        !Number.isFinite(sheet.indexColumn.width) ||
+        sheet.indexColumn.width < 0)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" indexColumn.width must be a finite non-negative number`,
+      );
+    }
     for (const col of leaves) {
       // OOXML 中 width=0 合法（隐藏列），负数与非有限数非法；只有叶子列
       // 消费 width，分组列上的 width 本就被忽略。
@@ -3136,6 +3282,10 @@ export async function exportExcel(
   // below only sees well-formed input.
   try {
     validateInput(options);
+    // 序号列归一化紧跟校验：INDEX_PROP 冲突在此以结构化 { success: false }
+    // 失败（applyIndexColumn 抛错）。只在此处展开一次，worker / stream 路由
+    // 拿到的 sheets 已含虚拟列，构建器只需特判 INDEX_PROP 取行号。
+    options = { ...options, sheets: options.sheets.map(applyIndexColumn) };
   } catch (e) {
     options.onProgress?.(1);
     return {
@@ -3357,6 +3507,8 @@ export async function exportEcharts(
 
 > 🔄 **v2.6 快照说明**：以上已整体替换为 `src/index.ts` 现行源码（提交 0c0fbd5 调整 `WORKER_THRESHOLD` 500 → 20_000 起）。与 v2.4 及以前快照的差异：① `WORKER_THRESHOLD = 20_000`——浏览器 auto 1 万行现走 **main**（不再是 worker）；② WASM 能力检测改为 `needsWasm = workerMode !== "stream"`——**Fast stream 路径不需要 WASM**，不支持 WebAssembly 的浏览器 ≥5 万行仍可正常导出（engine 为 `modern-xlsx`），不再一律降级 SheetJS；③ 新增 `onPhase` 阶段打点（`init`/`build`/`download`，Node 下不报 `download`）与 build 失败也上报的 `finally` 语义；④ 新增 `exportTable` / `exportEcharts` 便捷适配器。
 >
+> 🔄 **v2.16 快照说明**：本块在 v2.10（2.1.1）快照基础上增量同步至 2.4.0——补入 import 区的 `applyIndexColumn` 与 `./sheet-normalize` 重导出、`validateInput` 的 indexColumn 形状 / `start` / `width` 三段校验、以及 `exportExcel` 入口的 `applyIndexColumn` 归一化调用。其余部分仍为 v2.10 快照原文（降级链、pickMode、runOnMainThread 等自 2.1.1 起未变）。
+
 > 🔄 **v2.10 快照说明**：以上已再次整体替换为 2.1.1 现行源码。相对 v2.6/v2.9 快照的关键差异：① 终局兜底为 `finishWithStream`（主线程纯 JS 快速流，`success:true` + `result.error` 软标记），SheetJS / `finishWithSheetJS` 已不存在；② 下载触发隔离为 `triggerDownloadIsolated`（触发失败只告警、不进降级链）；③ `validateInput` 前置校验扩展到结构非法输入（非数组 sheets、null 表项、缺 columns/data 数组）并先于 totalRows 计算；④ `runOnMainThread(forceStream?)` 支持 `useStream`，Worker stream 路由重试失败即终局返回，不再第三次尝试；⑤ worker 超时经 `workerTimeoutMs` 可配置。
 
 > **v1.9 pickMode 与 v1.8 的关键差异**：
@@ -3410,6 +3562,16 @@ export const StylePresets = {
   dataRow: {
     alignment: { horizontal: "left", vertical: "center" },
     border: { bottom: { style: "thin", color: "BFBFBF" } },
+  } satisfies CellStyle,
+
+  /** Bordered: thin light-grey box on all four sides. */
+  bordered: {
+    border: {
+      top: { style: "thin", color: "BFBFBF" },
+      bottom: { style: "thin", color: "BFBFBF" },
+      left: { style: "thin", color: "BFBFBF" },
+      right: { style: "thin", color: "BFBFBF" },
+    },
   } satisfies CellStyle,
 
   /** Danger: bold red text, centered. */
@@ -3878,7 +4040,7 @@ await exportExcel({
 
 ### 7.1 单元测试（Vitest）
 
-（v2.7 注：下表按现行 `src/__tests__/` 实际文件对齐；旧表列有 `style-utils` 行但仓库并无该测试文件。v2.10 再次对齐：`fallback.test.ts` 已随 SheetJS 兜底移除。v2.14 对齐：补入 v2.13 新增的 `export-worker.test.ts`，现行 15 个测试文件如下。）
+（v2.7 注：下表按现行 `src/__tests__/` 实际文件对齐；旧表列有 `style-utils` 行但仓库并无该测试文件。v2.10 再次对齐：`fallback.test.ts` 已随 SheetJS 兜底移除。v2.14 对齐：补入 v2.13 新增的 `export-worker.test.ts`。v2.16 对齐：补入 2.3.0 新增的 `sheet-normalize.test.ts`，**现行 16 个测试文件**如下。）
 
 | 测试文件                                 | 重点                                                                                                                        |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -3887,6 +4049,7 @@ await exportExcel({
 | `wasm-node-auto-init.test.ts`（+集成版） | Node 自动同步初始化：单测 mock node:fs；集成版跑真实 wasm 零配置导出                                                        |
 | `builder.test.ts`                        | Workbook 路径：多行分组表头/合并/冻结/筛选、样式去重、跨路径值归一、空行渲染、空 border 容错                                |
 | `column-tree.test.ts`                    | 列树扁平化：分组表头网格/表头合并、循环与重复引用检测                                                                       |
+| `sheet-normalize.test.ts`                | 序号列展开：默认值/自定义/width 0、merges 右移、保留 prop 冲突；主入口导出与底层展开闭环                                    |
 | `stream.test.ts`                         | fast-xlsx 数据完整性、UTC 日期 pattern、sharedStrings count/uniqueCount 规范                                                |
 | `stream-fallback.test.ts`                | WASM 不可用终局兜底：降级软标记、0→1 进度契约、特性丢弃警告、多行表头/合并保留                                              |
 | `input-validation.test.ts`               | 前置校验：merges 越界/重叠、表名规则、空 sheets、结构非法输入——全路径同错同文案                                             |
@@ -3935,7 +4098,7 @@ describe.runIf(RUN_PERF)(
         sheets: [
           {
             name: "s",
-            columns: [{ prop: "id", header: "ID" }],
+            columns: [{ prop: "id", label: "ID" }],
             data: [{ id: 0 }],
           },
         ],
@@ -3988,7 +4151,7 @@ describe.runIf(RUN_PERF)(
 
     it("format function overhead does not dominate", async () => {
       const data = Array.from({ length: 10_000 }, (_, i) => ({ id: i }));
-      const base = { name: "s", columns: [{ prop: "id", header: "ID" }], data };
+      const base = { name: "s", columns: [{ prop: "id", label: "ID" }], data };
 
       const t0 = performance.now();
       await exportExcel({
@@ -4276,7 +4439,7 @@ const blob = new Blob([bytes], {
 
 ### 附录 F · Node 版本与补充依赖（v2.1 重写）
 
-> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（153 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 149 个，2026-09-16 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
+> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（186 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 182 个，2026-09-18 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
 >
 > v2.0 曾把 `@playwright/test`（`^1.62.0`）列入「补充依赖」、并写「Node 24+ 升级指引」，二者均与实际仓库不符（本仓库无 Playwright、CI 跑 Node 22），v2.1 已删除该依赖行与升级指引。关于 `unplugin`：6.2 的 Vite 插件是 Vite 原生插件对象（`{ name, buildStart() }`），全程未 import `unplugin`；若未来要让资源拷贝同时支持 Webpack，再按需引入。
 

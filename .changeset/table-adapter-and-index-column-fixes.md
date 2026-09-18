@@ -1,0 +1,11 @@
+---
+"@marcusok/excel-exporter": minor
+---
+
+Fixes and API additions from a full-repo audit:
+
+- **`exportTable()` now forwards `dataStyle` / `indexColumn`.** Both fields were declared on `TableExportOptions` but dropped by `tableExportToOptions`, so `exportTable({ indexColumn: true })` silently produced no index column (and `dataStyle` silently did nothing) while TypeScript reported no error. The 2.3.0 changelog already claimed the opposite — this release makes it true, with a regression test that goes through `exportTable` itself rather than only `tableToSheet`.
+- **`indexColumn.width` is now validated** like any column width (finite, non-negative). It previously bypassed pre-flight validation because the index column is injected _after_ validation runs: `indexColumn: { width: NaN }` reached the engine, failed with a cryptic serde error and degraded the whole export to the style-less stream, while the same input on the ≥ 50,000-row route silently ignored the width — the exact cross-threshold split the `col.width` check exists to prevent.
+- **New exports: `applyIndexColumn(sheet)` and `INDEX_PROP`.** `WorkbookBuilder.addSheet()` and `exportAsStream()` only understand an already-expanded `__index__` column — they never expanded `SheetConfig.indexColumn` themselves, and there was no public way to do it, so the field was silently ignored on those two entry points. `applyIndexColumn` performs the exact expansion `exportExcel` applies internally.
+- **`FormatSpec` pattern documentation corrected**: the stream path lower-cases the whole pattern and does not interpret quoted literals, so `yyyy"年"M"月"d"日"` renders as `2026"年"m"月"d"日"` above the threshold, where the Workbook path renders `2026年7月1日`. The docs said "verbatim", which was inaccurate for letter case. No behavior change.
+- Documentation-only corrections across the package README and the docs site: preset count (7 → 8), worker-route degradation wording (Worker + stream fails terminally with `success: false` rather than degrading a third time), auto-filter range (last header row plus all data rows), ECharts default header list and `layout` scope, header-row-count formula (`1 + max depth`), and `indexColumn` behavior on the low-level entry points.

@@ -49,10 +49,11 @@ Optional — assets default to the files shipped next to the package entry (see 
 
 ## Other exported symbols
 
-- `WorkbookBuilder.create()` + `addSheet(config)` + `toBuffer()` / `toBlob()`: batch build with full styling;
-- `exportAsStream(sheets, onProgress?)`: lower-level streaming, returns `Promise<{ bytes, rowCount }>`;
-- `exportTable(options)`: convenience for common table data; accepts Element Plus `prop`/`label` (the library naming), AntD `dataIndex`/`title`, and legacy `key`/`header`; sheet name defaults to `"Sheet1"` (override via `sheetName`); `freezeRows` / `autoFilter` / `merges` pass through to the sheet;
-- `exportEcharts(options)`: convenience for common ECharts data; supports category-axis series, pie `name/value`, and scatter pairs in either ECharts spelling (`[x,y]` or `{ value: [x,y] }`). `layout` selects `"wide"` (default, one column per series) or `"long"` (one row per series-category pair); an empty or missing `xAxis.data` routes to the item (name/value) layout. Default sheet name (`图表数据`) and headers are Chinese — override via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`; in long/item layouts duplicated headers are rejected (they double as row keys);
+- `WorkbookBuilder.create()` + `addSheet(config)` + `toBuffer()` / `toBlob()`: batch build with full styling. Does not expand `SheetConfig.indexColumn` — pass an already-expanded sheet (`applyIndexColumn(sheet)`), see `IndexColumnOptions`;
+- `exportAsStream(sheets, onProgress?)`: lower-level streaming, returns `Promise<{ bytes, rowCount }>`. Same `indexColumn` caveat as `WorkbookBuilder`;
+- `applyIndexColumn(sheet)` / `INDEX_PROP`: expand `indexColumn` into the leading reserved `__index__` column (what `exportExcel` does internally, and the only public way to do it for the two low-level entry points above);
+- `exportTable(options)`: convenience for common table data; accepts Element Plus `prop`/`label` (the library naming), AntD `dataIndex`/`title`, and legacy `key`/`header`; sheet name defaults to `"Sheet1"` (override via `sheetName`); `freezeRows` / `autoFilter` / `merges` / `dataStyle` / `indexColumn` pass through to the sheet;
+- `exportEcharts(options)`: convenience for common ECharts data; supports category-axis series, pie `name/value`, and scatter pairs in either ECharts spelling (`[x,y]` or `{ value: [x,y] }`). `layout` selects `"wide"` (default, one column per series) or `"long"` (one row per series-category pair) and is only meaningful for the category-axis layout — item data (pie/scatter) ignores it; an empty or missing `xAxis.data` routes to the item (name/value) layout. Default sheet name (`图表数据`) and headers are Chinese — override via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`; the scatter layout's coordinate headers are the literal `X` / `Y`. In long/item layouts duplicated headers are rejected (they double as row keys);
 - `getWasmLoader()`: access the global WASM loader (state: idle / loading / ready / error).
 
 ```ts
@@ -67,4 +68,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> The entry point also re-exports lower-level utilities and types (e.g. `applyFormat` / `validateSheetName` from `format-utils`, `LoaderOptions` / `LoadState`, `BorderStyle`). This page covers the commonly used stable API only; see `src/index.ts` for the full list. `exportInWorker` / `terminateWorker` live on the separate `@marcusok/excel-exporter/worker-utils` subpath (source entry `src/worker-exporter.ts`), not in the main entry.
+> The entry point also re-exports lower-level utilities and types (e.g. `applyFormat` / `validateSheetName` from `format-utils`, `LoaderOptions` / `LoadState`, `BorderStyle`). This page covers the commonly used stable API only; see `src/index.ts` for the full list. Two extra subpaths exist for code splitting: `@marcusok/excel-exporter/styles` (a standalone `StylePresets` entry, which the main entry also re-exports) and `@marcusok/excel-exporter/worker-utils` (`exportInWorker` / `terminateWorker`, source entry `src/worker-exporter.ts` — not available from the main entry).

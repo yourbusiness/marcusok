@@ -73,13 +73,16 @@ export interface CellStyle {
  * fall on the previous day in non-UTC timezones.
  *
  * Pattern tokens: the stream path (>= 50,000 rows, explicit stream mode, or
- * the fallback) parses only `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (case-insensitive;
- * `mm` resolves to minutes vs month by context) and emits the remaining
- * characters verbatim, while the Workbook path hands the pattern to Excel as a
- * numFormat where every valid format code renders. Superset tokens are not
- * passed through: `mmm` parses its `mm` prefix and emits a stray `m`
- * (`"mmm"` -> `"09m"`), while Excel's numFormat renders the month
- * abbreviation. Stick to the six tokens for cross-threshold consistency.
+ * the fallback) lower-cases the whole pattern first, then parses only
+ * `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (`mm` resolves to minutes vs month by
+ * context; `yy` and the single-letter `M`/`d` are NOT tokens) and emits
+ * everything else as-is — lower-cased, and with quoted literals NOT
+ * interpreted — so `yyyy"年"M"月"d"日"` renders as `2026"年"m"月"d"日"` while
+ * the Workbook path hands the same pattern to Excel as a numFormat and renders
+ * `2026年7月1日`. Superset tokens are likewise only partially passed through:
+ * `mmm` parses its `mm` prefix and emits a stray `m` (`"mmm"` -> `"09m"`),
+ * where Excel renders the month abbreviation. Stick to the six tokens for
+ * cross-threshold consistency.
  */
 export type FormatSpec =
   | { type: "enum"; map: Record<string, string>; fallback?: string }

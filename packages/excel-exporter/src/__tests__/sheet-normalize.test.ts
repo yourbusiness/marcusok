@@ -4,7 +4,13 @@ import {
   indexColumnStart,
   INDEX_PROP,
 } from "../sheet-normalize";
+import {
+  applyIndexColumn as publicApplyIndexColumn,
+  INDEX_PROP as publicIndexProp,
+  WorkbookBuilder,
+} from "../index";
 import type { SheetConfig } from "../types";
+import { readBuffer } from "./setup";
 
 const baseSheet = (over: Partial<SheetConfig> = {}): SheetConfig => ({
   name: "S",
@@ -101,6 +107,29 @@ describe("applyIndexColumn", () => {
         `column prop "${INDEX_PROP}" is reserved for the index column`,
       ),
     );
+  });
+});
+
+// 底层入口 WorkbookBuilder.addSheet / exportAsStream 只识别展开后的 __index__
+// 列，不自己展开 indexColumn（展开只在 exportExcel 入口发生一次）。公共入口
+// 导出这两个符号，就是直连底层 API 时唯一的公开补偿手段。
+describe("index-column helpers exported from the public entry", () => {
+  it("re-exports the same applyIndexColumn / INDEX_PROP", () => {
+    expect(publicIndexProp).toBe(INDEX_PROP);
+    expect(publicApplyIndexColumn).toBe(applyIndexColumn);
+  });
+
+  it("lets a WorkbookBuilder caller expand the sheet themselves", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(
+      publicApplyIndexColumn(baseSheet({ indexColumn: { start: 10 } })),
+    );
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("S")!;
+    expect(ws.cell("A1").value).toBe("序号");
+    // 值由行号生成（start 10 起），不读 data
+    expect(ws.cell("A2").value).toBe(10);
+    expect(ws.cell("B2").value).toBe("a");
   });
 });
 

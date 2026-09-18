@@ -4,6 +4,7 @@ import {
   exportTable,
   echartsToSheet,
   tableToSheet,
+  tableExportToOptions,
   WorkbookBuilder,
   StylePresets,
 } from "../index";
@@ -395,5 +396,40 @@ describe("dataStyle / indexColumn passthrough (exportTable)", () => {
     });
     expect(sheet.dataStyle).toBeUndefined();
     expect(sheet.indexColumn).toBeUndefined();
+  });
+
+  // 回归：tableExportToOptions 曾漏取这两个字段——TableExportOptions 继承了
+  // TableSheetInput，漏传不触发类型错误，只让它们在 exportTable 下静默失效。
+  // 前两个用例只覆盖 tableToSheet，因此没能拦住。
+  it("forwards both fields through tableExportToOptions", () => {
+    const options = tableExportToOptions({
+      filename: "t",
+      columns: [{ prop: "name", label: "名称" }],
+      data: [{ name: "a" }],
+      dataStyle: StylePresets.bordered,
+      indexColumn: { label: "序号", width: 8 },
+    });
+    expect(options.sheets[0].dataStyle).toBe(StylePresets.bordered);
+    expect(options.sheets[0].indexColumn).toEqual({ label: "序号", width: 8 });
+  });
+
+  it("exports a real index column through exportTable", async () => {
+    const result = await exportTable({
+      filename: "table-index",
+      download: false,
+      mode: "main",
+      columns: [{ prop: "name", label: "名称" }],
+      data: [{ name: "a" }, { name: "b" }],
+      indexColumn: { label: "序号" },
+    });
+
+    expect(result.success).toBe(true);
+    const wb = await readBuffer(
+      new Uint8Array(await result.blob!.arrayBuffer()),
+    );
+    const ws = wb.getSheet("Sheet1")!;
+    expect(ws.cell("A1").value).toBe("序号");
+    expect(ws.cell("A2").value).toBe(1);
+    expect(ws.cell("B2").value).toBe("a");
   });
 });

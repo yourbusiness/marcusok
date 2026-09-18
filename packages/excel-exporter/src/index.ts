@@ -22,6 +22,11 @@ export { configureWasm, getWasmLoader } from "./wasm-loader";
 export type { LoaderOptions, LoadState } from "./wasm-loader";
 export { WorkbookBuilder } from "./workbook-builder";
 export { exportAsStream } from "./streaming-builder";
+// 序号列的展开工具（exportExcel 入口已自动调用一次）。底层入口
+// WorkbookBuilder.addSheet / exportAsStream 只识别展开后的 __index__ 列，不会
+// 自己展开 indexColumn；直连它们时须先 applyIndexColumn(sheet)，否则 indexColumn
+// 被静默忽略。INDEX_PROP 同时导出，便于调用方避开该保留字。
+export { applyIndexColumn, INDEX_PROP } from "./sheet-normalize";
 // 库级基底样式：铺在所有单元格样式之下的默认对齐（见 style-utils 注释）
 export { BaseCellStyle } from "./style-utils";
 
@@ -182,6 +187,23 @@ function validateInput(options: ExportOptions): void {
     ) {
       throw new Error(
         `[excel-exporter] sheet "${sheet.name}" indexColumn.start must be a non-negative integer`,
+      );
+    }
+    // indexColumn.width 与下方 col.width 同类，但序号列是在**本校验之后**才由
+    // applyIndexColumn 注入的（见 exportExcel），不在这里单独覆盖就会绕过校验：
+    // NaN 直通引擎以 serde 错误失败并把整份导出降级为无样式 stream，而 >=50k 的
+    // stream 路由又把 width 当作被丢弃的特性静默忽略——同一输入跨阈值一边降级
+    // 一边成功，正是 col.width 校验要消除的那种分裂。
+    if (
+      typeof sheet.indexColumn === "object" &&
+      sheet.indexColumn !== null &&
+      sheet.indexColumn.width !== undefined &&
+      (typeof sheet.indexColumn.width !== "number" ||
+        !Number.isFinite(sheet.indexColumn.width) ||
+        sheet.indexColumn.width < 0)
+    ) {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" indexColumn.width must be a finite non-negative number`,
       );
     }
     for (const col of leaves) {

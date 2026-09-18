@@ -54,7 +54,7 @@ release.yml 里 version 命令配的是 `pnpm version-packages`，底层是 `cha
 所以这次走 publish 分支，执行 `pnpm release`：
 
 ```
-turbo run lint typecheck test build && changeset publish
+pnpm format:check && turbo run lint typecheck test build && changeset publish
 ```
 
 这才是真正发包的地方。
@@ -93,9 +93,9 @@ turbo run lint typecheck test build && changeset publish
 
 ### 保护二：质量门禁的 `&&` 短路
 
-`turbo run lint typecheck test build && changeset publish` 里的 `&&`，前面全过才跑后面。如果 lint / typecheck / test / build 任一项挂了，`changeset publish` 根本不执行，包发不出去。
+`pnpm format:check && turbo run lint typecheck test build && changeset publish` 里的 `&&`，前面全过才跑后面。如果 format:check / lint / typecheck / test / build 任一项挂了，`changeset publish` 根本不执行，包发不出去。
 
-这也是为什么 release-guide 里说"发版 PR 不跑质量检查，真正的把关在分支 B 的 `pnpm release` 里"——发版 PR 只改版本号和 CHANGELOG，没必要也不该在那时跑测试；真正发包前必须过一道门禁。
+这也是为什么 release-guide 里说"发版 PR 不跑质量检查，真正的把关在分支 B 的 `pnpm release` 里"。注意准确的原因：`ci.yml` 自 `538ffca` 起显式 `branches-ignore: changeset-release/**`——用 PAT 创建的这个 PR 会被 GitHub 平台级策略标记为"待人工批准"（防 token 滥用），每次发版都得手动重跑，于是干脆跳过；发版 PR 本身只改版本号和 CHANGELOG，质量门由合并后 main 的 push CI、`release.yml` 的 `pnpm release` 与 `deploy.yml` 共同承担。
 
 ---
 
@@ -121,7 +121,7 @@ turbo run lint typecheck test build && changeset publish
 
 ### 分支 B 每次都跑门禁，即使无包可发
 
-只要 push 到 main 且 `.changeset/` 为空，`pnpm release` 就会跑 `turbo run lint typecheck test build`。哪怕最终 `changeset publish` 是 no-op（没新版本），门禁照跑。这保证 main 上的代码质量持续受监控，代价是和 `ci.yml` 的检查有一定重叠。这是设计上的取舍，不是 bug。
+只要 push 到 main 且 `.changeset/` 为空，`pnpm release` 就会跑 `pnpm format:check && turbo run lint typecheck test build`。哪怕最终 `changeset publish` 是 no-op（没新版本），门禁照跑。这保证 main 上的代码质量持续受监控，代价是和 `ci.yml` 的检查有一定重叠。这是设计上的取舍，不是 bug。
 
 ---
 

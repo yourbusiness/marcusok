@@ -49,10 +49,11 @@ configureWasm(options: LoaderOptions): void
 
 ## 其他导出符号
 
-- `WorkbookBuilder.create()` + `addSheet(config)` + `toBuffer()` / `toBlob()`：批量化构建，完整样式；
-- `exportAsStream(sheets, onProgress?)`：底层流式导出，返回 `Promise<{ bytes, rowCount }>`；
-- `exportTable(options)`：常见表格数据便捷导出，支持 Element Plus `prop`/`label`（即本库命名）、AntD `dataIndex`/`title` 与旧名 `key`/`header`；sheet 名默认 `"Sheet1"`（可用 `sheetName` 覆盖）；`freezeRows` / `autoFilter` / `merges` 会透传给 sheet；
-- `exportEcharts(options)`：常见 ECharts 数据便捷导出，支持类目轴多系列、饼图 `name/value`、散点数据两种写法（`[x,y]` 或 `{ value: [x,y] }`）。`layout` 可选 `"wide"`（默认，每系列一列）或 `"long"`（每系列-类目对一行）；`xAxis.data` 为空或缺失时走 item（名称/数值）布局。默认 sheet 名（`图表数据`）与表头为中文，可通过 `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader` 覆盖；long/item 布局下表头兼作行键，重复表头会被明确拒绝；
+- `WorkbookBuilder.create()` + `addSheet(config)` + `toBuffer()` / `toBlob()`：批量化构建，完整样式。**不展开** `SheetConfig.indexColumn`——直连时请传入已展开的 sheet（`applyIndexColumn(sheet)`），见 `IndexColumnOptions`；
+- `exportAsStream(sheets, onProgress?)`：底层流式导出，返回 `Promise<{ bytes, rowCount }>`。`indexColumn` 的注意事项同 `WorkbookBuilder`；
+- `applyIndexColumn(sheet)` / `INDEX_PROP`：把 `indexColumn` 展开为最左侧的保留 `__index__` 列（`exportExcel` 内部所做的正是这一步，也是上面两个底层入口唯一的公开补偿手段）；
+- `exportTable(options)`：常见表格数据便捷导出，支持 Element Plus `prop`/`label`（即本库命名）、AntD `dataIndex`/`title` 与旧名 `key`/`header`；sheet 名默认 `"Sheet1"`（可用 `sheetName` 覆盖）；`freezeRows` / `autoFilter` / `merges` / `dataStyle` / `indexColumn` 会透传给 sheet；
+- `exportEcharts(options)`：常见 ECharts 数据便捷导出，支持类目轴多系列、饼图 `name/value`、散点数据两种写法（`[x,y]` 或 `{ value: [x,y] }`）。`layout` 可选 `"wide"`（默认，每系列一列）或 `"long"`（每系列-类目对一行），**仅对类目轴布局有意义**——item 数据（饼图/散点）会忽略它；`xAxis.data` 为空或缺失时走 item（名称/数值）布局。默认 sheet 名（`图表数据`）与表头为中文，可通过 `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader` 覆盖；散点布局的坐标表头是字面量 `X` / `Y`。long/item 布局下表头兼作行键，重复表头会被明确拒绝；
 - `getWasmLoader()`：访问全局 WASM 加载器（状态：idle / loading / ready / error）。
 
 ```ts
@@ -67,4 +68,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> 入口还重导出了若干底层工具与类型（如 `format-utils` 的 `applyFormat` / `validateSheetName`、`LoaderOptions` / `LoadState`、`BorderStyle` 等），本文档只覆盖常用的稳定 API，完整列表见 `src/index.ts`。`exportInWorker` / `terminateWorker` 不在主入口，经独立子路径 `@marcusok/excel-exporter/worker-utils` 发布（源入口 `src/worker-exporter.ts`）。
+> 入口还重导出了若干底层工具与类型（如 `format-utils` 的 `applyFormat` / `validateSheetName`、`LoaderOptions` / `LoadState`、`BorderStyle` 等），本文档只覆盖常用的稳定 API，完整列表见 `src/index.ts`。另有两条用于按需拆分的子路径：`@marcusok/excel-exporter/styles`（独立的 `StylePresets` 入口，主入口也重导出它）与 `@marcusok/excel-exporter/worker-utils`（`exportInWorker` / `terminateWorker`，源入口 `src/worker-exporter.ts`——主入口不提供）。

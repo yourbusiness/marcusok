@@ -55,7 +55,7 @@ Changesets 在本项目里不是一个单独的命令，而是横跨好几个文
 ```json
 "changeset": "changeset",
 "version-packages": "changeset version",
-"release": "turbo run lint typecheck test build && changeset publish"
+"release": "pnpm format:check && turbo run lint typecheck test build && changeset publish"
 ```
 
 ### `pnpm changeset` —— 写发版说明书（人工）
@@ -90,10 +90,10 @@ Changesets 在本项目里不是一个单独的命令，而是横跨好几个文
 ### `pnpm release` —— 质量门禁 + 发包（阶段 2，机器跑）
 
 ```bash
-turbo run lint typecheck test build && changeset publish
+pnpm format:check && turbo run lint typecheck test build && changeset publish
 ```
 
-前半段是质量门禁：turbo 跑 lint / typecheck / test / build（lint、typecheck、build 在 turbo.json 里都声明了 `dependsOn: ["^build"]`，会先构建被依赖的包再执行；test 声明的是 `dependsOn: ["build"]`——先构建本包自身再跑，因为 Node 自动初始化的回退候选 `../dist/modern-xlsx.wasm` 依赖构建产物存在）。后半段 `&&` 表示**全过才发**——turbo 整体退出码非 0 时 changeset publish 不会执行。`changeset publish` 真正发包时，会先查 npm registry，只有本地版本比线上新的包才调 `npm publish`，已发布的跳过（幂等）。
+前半段是质量门禁：先 `prettier --check` 兜底格式（CI 与 pre-commit 钩子之外的第三道），再由 turbo 跑 lint / typecheck / test / build（lint、typecheck、build 在 turbo.json 里都声明了 `dependsOn: ["^build"]`，会先构建被依赖的包再执行；test 声明的是 `dependsOn: ["build"]`——先构建本包自身再跑，因为 Node 自动初始化的回退候选 `../dist/modern-xlsx.wasm` 依赖构建产物存在）。后半段 `&&` 表示**全过才发**——任一环节退出码非 0 时 changeset publish 不会执行。`changeset publish` 真正发包时，会先查 npm registry，只有本地版本比线上新的包才调 `npm publish`，已发布的跳过（幂等）。
 
 > 为什么门禁放在 publish 这一步、而不是 version 那一步？因为 version PR 只改版本号和 CHANGELOG，不涉及代码能不能编译；真正的代码质量把关放在发包前最合理，避免「版本号已经发出去，但代码其实是坏的」。
 

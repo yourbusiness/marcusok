@@ -22,6 +22,13 @@
 name: CI
 on:
   pull_request:
+    # changesets 用 PAT 创建/推送的 release PR，其触发的 workflow 会被
+    # GitHub 平台级策略标记为"待人工批准"（防 token 滥用，无仓库设置可
+    # 关闭），每次发版都得手动 re-run。该 PR 内容纯 bot 生成（版本号 +
+    # CHANGELOG），质量门由合并后 main 的 push CI、release.yml 与
+    # deploy.yml 自带的 format/lint/typecheck/test 承担，故直接跳过。
+    branches-ignore:
+      - "changeset-release/**"
   push:
     branches: [main]
 concurrency:
@@ -83,16 +90,18 @@ jobs:
 ```yaml
 on:
   pull_request:
+    branches-ignore:
+      - "changeset-release/**"
   push:
     branches: [main]
 ```
 
 `on` 的意思是"触发条件"，也就是"什么情况下机器会自动启动"。这里规定了两种情况：
 
-1. `pull_request:` —— 当有人发起一个 **Pull Request（简称 PR，合并请求）** 的时候。PR 就是你把自己分支上的代码，申请合并到主干上。这是最常见的检查时机：**合并之前先检查一遍**。
+1. `pull_request:` —— 当有人发起一个 **Pull Request（简称 PR，合并请求）** 的时候。PR 就是你把自己分支上的代码，申请合并到主干上。这是最常见的检查时机：**合并之前先检查一遍**。但发往 `changeset-release/**` 的 PR 被排除掉了——那是 changesets 机器人开的"发版 PR"，用 PAT 创建时会被 GitHub 标记为"待人工批准"而卡住，详见第二节的注释。
 2. `push: branches: [main]` —— 当有人**直接往 main 分支推送代码**的时候（比如 PR 被合并、或有人直接 push）。
 
-**注意一个细节**：普通的 PR 会触发，任何分支往 main 推送也会触发，但是"往别的分支 push"不会触发。这样能避免你在自己杂乱的试验分支上反复 push 时浪费机器时间。
+**注意一个细节**：普通 PR 会触发，任何分支往 main 推送也会触发，但是"往别的分支 push"不会触发，发版 PR 也是例外（见上）。这样能避免你在自己杂乱的试验分支上反复 push 时浪费机器时间。
 
 ---
 
@@ -302,7 +311,7 @@ env:
 
 重点是这个环境变量 **`RUN_PERF: "0"`**，它的来龙去脉很有意思，是项目踩过坑后加的：
 
-项目里有一个 [performance.test.ts](../packages/excel-exporter/src/__tests__/performance.test.ts)，它是**性能测试**——比如测"导出 10 万行 Excel 要多久，有没有超过 2 秒"。代码里是这样写的：
+项目里有一个 [performance.test.ts](../packages/excel-exporter/src/__tests__/performance.test.ts)，它是**性能测试**——比如测"导出 10 万行 Excel 要多久，有没有超过 1000 毫秒"（当前阈值：10k 行 < 200ms、50k 行 < 500ms、100k 行 < 1000ms，且 `SLACK = 1.0`，即阈值本身就是产品 SLA、无环境宽限）。代码里是这样写的：
 
 ```ts
 const RUN_PERF = process.env.RUN_PERF !== "0";

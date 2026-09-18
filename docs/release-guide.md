@@ -165,21 +165,23 @@ GitHub Actions 跑在云端，要发版就得知道你的 npm token。但 token 
 
 仓库 → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**：
 
-| Secret 名                               | 值                   | 干什么用                           |
-| --------------------------------------- | -------------------- | ---------------------------------- |
-| `NPM_TOKEN`                             | 刚才复制的 `npm_...` | 给 `npm publish` 做认证            |
-| `CHANGESETS_GITHUB_TOKEN`（可选但推荐） | 一个 GitHub PAT      | 让发版机器人开的 PR 能触发 CI 检查 |
+| Secret 名                         | 值                   | 干什么用                                                             |
+| --------------------------------- | -------------------- | -------------------------------------------------------------------- |
+| `NPM_TOKEN`                       | 刚才复制的 `npm_...` | 给 `npm publish` 做认证                                              |
+| `CHANGESETS_GITHUB_TOKEN`（可选） | 一个 GitHub PAT      | 让发版机器人开的 PR 具备触发 workflow 的能力（**当前用不上**，见下） |
 
 **NPM_TOKEN** 是必填的，没有它 publish 会报 401。
 
-**CHANGESETS_GITHUB_TOKEN** 解释：发版机器人用 GitHub 默认 token 开的 PR，**不会触发 CI**（GitHub 有防递归机制：机器人触发的事件不再触发别的机器人）。如果你将来给 main 分支加了保护、把 CI 设成合并前必过，那机器人开的 PR 就永远绿不了、合不了。配一个 PAT（Personal Access Token）能绕过这个限制：
+**CHANGESETS_GITHUB_TOKEN** 解释：发版机器人用 GitHub 默认 token 开的 PR，**不会触发其他 workflow**（GitHub 有防递归机制：机器人触发的事件不再触发别的机器人）。PAT 能绕过这条限制。
+
+但要注意**当前配置下它并不产生 CI 检查**：`ci.yml` 自 `538ffca` 起对 `pull_request` 显式 `branches-ignore: changeset-release/**`。原因是用 PAT 创建的 PR 会被 GitHub 平台级策略标记为"待人工批准"（防 token 滥用，无仓库设置可关闭），每次发版都得手动 re-run，反而更麻烦——于是这个纯 bot 生成的 PR 被直接跳过，质量门改由合并后 main 的 push CI、`release.yml` 的 `pnpm release` 与 `deploy.yml` 承担。
+
+所以：**不配也能正常发版**（`release.yml` 已写好 `CHANGESETS_GITHUB_TOKEN || GITHUB_TOKEN` 回退，PR 照开）。想配的话（保留"将来取消 branches-ignore 就能让 PR 触发 CI"的能力）：
 
 - GitHub 头像 → Settings → Developer settings → Personal access tokens → Fine-grained → Generate
 - Repository access：Only select repositories → 选你的仓库
 - Permissions：Contents = Read and write，Pull requests = Read and write
 - 复制 `github_pat_` 开头的串，存为 secret `CHANGESETS_GITHUB_TOKEN`
-
-`release.yml` 里已经写好了 `CHANGESETS_GITHUB_TOKEN || GITHUB_TOKEN` 的回退：配了 PAT 就用 PAT，没配就退回默认 token（PR 照开，只是不触发 CI）。
 
 ## 1.5 npm 来源签名（provenance，已启用，了解一下）
 
@@ -328,17 +330,17 @@ push 到 main 后，GitHub Actions 同时启动 CI 与 Release 两个 workflow�
 - 删掉已消费的 changeset 文件
 - 把这些改动打包成一个 commit，开一个标题 "chore: release packages" 的 **Pull Request（发版 PR）**
 
-> **这个发版 PR 不跑质量检查**。它只有版本号和 CHANGELOG 的改动。"代码能不能编译"的真正把关，在分支 B（合并后）的 `pnpm release` 里。
+> **这个发版 PR 不跑质量检查**（`ci.yml` 里 `branches-ignore: changeset-release/**`，原因见 1.4 的 PAT 说明）。它只有版本号和 CHANGELOG 的改动，"代码能不能编译"的真正把关在分支 B（合并后）的 `pnpm release` 里，以及合并后 main 的 push CI 上。
 
 **分支 B：`.changeset/` 是空的**
 
 机器人执行 `pnpm release`，等价于：
 
 ```
-turbo run lint typecheck test build && changeset publish
+pnpm format:check && turbo run lint typecheck test build && changeset publish
 ```
 
-先跑质量门禁（lint→typecheck→test→build），**全过**才执行 `changeset publish`（最终调用 `npm publish` 把包发出去）。
+先跑质量门禁（format:check→lint→typecheck→test→build），**全过**才执行 `changeset publish`（最终调用 `npm publish` 把包发出去）。
 
 > **关键理解**：`&&` 表示"前面全过了才跑后面"。所以如果 test 挂了，`changeset publish` 根本不会执行——包不会被发出去。这是质量门禁的护栏。前面踩的坑就是 test 里的性能测试挂了，把 publish 挡住。
 

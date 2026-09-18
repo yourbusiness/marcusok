@@ -97,7 +97,7 @@ Merges are validated identically on every path: values must be integers, `row`/`
 
 ## Auto filter
 
-`autoFilter: true` adds filter dropdowns to the header range.
+`autoFilter: true` adds filter dropdowns to the **last header row**, spanning that row plus every data row beneath it (Excel's own filter semantics).
 
 ## Progress and phase callbacks
 

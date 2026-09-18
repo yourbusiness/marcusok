@@ -151,6 +151,11 @@ export function tableExportToOptions(input: TableExportOptions): ExportOptions {
     freezeRows,
     autoFilter,
     merges,
+    // 表级样式与序号列必须显式透传：TableExportOptions 继承了 TableSheetInput，
+    // 漏传不会报类型错误，只会让这两个字段静默失效（下方的 tableToSheet 本身
+    // 是支持它们的）。
+    dataStyle,
+    indexColumn,
     filename,
     mode,
     onProgress,
@@ -168,6 +173,8 @@ export function tableExportToOptions(input: TableExportOptions): ExportOptions {
         freezeRows,
         autoFilter,
         merges,
+        dataStyle,
+        indexColumn,
       }),
     ],
     ...(mode !== undefined && { mode }),

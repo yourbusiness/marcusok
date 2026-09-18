@@ -104,6 +104,12 @@ export function numFormatForSpec(spec: FormatSpec): string | null {
  * Excel-style pattern (tokens: yyyy MM dd HH mm ss). Used by the streaming
  * path, which has no numFormat support and must emit readable date strings.
  *
+ * Not a full Excel format-code engine: the pattern is lower-cased before the
+ * scan and quoted literals are not interpreted (their quotes are emitted
+ * as-is), so `yyyy"年"M"月"d"日"` renders as `2026"年"m"月"d"日"` here, while
+ * the Workbook path hands the same pattern to Excel's numFormat and renders
+ * `2026年7月1日` (see the FormatSpec note in types.ts).
+ *
  * Uses the date's **UTC components** (not local ones), matching modern-xlsx's
  * `dateToSerial` (the workbook path also derives the serial from UTC
  * components). The same input therefore renders identically on the workbook
@@ -117,6 +123,7 @@ export function formatDateByPattern(value: unknown, pattern: string): string {
   if (!d) return toStr(value);
   const pad = (n: number) => String(n).padStart(2, "0");
   // Excel format codes are case-insensitive, so normalize to lowercase first.
+  // 整串小写也作用于引号字面量（"T" 会渲染成 t）——见函数头注释。
   // `mm` is ambiguous: minutes when adjacent to a time token (directly after an
   // hour token `hh`, or directly before a seconds token `ss` — Excel's own
   // numFormat convention), otherwise the month. Scan the token stream once and

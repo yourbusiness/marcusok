@@ -45,8 +45,9 @@ marcusok/
 │   │   ├── src/                # Source (incl. workers/ entry) and __tests__/
 │   │   └── dist/               # tsup build output
 │   └── play/                   # Local integration sandbox (React 19 + antd 6, private package)
-├── docs/                       # Design documents
-│   └── excel-export-design.md  # Excel export core design doc (~210k chars)
+├── docs/                       # Design documents (Chinese)
+│   ├── excel-export-design.md  # Excel export core design doc (~230k chars, the main one)
+│   └── release-*.md / ci-*.md  # Release & CI walkthroughs, debug notes, docs-site plan
 ├── scripts/                    # Repo-level scripts (dev.mjs unified dev launcher)
 ├── .changeset/                 # Changesets config
 ├── .github/workflows/          # CI/CD
@@ -67,12 +68,17 @@ marcusok/
 
 ## Release Process
 
+Two-phase by design — `release.yml` runs on every push to `main`:
+
 ```bash
 pnpm changeset                # create a changeset, pick affected packages and semver type
-# commit .changeset/*.md → merge to main → release.yml automatically runs:
-#   changeset version         bump versions + update CHANGELOGs
-#   changeset publish         publish to npm
+# commit .changeset/*.md → merge to main → release.yml opens a "chore: release packages" PR:
+#   changeset version         bump versions + update CHANGELOGs (staged in that PR, NOT published)
+# merge that PR → release.yml runs again and, with .changeset/ now empty, executes:
+#   pnpm release              format:check + lint + typecheck + test + build, then changeset publish
 ```
+
+Merging the version PR is what publishes to npm — it is a human decision, never automatic.
 
 Prerelease:
 

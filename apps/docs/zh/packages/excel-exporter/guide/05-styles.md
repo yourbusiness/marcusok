@@ -139,7 +139,7 @@ indexColumn: {
 | `"¥"#,##0.00`        | `¥12,999.99`       |
 | `yyyy"年"M"月"d"日"` | `2026年7月1日`     |
 
-格式码中的字面量文本用双引号包裹；其余遵循 Excel 格式码语法。
+格式码中的字面量文本用双引号包裹；其余遵循 Excel 格式码语法。这些格式码由 Excel 通过 `numFormat` 渲染，因此只在带样式的（Workbook）路径生效——Stream 路径会整段丢弃样式并回落到该列的 `FormatSpec` pattern，而 pattern **不解析**引号字面量（见[值格式化](/zh/packages/excel-exporter/guide/04-formatting)）。
 
 ## 自定义 CellStyle
 

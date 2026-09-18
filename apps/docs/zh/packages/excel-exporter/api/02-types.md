@@ -28,7 +28,7 @@
 | `headerStyle?` | `CellStyle`              | —          | 本列表头样式（含分组表头格），优先于表级 `headerStyle`                                     |
 | `format?`      | `FormatSpec \| Function` | —          | 值格式化；仅叶子列；函数在主线程路径执行，浏览器 worker 路径会被剥离（详见 FormatSpec 页） |
 
-带 `children` 的列为分组列，无数据单元格，只贡献表头行。表头行数 = 列树最大深度；叶子列表头纵向跨满剩余表头行，分组列表头横向跨其子树所有叶子列，合并由库自动生成（无需手工写 `merges`）。
+带 `children` 的列为分组列，无数据单元格，只贡献表头行。表头行数 = 1 + 列树最大深度（扁平列即 1 行）；叶子列表头纵向跨满剩余表头行，分组列表头横向跨其子树所有叶子列，合并由库自动生成（无需手工写 `merges`）。
 
 ## IndexColumnOptions
 
@@ -43,6 +43,8 @@
 | `headerStyle?` | `CellStyle` | —        | 序号列表头样式；优先于表级 `headerStyle`                              |
 
 序号列的值由行号生成、从不读取 `data`；用户列声明保留 prop `__index__` 会被明确报错拒绝。已有 `merges` 自动右移一列，仍指向原目标。
+
+`exportExcel` 会在模式路由之前自动展开该字段（且只展开一次），这正是它「在所有路径生效」的原因。底层入口 `WorkbookBuilder.addSheet()` 与 `exportAsStream()` **不会**自动展开——它们只认识已展开的 `__index__` 列，直连时请先调用 `applyIndexColumn(sheet)`（随包导出，保留字 `INDEX_PROP` 一并导出）。否则 `indexColumn` 会被静默忽略。
 
 ## MergeRange
 

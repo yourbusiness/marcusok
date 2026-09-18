@@ -187,7 +187,7 @@ env:
 
 ### 5.2 处理
 
-`git rm .changeset/bumpy-tables-grin.md`，留 [fix-exports-and-peer-deps.md](/.changeset/fix-exports-and-peer-deps.md) 那条真实的。
+`git rm .changeset/bumpy-tables-grin.md`，留 `fix-exports-and-peer-deps.md` 那条真实的（该 changeset 已随发版消费并从 `.changeset/` 删除，此处仅作历史记录，故不再做链接）。
 
 > 注：PowerShell 里看到的中文乱码是 GBK 控制台显示问题，文件本身是 UTF-8、内容完好。
 
@@ -474,7 +474,7 @@ lint、typecheck、build 三个 task 都过了，只有 test 挂。说明代码�
 Error: Publish command exited with code 1
 ```
 
-`pnpm release` 的脚本是 `turbo run lint typecheck test build && changeset publish`。test 失败 → `&&` 短路 → `changeset publish` 永远跑不到。这行不是 publish 本身报错，是 quality gate 失败的连锁结果。
+`pnpm release` 的脚本是 `pnpm format:check && turbo run lint typecheck test build && changeset publish`。test 失败 → `&&` 短路 → `changeset publish` 永远跑不到。这行不是 publish 本身报错，是 quality gate 失败的连锁结果。
 
 ### 13.2 为什么 CI 和 Release 挂在同一个地方
 

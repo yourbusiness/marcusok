@@ -139,7 +139,7 @@ Common `numFormat` tweaks used with the numeric presets:
 | `"¥"#,##0.00`        | `¥12,999.99`           |
 | `yyyy"年"M"月"d"日"` | `2026年7月1日`         |
 
-Literal text in a format code goes in double quotes; everything else follows Excel's format-code syntax.
+Literal text in a format code goes in double quotes; everything else follows Excel's format-code syntax. These codes are rendered by Excel through `numFormat`, so they apply on the styled (Workbook) routes only — the stream path drops styles wholesale and falls back to the column's `FormatSpec` pattern, which does **not** interpret quoted literals (see [Value Formatting](/packages/excel-exporter/guide/04-formatting)).
 
 ## Custom CellStyle
 
