@@ -95,6 +95,9 @@ export default defineConfig([
       index: "src/index.ts",
       "style-presets": "src/style-presets.ts",
       "worker-utils": "src/worker-exporter.ts",
+      // 遮罩是独立入口：index.ts 不引用它，因此不用该能力的调用方打包体积
+      // 不变（仅多一个可按需 import 的子路径文件）。
+      overlay: "src/overlay.ts",
     },
     format: ["esm"],
     dts: { resolve: true },

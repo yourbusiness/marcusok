@@ -32,6 +32,8 @@
 
 > 🔄 **v2.16（全仓梳理修复：exportTable 透传缺口 + 序号列 width 校验 + 底层入口补偿 + 文档口径收敛，2026-09-18）**：① **代码修复三处**——`table-export.ts` 的 `tableExportToOptions` 补传 `dataStyle` / `indexColumn`（原解构与 `tableToSheet` 调用双双漏掉这两个字段：`TableExportOptions extends TableSheetInput` 使漏传不触发类型错误，`exportTable({ indexColumn: true })` 静默失效，与 2.3.0 CHANGELOG「exportTable accepts both new fields too」的承诺相反；原测试 describe 名写着 exportTable 却只断言 `tableToSheet`，未能拦住）；`validateInput` 补 `indexColumn.width` 校验（有限非负——序号列在**校验之后**才由 `applyIndexColumn` 注入，NaN 会绕过早前的 `col.width` 校验、以 serde 错误让整份导出降级为无样式 stream，而 ≥50k 路由又把 width 当被丢弃的特性静默忽略，正是 `col.width` 校验当初要消除的那种跨路径分裂）；主入口新增导出 `applyIndexColumn` / `INDEX_PROP`（`WorkbookBuilder.addSheet` / `exportAsStream` 只识别展开后的 `__index__` 列、不自己展开 `indexColumn`，此前直连底层 API 的调用方没有任何公开补偿手段）。② **注释口径**——`types.ts` 与 `format-utils.ts` 更正 stream 路径 pattern 的描述：pattern 先整串转小写再扫描，六 token 之外的字符「小写后原样」输出且**不解析引号字面量**（原「emits anything else verbatim」与实现不符；`yyyy"年"M"月"d"日"` 在 stream 路径渲染为 `2026"年"m"月"d"日"`，Workbook 路径仍为 `2026年7月1日`）。③ **测试**——新增回归 6 个（exportTable 透传与端到端序号列、indexColumn.width 非法值/0 合法、主入口导出与底层展开），186 全量 / CI 实跑 182。④ **文档站同步（zh/en 各 12 页）**——预设数量 7→8（含 registry 首页统计卡，该值手工维护、无自动校验）、guide/06 降级链区分 Worker+Workbook（重试失败继续降级）与 Worker+stream（重试即同一 fast stream，失败即终局 `success:false`）、guide/10 autoFilter 范围改为「末行表头 + 全部数据行」、guide/06 的 phase 转发说明与 guide/10 对齐、api/02 表头行数改为「1 + 最大深度」并补底层入口说明、api/01 与 README 补 `dataStyle`/`indexColumn` 透传、echarts `layout` 适用范围与散点 X/Y 表头、`/styles` 子路径、pattern 字面量差异，zh guide/08 补锚点。⑤ **内部文档订正**——`release` 脚本补 `format:check` 前缀（changeset-walkthrough / release-publish-logic / release-workflow-analysis / release-guide / debug 共 6 份同步）、`ci.yml` 的 `branches-ignore: changeset-release/**` 与 PAT 口径（release-guide / release-workflow-analysis / release-publish-logic / `release.yml` 注释——原文「配 PAT 让发版 PR 跑 CI」与实际配置相反）、性能阈值「2 秒」→ 1000ms、测试文件数 15→16（补 `sheet-normalize.test.ts`）与 4.1 目录树漏列的 `src/sheet-normalize.ts`（全文原 0 次提及）、附录 F 计数刷新为本次实测口径、`@types/node` 声明描述、§7.2 快照 `header:`→`label:`、版本号 2.1.4→2.4.0、预设 7→8、deploy.yml 门禁补 `format:check`、两处断链修复。
 
+> 🔄 **v2.17（进度遮罩：新增可选子路径能力，2026-09-18）**：① **新能力（minor，2.6.0）**——新增独立子路径 `@marcusok/excel-exporter/overlay`，导出 `exportExcelWithOverlay(options, overlayOptions?)` 与 `showExportOverlay(overlayOptions?)`：导出期间的全局遮罩 + 进度条，默认阻断页面交互、默认延迟 200ms 显示（更快的导出完全不显示遮罩）、已显示则至少停留 300ms 再淡出，支持主题/文案/层级/容器/`blockInteraction` 覆盖。`index.ts` 与 `types.ts` **零改动**——该能力不被主入口引用，不用它的调用方产物不变（构建验证：`dist/overlay.js` 13.7KB，引擎代码与 `index.js` 共享 chunk，无重复打包）。② **设计要点（详见新增的 4.15）**——纯状态机（`overlay-state.ts`，无 DOM、时钟可注入）+ DOM 层（`overlay.ts`）分层，使延迟门控/最短可见/确定态切换/关闭幂等这些易错边界可在仓库默认的 node 测试环境单测；进度源的粒度如实呈现（只有 fast stream 有 0..1 中间值，Workbook 路由全程不确定态）；`onProgress` 的收尾 1 不关闭遮罩也不伪造完成（失败路径同样发它）；`onPhase` 无"阶段开始"事件，文案只能乐观推进，且按 `willDownload` 区分 build 之后是"下载中"还是"即将完成"。③ **两个必须处理的坑**——其一，`close()` 在从未显示过时必须清掉延迟定时器，否则主线程阻塞把定时器饿死到导出结束后触发、遮罩会在导出完成后弹出来（有专门回归用例）；其二，遮罩挂载与紧随其后的同步构建落在同一任务里时浏览器永不绘制遮罩，`exportExcelWithOverlay` 用双 rAF 让出先绘制再调用导出（`delayMs: 0` 时这是阻塞路由唯一能看见遮罩的配置）。④ **不影响原有功能**——对调用方的 `onProgress` / `onPhase` 是链式追加而非替换；句柄方法全部 try/catch 兜底；无 `document` 时返回空实现句柄。⑤ **测试与文档**——新增 `overlay-state.test.ts`（node，注入时钟）与 `overlay.test.ts`（`happy-dom`，新增 devDependency，仅测试用），221 全量 / CI 实跑 217（原 186/182）；4.1 目录树、4.2 快照的 `exports` 与 devDependencies、7.1 测试表、附录 F 计数同步；新增 4.15 设计小节；包 README、文档站 guide/11（zh/en 各一页，guide/10 补交叉链接）、play 与文档站演示各加「全屏遮罩」开关（默认关，保留原内联进度 UI 做 A/B 对比）。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -696,6 +698,8 @@ packages/excel-exporter/
 │   ├── format-utils.ts         # FormatSpec 解析与格式化 + validateSheetName/validateMerges
 │   ├── column-tree.ts          # 多行表头列树扁平化（分组表头/表头合并/环与复用检测）
 │   ├── sheet-normalize.ts      # 序号列展开（applyIndexColumn / INDEX_PROP，2.3.0 起）
+│   ├── overlay.ts              # 进度遮罩 DOM 层与公共 API（独立子路径，2.6.0 起）
+│   ├── overlay-state.ts        # 遮罩纯状态机（无 DOM，供 node 环境单测）
 │   ├── wasm-loader.ts          # WASM 加载/单例/超时重试/Node 自动同步初始化
 │   ├── workbook-builder.ts     # 主线程构建器（批量写入，<5 万行即 ≤49,999 行主路径）
 │   ├── streaming-builder.ts    # 流式构建器（≥5 万行主路径；薄委托 fast-xlsx）
@@ -708,7 +712,7 @@ packages/excel-exporter/
 │   ├── style-utils.ts          # CellStyle → StyleBuilder 转换
 │   ├── style-presets.ts        # 业务预设样式（header/currency/date/percent …）
 │   ├── download.ts             # Blob 下载工具（triggerDownload / toBlobPart）
-│   └── __tests__/              # 16 个测试文件 + setup.ts（清单见 7.1）
+│   └── __tests__/              # 18 个测试文件 + setup.ts（清单见 7.1）
 ├── scripts/copy-wasm.mjs       # 构建后置：把 modern-xlsx.wasm 转发进 dist（2.0 起）
 ├── tsup.config.ts
 ├── tsconfig.json
@@ -751,6 +755,11 @@ packages/excel-exporter/
       "types": "./dist/worker-utils.d.ts",
       "import": "./dist/worker-utils.js",
       "default": "./dist/worker-utils.js"
+    },
+    "./overlay": {
+      "types": "./dist/overlay.d.ts",
+      "import": "./dist/overlay.js",
+      "default": "./dist/overlay.js"
     },
     "./dist/export.worker.js": {
       "import": "./dist/export.worker.js",
@@ -3759,6 +3768,87 @@ duration 在主线程从调用 `exportInWorker` 起表——含 postMessage 前�
 回传后由 `worker-exporter.ts` 转发；终局兜底沿用 `runOnMainThread` 的打点
 （`fallback.ts` 已随 2.0 移除，纯 JS 兜底在 `index.ts` 的 `finishWithStream` 编排）。
 
+### 4.15 进度遮罩（`overlay.ts` + `overlay-state.ts`）— v2.17 新增
+
+导出期间的全局遮罩 + 进度条，作为**可选能力**放在独立子路径
+`@marcusok/excel-exporter/overlay`。`index.ts` 不引用它，因此不用该能力的调用方
+打包体积与产物结构不变（对照：`src/index.ts` / `src/types.ts` 零改动）。全量源码见
+`packages/excel-exporter/src/overlay.ts` 与 `overlay-state.ts`，此处只记录设计决策与
+容易踩的边界。
+
+**分层**：`overlay-state.ts` 是纯状态机（不碰 DOM、不持有定时器、时钟可注入），
+`overlay.ts` 负责 DOM 渲染与定时器编排。这样拆分是为了让「延迟门控 / 最短可见 /
+确定态切换 / 文案时序 / 关闭幂等」这些最容易写错的边界能在仓库默认的 node 测试
+环境（`vitest.config.ts` 的 `environment: "node"`）里直接单测——DOM 层另用
+`happy-dom`（devDependency，仅测试用；`.test.ts` 顶部的 `// @vitest-environment`
+覆盖到单个文件，不改变全局环境配置）。
+
+**两条数据源的真实粒度**（决定了进度条能有多"真"）：
+
+| 路由                 | 触发条件              | `onProgress` 中间值 |
+| -------------------- | --------------------- | ------------------- |
+| main + Workbook      | 浏览器 < 20,000 行    | 无                  |
+| main + fast stream   | Node / 显式 `stream`  | 每 1000 行一次      |
+| Worker + Workbook    | auto 20,000–49,999 行 | 无                  |
+| Worker + fast stream | auto ≥ 50,000 行      | 每 1000 行一次      |
+
+只有 fast stream 路径会产生 0..1 之间的值（`fast-xlsx.ts` 的 checkpoint），Workbook
+分支两条路由（`index.ts` 主线程 / `export.worker.ts`）都不传进度回调。因此遮罩在收到
+第一个中间值之前渲染**不确定态**（CSS 扫光），收到后才切确定态——Workbook 路由全程
+不确定态是数据源粒度决定的，不是渲染缺陷。
+
+**`onProgress` 契约对遮罩的三条约束**（均已在状态机中落地并有单测）：
+
+1. 入口的 `0` 不改变状态（0 只说明导出已开始，不代表有进度）。
+2. 收尾的 `1` **不关闭遮罩**：失败路径同样会发它（见 4.4 的 `onProgress` 契约），
+   成功后 `triggerDownloadIsolated` 还排在它之后。关闭时机只由调用方 `finally` 掌握。
+3. 收尾的 `1` 只在**已经是确定态**时才把进度推到 100%——否则 Workbook 路由会凭
+   这一个 1 假装走完全程。
+
+**`onPhase` 没有"阶段开始"事件**（只在阶段结束后回调，见 4.14），所以文案只能乐观
+推进：初始 `preparing`，收到 `init` 切 `building`（init 完即在做 build），收到
+`build` 按 `willDownload` 切 `downloading` 或 `finishing`。`willDownload` 由
+`exportExcelWithOverlay` 按 `options.download !== false && typeof document !==
+"undefined"` 推断——Node 与 `download: false` 下没有 download 阶段，不区分就会让
+文案卡在"正在下载…"。
+
+**延迟门控与主线程阻塞的相互作用**（本模块最容易踩的坑）：
+
+- `WorkbookBuilder.addSheet` 与 `exportFastXlsx` 都是同步的，期间浏览器无法重绘。
+- 遮罩的显示由 `setTimeout(delayMs)` 驱动。若这次阻塞在延迟到期前就开始，定时器
+  会被饿死到阻塞结束才触发——**此时导出已经结束**。因此 `close()` 在从未显示过时
+  **必须清掉这个定时器**，否则遮罩会在导出结束之后弹出来。这条有专门回归用例
+  （`overlay.test.ts` 的"导出快于 delayMs 时遮罩永不出现"）。
+- 该场景下的净效果是：阻塞路由 + 默认 `delayMs > 0` 时遮罩完全不出现。想让阻塞路由
+  也能看到遮罩，用 `delayMs: 0`——遮罩在 `exportExcel` **之前**同步挂载，再由
+  `nextPaint()`（双 rAF）把绘制机会让给浏览器。代价是快导出会闪一下。
+- 无论哪种配置，阻塞期间扫光动画继续流动（CSS `transform` 动画由合成器线程驱动），
+  百分比与文案冻结到线程空闲——这是物理限制，已在文档站明写。
+
+**渲染与样式**：样式走一次注入的 `<style id="mxe-overlay-style">` 而非全内联，因为
+`@keyframes` 与 `@media (prefers-reduced-motion)` 内联样式表达不了；动态部分（层级、
+透明度、确定态宽度）才用内联样式。颜色用 CSS 变量承载，`theme: "auto"` 在挂载时由
+JS 解析成 `light` / `dark`，因此只需一份 `[data-mxe-theme="dark"]` 覆盖，不必在媒体
+查询里重复一遍。确定态填充用 `transform: scaleX(p)` 而非 `width: p%`（不触发布局，
+且阻塞时过渡仍由合成器推进）。结构属性加 `!important`，避免打包进宿主页面后撞上
+对方的全局样式。
+
+**不碰宿主页面的状态**：滚动拦截挂在遮罩自身（`touch-action: none` + 节点上的
+`wheel`/`touchmove` preventDefault，随节点移除），**不改 `document.body.overflow`**
+——改 body 状态会在 `close()` 漏调时让宿主页面永久不可滚动，风险不对等。同理**不施加
+`inert`**：把 body 全体子节点置 inert 再回滚侵入性太强，代价是键盘用户仍能 Tab 到
+视觉上被盖住的元素（已在文档站说明该取舍）。
+
+**并发**：模块级单例 + 引用计数，`refs` 归零才移除节点；渲染以最后更新者为准。容器
+变更时丢弃旧遮罩。这些在 `exportTable` / `exportExcel` 的既有单飞约束下不会触发，
+但库级行为需确定。
+
+**不影响的保证**：`exportExcelWithOverlay` 对调用方的 `onProgress` / `onPhase` 是
+**链式追加**而非替换（play 与文档站演示都用这对回调驱动自有的指标面板，替换会直接
+打断它们）；遮罩句柄的所有方法内部 `try/catch` 兜底——遮罩是增强，它的任何异常都不
+允许弄挂导出；`typeof document === "undefined"` 时返回全空实现句柄，Node/SSR 用同一套
+API 无需分支。
+
 ---
 
 ## 五、性能优化策略
@@ -4040,7 +4130,7 @@ await exportExcel({
 
 ### 7.1 单元测试（Vitest）
 
-（v2.7 注：下表按现行 `src/__tests__/` 实际文件对齐；旧表列有 `style-utils` 行但仓库并无该测试文件。v2.10 再次对齐：`fallback.test.ts` 已随 SheetJS 兜底移除。v2.14 对齐：补入 v2.13 新增的 `export-worker.test.ts`。v2.16 对齐：补入 2.3.0 新增的 `sheet-normalize.test.ts`，**现行 16 个测试文件**如下。）
+（v2.7 注：下表按现行 `src/__tests__/` 实际文件对齐；旧表列有 `style-utils` 行但仓库并无该测试文件。v2.10 再次对齐：`fallback.test.ts` 已随 SheetJS 兜底移除。v2.14 对齐：补入 v2.13 新增的 `export-worker.test.ts`。v2.16 对齐：补入 2.3.0 新增的 `sheet-normalize.test.ts`。v2.17 对齐：补入 2.6.0 新增的 `overlay-state.test.ts` / `overlay.test.ts`，**现行 18 个测试文件**如下。）
 
 | 测试文件                                 | 重点                                                                                                                        |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -4059,6 +4149,8 @@ await exportExcel({
 | `routing.test.ts`                        | pickMode 路由阈值、降级链 onProgress 契约、下载触发隔离                                                                     |
 | `phases.test.ts`                         | onPhase 阶段序列（init/build，Node 不报 download）                                                                          |
 | `performance.test.ts`                    | 性能基准（1万/5万/10万 + format 开销；CI 以 RUN_PERF=0 跳过）                                                               |
+| `overlay-state.test.ts`                  | 遮罩状态机（node 环境，注入时钟）：延迟门控/最短可见/确定态切换/文案时序/关闭幂等                                           |
+| `overlay.test.ts`                        | 遮罩 DOM 层（happy-dom）：挂载时机、悬挂延迟定时器清理、并发引用计数、aria 属性、回调链式保留与失败路径移除                 |
 | `setup.ts`                               | Node WASM 引导（initWasmSync）+ makeData / fourCols                                                                         |
 
 ### 7.2 性能基准测试（关键验收）
@@ -4433,13 +4525,13 @@ const blob = new Blob([bytes], {
 
 ---
 
-**文档版本**：v2.13 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-09-16（v2.13：Node stream 终局防护 + 数值字段跨路径校验 + wasm-loader 状态机修复 + tsup onSuccess 统一 wasm 回补 + worker 协议测试；v2.12：Invalid Date/enum 原型链/散点对象形式/filename 校验/objectURL 泄漏五处代码修复 + 4.8 等快照再对齐；该行此前停留 v2.8，v2.9–v2.11 漏更，一并修正。历史见顶部版本注与文末修订历史）
+**文档版本**：v2.17 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-09-18（v2.17：新增可选子路径能力 `@marcusok/excel-exporter/overlay`——导出期间的全局遮罩 + 进度条，纯状态机与 DOM 层分层、主入口零改动，详见 4.15，测试 221/217；v2.14–v2.16：进度契约边界、API 命名对齐 `prop`/`label`、exportTable 透传缺口与序号列 width 校验。历史见顶部版本注与文末修订历史；v2.13：Node stream 终局防护 + 数值字段跨路径校验 + wasm-loader 状态机修复 + tsup onSuccess 统一 wasm 回补 + worker 协议测试；v2.12：Invalid Date/enum 原型链/散点对象形式/filename 校验/objectURL 泄漏五处代码修复 + 4.8 等快照再对齐；该行此前停留 v2.8，v2.9–v2.11 漏更，一并修正。历史见顶部版本注与文末修订历史）
 
 ---
 
 ### 附录 F · Node 版本与补充依赖（v2.1 重写）
 
-> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（186 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 182 个，2026-09-18 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
+> **本仓库用 Node 22，不升级到 24**：monorepo 根的 `engines.node` 为 `>=22.12.0`，`@marcusok/excel-exporter` 放宽为 `>=22.0.0`；`.nvmrc` 锁定 `22`，CI 用 `node-version-file: .nvmrc` 读取。核心依赖 modern-xlsx@1.2.0 的 `engines.node` 声明为 `>=24.0.0`，但其 WASM 核心面向浏览器、与 Node 版本无关；本仓库在 Node 22（v22.22.2）下 `lint/typecheck/test/build` 全绿（221 个用例实测通过；CI 以 `RUN_PERF=0` 跳过 4 个性能基准、实跑 217 个，2026-09-18 更新）。注意：modern-xlsx README 无 "Node Usage" 章节，其顶部声明要求 "Node.js 24+"，Node 22 可用性由本仓库测试实测而非 README 声明。`.npmrc` 设 `engine-strict=false`，避免 modern-xlsx 的 engines 声明在 Node 22 下阻断 `pnpm install`（见 3.5）。本地推荐 fnm/nvm 并 `fnm use`（读 `.nvmrc`）。
 >
 > v2.0 曾把 `@playwright/test`（`^1.62.0`）列入「补充依赖」、并写「Node 24+ 升级指引」，二者均与实际仓库不符（本仓库无 Playwright、CI 跑 Node 22），v2.1 已删除该依赖行与升级指引。关于 `unplugin`：6.2 的 Vite 插件是 Vite 原生插件对象（`{ name, buildStart() }`），全程未 import `unplugin`；若未来要让资源拷贝同时支持 Webpack，再按需引入。
 

@@ -25,10 +25,13 @@ import {
   getWasmLoader,
   type ColumnConfig,
   type ExportMode,
+  type ExportOptions,
   type ExportPhase,
   type ExportResult,
   type MergeRange,
 } from "@marcusok/excel-exporter";
+// 遮罩走独立子路径：不用它的调用方不会被打包进这份代码
+import { exportExcelWithOverlay } from "@marcusok/excel-exporter/overlay";
 import {
   createDataset,
   DATASET_PRESETS,
@@ -178,6 +181,8 @@ export default function BasicExportDemo() {
   const [mode, setMode] = useState<ExportMode>("auto");
   const [headerMode, setHeaderMode] = useState<"flat" | "grouped">("flat");
   const [withMerges, setWithMerges] = useState(false);
+  // 默认关：保留原有的内联进度卡片，便于与全屏遮罩做 A/B 对比
+  const [withOverlay, setWithOverlay] = useState(false);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<{
     percent: number;
@@ -301,50 +306,55 @@ export default function BasicExportDemo() {
     elapsedTimerRef.current = elapsedTimer;
     tick();
 
+    const exportOptions: ExportOptions = {
+      sheets: [
+        {
+          name: "示例表",
+          // 演示序号列：库内注入最左 1..N 列，结构特性、全路径（含 stream）生效
+          indexColumn: true,
+          columns: exportColumns,
+          data: dataset,
+          // 多级表头时冻结全部表头行并把筛选锚定在最后一行表头；
+          // 扁平模式保持原有行为（不冻结、不筛选）。
+          ...(headerMode === "grouped" && {
+            freezeRows: headerDepth(exportColumns),
+            autoFilter: true,
+          }),
+          ...(merges && merges.length > 0 && { merges }),
+        },
+      ],
+      filename: "play-demo.xlsx",
+      mode: requestedMode,
+      onProgress: (p) => {
+        if (cancelledRef.current) return;
+        const percent = Math.round(p * 100);
+        setProgress((prev) => ({
+          percent,
+          phase:
+            p >= 1
+              ? "触发下载…"
+              : percent > 0
+                ? `导出中 ${percent}%`
+                : (prev?.phase ?? "初始化 WASM…"),
+          elapsedMs: performance.now() - t0,
+        }));
+      },
+      onPhase: (phase, durationMs) => {
+        if (cancelledRef.current) return;
+        phases.push({ phase, durationMs });
+        setProgress((prev) => ({
+          percent: prev?.percent ?? 0,
+          phase: `${PHASE_LABEL[phase]}…`,
+          elapsedMs: performance.now() - t0,
+        }));
+      },
+    };
+
     try {
-      const result = await exportExcel({
-        sheets: [
-          {
-            name: "示例表",
-            // 演示序号列：库内注入最左 1..N 列，结构特性、全路径（含 stream）生效
-            indexColumn: true,
-            columns: exportColumns,
-            data: dataset,
-            // 多级表头时冻结全部表头行并把筛选锚定在最后一行表头；
-            // 扁平模式保持原有行为（不冻结、不筛选）。
-            ...(headerMode === "grouped" && {
-              freezeRows: headerDepth(exportColumns),
-              autoFilter: true,
-            }),
-            ...(merges && merges.length > 0 && { merges }),
-          },
-        ],
-        filename: "play-demo.xlsx",
-        mode: requestedMode,
-        onProgress: (p) => {
-          if (cancelledRef.current) return;
-          const percent = Math.round(p * 100);
-          setProgress((prev) => ({
-            percent,
-            phase:
-              p >= 1
-                ? "触发下载…"
-                : percent > 0
-                  ? `导出中 ${percent}%`
-                  : (prev?.phase ?? "初始化 WASM…"),
-            elapsedMs: performance.now() - t0,
-          }));
-        },
-        onPhase: (phase, durationMs) => {
-          if (cancelledRef.current) return;
-          phases.push({ phase, durationMs });
-          setProgress((prev) => ({
-            percent: prev?.percent ?? 0,
-            phase: `${PHASE_LABEL[phase]}…`,
-            elapsedMs: performance.now() - t0,
-          }));
-        },
-      });
+      // 遮罩是链式追加而非替换 onProgress/onPhase，上面的指标面板照常工作
+      const result = withOverlay
+        ? await exportExcelWithOverlay(exportOptions, { delayMs: 200 })
+        : await exportExcel(exportOptions);
       if (cancelledRef.current) return;
       pushRecord({
         result,
@@ -418,7 +428,8 @@ export default function BasicExportDemo() {
         历史中对比（行数 ≥ 20,000 走 Worker，≥ 50,000 走流式）。「多级分组」演示
         children 三级表头（自动合并表头格），「数据区合并」演示 merges（每 10
         行纵向合并城市列）——两者与最左侧的序号列（indexColumn）在 stream
-        路径同样生效（样式除外）。
+        路径同样生效（样式除外）。「全屏进度遮罩」走库的 overlay 子路径：导出
+        期间显示全局遮罩与进度条，链式追加在现有回调之上，可对比两种交互。
       </Typography.Paragraph>
 
       <Card>
@@ -470,6 +481,15 @@ export default function BasicExportDemo() {
               onChange={(e) => setWithMerges(e.target.checked)}
             >
               每 10 行合并城市列
+            </Checkbox>
+          </Space>
+          <Space orientation="vertical" size={6}>
+            <Typography.Text type="secondary">导出交互</Typography.Text>
+            <Checkbox
+              checked={withOverlay}
+              onChange={(e) => setWithOverlay(e.target.checked)}
+            >
+              全屏进度遮罩
             </Checkbox>
           </Space>
           <Space>

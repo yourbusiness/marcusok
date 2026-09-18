@@ -126,6 +126,8 @@ await exportExcel({
 
 > `onPhase` 只反映各阶段耗时，不影响 `ExportResult.duration`（主线程路由为整次导出总耗时；worker 路由的 duration 在主线程从调用 `exportInWorker` 起表，含 postMessage 前的序列化与 Worker 往返，直到 Blob 构造完成，因此比纯 Worker 内构建耗时更宽）。
 
+> 基于这对回调开箱可用的全屏遮罩见[进度遮罩](./11-overlay)。
+
 ## 关闭自动下载
 
 ```ts

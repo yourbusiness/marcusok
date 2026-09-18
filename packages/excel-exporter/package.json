@@ -29,6 +29,11 @@
       "import": "./dist/worker-utils.js",
       "default": "./dist/worker-utils.js"
     },
+    "./overlay": {
+      "types": "./dist/overlay.d.ts",
+      "import": "./dist/overlay.js",
+      "default": "./dist/overlay.js"
+    },
     "./dist/export.worker.js": {
       "import": "./dist/export.worker.js",
       "default": "./dist/export.worker.js"
@@ -68,6 +73,7 @@
     "@types/node": "^22.10.0",
     "eslint": "^9.16.0",
     "fflate": "^0.8.3",
+    "happy-dom": "^20.14.5",
     "modern-xlsx": "^1.2.0",
     "tsup": "^8.3.5",
     "typescript": "^5.9.3",

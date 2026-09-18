@@ -127,6 +127,8 @@ Phase semantics:
 
 > `onPhase` measures per-phase wall time only; `ExportResult.duration` measures the whole export on main-thread routes. On the worker route it is measured on the main thread from the call into the worker — including the pre-post serialization and the worker round-trip, through Blob construction — so it is wider than the pure in-worker build time.
 
+> For a ready-made full-screen overlay built on these two callbacks, see [Progress Overlay](./11-overlay).
+
 ## Disable auto download
 
 ```ts

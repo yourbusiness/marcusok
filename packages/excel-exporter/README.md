@@ -213,6 +213,21 @@ Number-spec cross-path notes (see `ColumnConfig.format` in [`src/types.ts`](./sr
 
 When the browser Worker route fails (missing/404 worker asset, WASM init error inside the Worker, timeout), the library first **retries on the main thread** with modern-xlsx — styles are preserved. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to the **pure-JS fast stream** — no WASM, no network, headers and merges preserved, styles stripped. A successful degraded export carries `result.error` (with `success: true`) describing the degradation, and each degradation step prints an `[excel-exporter]` console warning — check `result.error` to monitor the fallback rate.
 
+### Progress Overlay
+
+An optional full-screen overlay with a progress bar, behind its own subpath so the main entry stays free of DOM code:
+
+```ts
+import { exportExcelWithOverlay } from "@marcusok/excel-exporter/overlay";
+
+const result = await exportExcelWithOverlay(
+  { filename: "report", sheets: [...] },
+  { delayMs: 200, blockInteraction: true },
+);
+```
+
+It appends to (never replaces) your existing `onProgress` / `onPhase` callbacks, blocks page interaction while shown, and is removed when the export settles — on success and on failure alike. Only the Fast stream path emits intermediate progress, so Workbook routes render an animated sweep instead of a percentage; `delayMs` keeps fast exports from flashing an overlay at all. See the [Progress Overlay guide](https://yourbusiness.github.io/marcusok/packages/excel-exporter/guide/11-overlay) for the route-by-route behaviour, the blocking-thread trade-offs, and the handle form used by `exportTable` / `exportEcharts`.
+
 ## API
 
 - `exportExcel(options)` — unified entry with auto routing.
@@ -225,6 +240,7 @@ When the browser Worker route fails (missing/404 worker asset, WASM init error i
 - `exportEcharts(options)` — convenience export for common ECharts data, supporting category-axis multi-series, pie `name/value`, and scatter pairs in either ECharts spelling (`[x,y]` or `{ value: [x,y] }`). The default sheet name and column headers are Chinese (`图表数据` / `系列` / `类目` / `名称` / `数值`), except the scatter layout, whose coordinate headers are the literal `X` / `Y`; override them via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`. In long/item layouts the header texts double as row keys, so duplicated headers are rejected with a clear error.
 - `StylePresets` — the eight preset styles, also importable on their own from the `@marcusok/excel-exporter/styles` subpath.
 - `headerStyle` — supported on both `SheetConfig` and `ColumnConfig` for styling header cells.
+- `exportExcelWithOverlay(options, overlayOptions)` / `showExportOverlay(overlayOptions)` (`@marcusok/excel-exporter/overlay`, source entry `src/overlay.ts`) — optional full-screen progress overlay; the first wraps `exportExcel`, the second returns a handle for `exportTable` / `exportEcharts` / custom flows. No-ops in Node/SSR.
 - `exportInWorker` / `terminateWorker` (`@marcusok/excel-exporter/worker-utils`, source entry `src/worker-exporter.ts`) — manual Worker lifecycle control.
 
 ## Node Usage

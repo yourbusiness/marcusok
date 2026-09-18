@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from "vue";
 import { useData } from "vitepress";
-import type { ColumnConfig } from "@marcusok/excel-exporter";
+import type { ColumnConfig, ExportOptions } from "@marcusok/excel-exporter";
 import {
   getDataset,
   headerDepth,
@@ -26,6 +26,8 @@ const selectedMode = ref<(typeof modes)[number]>("auto");
 const datasetKey = ref("sales");
 const rowsCount = ref(10000);
 const exporting = ref(false);
+// 默认关：保留页面内联进度条，便于与全屏遮罩做对比
+const useOverlay = ref(false);
 const progress = ref(0);
 const phases = ref<{ phase: string; ms: number }[]>([]);
 const result = ref<{
@@ -55,6 +57,7 @@ const statusText = computed(() =>
         dataset: "Dataset",
         mode: "Mode",
         rows: "Rows",
+        overlay: "Full-screen overlay",
         engine: "engine",
         ok: "OK",
         fail: "failed",
@@ -69,6 +72,7 @@ const statusText = computed(() =>
         dataset: "数据集",
         mode: "模式",
         rows: "数据量",
+        overlay: "全屏遮罩",
         engine: "引擎",
         ok: "成功",
         fail: "失败",
@@ -110,7 +114,7 @@ async function run() {
     const columns: ColumnConfig[] = ds.columns.map(toColumnConfig);
     const merges = ds.merges?.(rowsCount.value);
 
-    const res = await exportExcel({
+    const exportOptions: ExportOptions = {
       filename: `${ds.fileName}-${rowsCount.value}`,
       sheets: [
         {
@@ -130,7 +134,14 @@ async function run() {
       onPhase: (phase, ms) => {
         if (!disposed.value) phases.value.push({ phase, ms });
       },
-    });
+    };
+    // overlay 是独立子路径，按需加载：不开这个开关的页面不会加载它的代码。
+    // 它链式追加而非替换 onProgress/onPhase，上面的进度与阶段展示照常工作。
+    const res = useOverlay.value
+      ? await (
+          await import("@marcusok/excel-exporter/overlay")
+        ).exportExcelWithOverlay(exportOptions, { delayMs: 200 })
+      : await exportExcel(exportOptions);
     // A failed export still receives the trailing onProgress(1) (library
     // contract), so the bar always completes; the failure itself is shown
     // via `result.success: false` / the error block below.
@@ -169,6 +180,10 @@ async function run() {
             {{ n.toLocaleString() }}
           </option>
         </select>
+      </label>
+      <label>
+        <input v-model="useOverlay" type="checkbox" :disabled="exporting" />
+        {{ statusText.overlay }}
       </label>
       <button type="button" :disabled="exporting" @click="run">
         {{ exporting ? statusText.running : statusText.run }}
