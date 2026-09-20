@@ -44,7 +44,7 @@ await exportExcelWithOverlay(options, {
 | `container`        | `document.body` | Mount target.                                                                                     |
 | `blockInteraction` | `true`          | Blocks pointer and scroll events on the overlay. `false` leaves the page usable underneath.       |
 | `theme`            | `"auto"`        | `"auto"` resolves via `prefers-color-scheme` at mount time.                                       |
-| `text`             | Chinese         | Label overrides; the progress bar tracks the `hint` shown while indeterminate.                    |
+| `text`             | Chinese         | Label overrides; the `hint` is additionally shown while the bar is indeterminate.                 |
 
 `text.hint` is only rendered while the bar is indeterminate — a determinate bar shows its percentage instead.
 

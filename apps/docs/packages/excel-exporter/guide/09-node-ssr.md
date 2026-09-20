@@ -6,13 +6,13 @@ In Node servers (including SSR) you don't need browser assets and there is **no 
 
 ## Environment differences
 
-| Dimension         | Browser                | Node / SSR                                 |
-| ----------------- | ---------------------- | ------------------------------------------ |
-| Worker path       | available              | no Web Worker; falls back to main/stream   |
-| Auto download     | triggers download      | `triggerDownload` is a no-op               |
-| `download` option | defaults to true       | set `false` explicitly and handle the Blob |
-| Large data        | worker + Fast stream   | main → stream at ≥ 50k rows (main thread)  |
-| WASM init         | auto-located (default) | auto-located and initialized               |
+| Dimension         | Browser                | Node / SSR                                                                |
+| ----------------- | ---------------------- | ------------------------------------------------------------------------- |
+| Worker path       | available              | no Web Worker; falls back to main/stream                                  |
+| Auto download     | triggers download      | `triggerDownload` is a no-op                                              |
+| `download` option | defaults to true       | already a no-op in Node; set `false` for explicitness and handle the Blob |
+| Large data        | worker + Fast stream   | main → stream at ≥ 50k rows (main thread)                                 |
+| WASM init         | auto-located (default) | auto-located and initialized                                              |
 
 ## Export and write to disk
 

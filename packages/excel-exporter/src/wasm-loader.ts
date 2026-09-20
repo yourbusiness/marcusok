@@ -230,7 +230,23 @@ export class WasmLoader {
         );
       });
       try {
-        await Promise.race([initWasm(wasmUrl), timeout]);
+        const initPromise = initWasm(wasmUrl);
+        // 自愈挂钩：initWasm 持有模块级单一 in-flight promise，所有重试都
+        // 超时放弃之后，底层加载仍可能随后成功（慢网络）。那时引擎实际已
+        // 就绪，若放任 state 停在 "error"，后续导出会以 "previously failed"
+        // 永久拒载，与引擎真实状态矛盾，只能靠 configureWasm 手动解锁。
+        // 迟到的成功在此把 error 拨回 ready；失败分支为 no-op（rejection
+        // 已被下方的 race 处理，这里仅防止重复触发未处理拒绝告警）。
+        void initPromise.then(
+          () => {
+            if (this.state === "error") {
+              this.state = "ready";
+              this.promise = null;
+            }
+          },
+          () => {},
+        );
+        await Promise.race([initPromise, timeout]);
         return;
       } catch (e) {
         lastErr = e;

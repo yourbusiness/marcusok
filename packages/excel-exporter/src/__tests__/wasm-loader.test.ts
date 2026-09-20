@@ -204,4 +204,48 @@ describe("WasmLoader error recovery", () => {
     expect(initWasmMock).toHaveBeenCalledTimes(1);
     expect(String(initWasmMock.mock.calls[0][0])).toMatch(/modern-xlsx\.wasm$/);
   });
+
+  it("self-heals to ready when the underlying init succeeds after the retries gave up", async () => {
+    // initWasm 的模块级 in-flight promise 可能比最后一次超时更晚落地（慢
+    // 网络）：那一刻引擎实际已初始化，loader 若停在 error 态就会永久拒载、
+    // 与引擎真实状态矛盾。迟到的成功必须把 error 拨回 ready。
+    let resolveInit!: () => void;
+    initWasmMock.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveInit = resolve;
+      }),
+    );
+    const loader = makeLoader("slow.wasm");
+    await expect(loader.ensureLoaded()).rejects.toThrow(
+      /failed after 2 attempts/,
+    );
+    expect(loader.isReady).toBe(false);
+
+    resolveInit();
+    await vi.waitFor(() => expect(loader.isReady).toBe(true));
+    // 自愈后的导出直接可用，不再触发新的 initWasm 调用。
+    await loader.ensureLoaded();
+    expect(initWasmMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT self-heal on a late rejection of the underlying init", async () => {
+    // 对称面：迟到的是失败（而非成功）时状态必须保持 error——否则一次迟到的
+    // rejection 会把"从未成功"误判成"已就绪"。
+    let rejectInit!: (e: Error) => void;
+    initWasmMock.mockReturnValue(
+      new Promise<void>((_resolve, reject) => {
+        rejectInit = reject;
+      }),
+    );
+    const loader = makeLoader("slow-bad.wasm");
+    await expect(loader.ensureLoaded()).rejects.toThrow(
+      /failed after 2 attempts/,
+    );
+    expect(loader.isReady).toBe(false);
+
+    rejectInit(new Error("late failure"));
+    await Promise.resolve();
+    expect(loader.isReady).toBe(false);
+    await expect(loader.ensureLoaded()).rejects.toThrow(/previously failed/);
+  });
 });
