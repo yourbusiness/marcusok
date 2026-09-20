@@ -11,7 +11,7 @@ import {
 } from "./echarts-export";
 import { validateSheetName, validateMerges } from "./format-utils";
 import { columnLabel, flattenColumnTree } from "./column-tree";
-import { applyIndexColumn } from "./sheet-normalize";
+import { applyIndexColumn, assertNoReservedIndexProp } from "./sheet-normalize";
 
 export * from "./types";
 export * from "./style-presets";
@@ -148,6 +148,11 @@ function validateInput(options: ExportOptions): void {
       );
     }
     const { leaves } = flattenColumnTree(sheet.columns);
+    // 保留列在这里**无条件**拦截（与是否启用 indexColumn 无关）：构建器对
+    // INDEX_PROP 的特判是无条件的，放行只会让用户自带的该列被行号静默顶替
+    // （数据丢失而 success 仍为 true）。原先该检查只在 applyIndexColumn 内，
+    // 未启用 indexColumn 时它直接返回原表，静默路径正好漏在最外层入口上。
+    assertNoReservedIndexProp(leaves);
     validateMerges(sheet, leaves.length);
     // 数值型布局/格式字段的前置校验：缺了这层，非法 width/freezeRows 会直通
     // 引擎并以晦涩的 serde 错误失败（"JSON parse error: invalid type: null,

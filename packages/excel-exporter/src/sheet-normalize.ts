@@ -9,8 +9,31 @@ import { columnProp, flattenColumnTree } from "./column-tree";
  * the legacy `key` alias is reserved too (every other consumer reads the field
  * alias-aware; a prop-only check would treat `key: "__index__"` as a normal
  * column and silently read it from `data`).
+ *
+ * `exportExcel` 对**用户自带的**该 prop 一律报错，与是否启用 `indexColumn`
+ * 无关（见 assertNoReservedIndexProp）。低层构建器仍保留"手写即行号列"的
+ * 语义——它们不做输入校验，调用方本就该知道自己在写保留列。
  */
 export const INDEX_PROP = "__index__";
+
+/**
+ * 保留列冲突检查。构建器（`WorkbookBuilder.addSheet` / `fast-xlsx`）对
+ * INDEX_PROP 的特判是**无条件**的：只要叶子列的 prop（或 legacy `key`）命中，
+ * 该列的值就由行号生成、永不读 `data`。因此用户自带的 `__index__` 列不是
+ * "报错"而是"数据被静默顶替、success 仍为 true"。
+ *
+ * `exportExcel`（validateInput）与 `applyIndexColumn` 共用本判定——原先该检查
+ * 只存在于 `applyIndexColumn` 内，而它在未启用 `indexColumn` 时直接返回原表，
+ * 于是那条静默路径正好漏在最外层入口上。主入口下用户不可能"有意"手写该列
+ * （要序号列应声明 `indexColumn`），故报错不会误伤。
+ */
+export function assertNoReservedIndexProp(leaves: ColumnConfig[]): void {
+  if (leaves.some((c) => columnProp(c) === INDEX_PROP)) {
+    throw new Error(
+      `[excel-exporter] column prop "${INDEX_PROP}" is reserved for the index column; rename your column or drop indexColumn`,
+    );
+  }
+}
 
 /**
  * First number shown on the index column. Read from the (possibly boolean)
@@ -37,13 +60,9 @@ export function applyIndexColumn(sheet: SheetConfig): SheetConfig {
     sheet.indexColumn === true ? {} : sheet.indexColumn;
 
   // 同名 prop 冲突宁可报错：序号列的值由行号生成、不读 data，用户列若撞名
-  // 会被静默遮蔽成序号——数据悄悄丢失比报错更糟。
-  const { leaves } = flattenColumnTree(sheet.columns);
-  if (leaves.some((c) => columnProp(c) === INDEX_PROP)) {
-    throw new Error(
-      `[excel-exporter] column prop "${INDEX_PROP}" is reserved for the index column; rename your column or drop indexColumn`,
-    );
-  }
+  // 会被静默遮蔽成序号——数据悄悄丢失比报错更糟。（exportExcel 路径上
+  // validateInput 已先拦一次；此处保证直接调用本函数的调用方同样拿到报错。）
+  assertNoReservedIndexProp(flattenColumnTree(sheet.columns).leaves);
 
   const column: ColumnConfig = {
     prop: INDEX_PROP,

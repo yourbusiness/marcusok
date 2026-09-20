@@ -211,7 +211,12 @@ Number-spec cross-path notes (see `ColumnConfig.format` in [`src/types.ts`](./sr
 
 ### Fallback
 
-When the browser Worker route fails (missing/404 worker asset, WASM init error inside the Worker, timeout), the library first **retries on the main thread** with modern-xlsx — styles are preserved. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to the **pure-JS fast stream** — no WASM, no network, headers and merges preserved, styles stripped. A successful degraded export carries `result.error` (with `success: true`) describing the degradation, and each degradation step prints an `[excel-exporter]` console warning — check `result.error` to monitor the fallback rate.
+When the browser Worker route fails (missing/404 worker asset, WASM init error inside the Worker, timeout), the recovery depends on which engine that route was running:
+
+- **Worker + Workbook** (browser 20,000 – 49,999 rows): the library first **retries on the main thread** with modern-xlsx — styles are preserved. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to the **pure-JS fast stream** — no WASM, no network, headers and merges preserved, styles stripped. A successful degraded export carries `result.error` (with `success: true`) describing the degradation.
+- **Worker + Fast stream** (browser ≥ 50,000 rows, or an explicit `mode: "stream"`): the retry on the main thread _is_ the same fast stream on the identical input, so there are no styles left to preserve and nothing further to degrade to. A retry failure is terminal — the export resolves with `success: false` instead of attempting a doomed third build.
+
+Either way the caller's promise resolves rather than rejects, and each degradation step prints an `[excel-exporter]` console warning — check `result.error` to monitor the fallback rate.
 
 ### Progress Overlay
 

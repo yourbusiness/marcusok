@@ -3981,11 +3981,12 @@ pnpm add @marcusok/excel-exporter
 
 > **v2.10 注**：2.0.0 起本包**零运行时依赖**（modern-xlsx JS 胶水与 fflate 构建期打包进产物，WASM 随包发布），消费方无需再安装 `modern-xlsx`；SheetJS 兜底已移除，`xlsx` 亦无需安装（终局兜底为包内纯 JS 快速流）。旧文「peerDep 必装 + optional xlsx」口径作废。
 
-### 6.2 浏览器资源解析（2.0 起零配置）
+### 6.2 浏览器资源解析（2.0 起零配置；Vite dev 需 exclude，见下）
 
 两份资源（`modern-xlsx.wasm` 约 1.9MB、`export.worker.js` 自包含 Worker 脚本）随包发布，默认按 `new URL(<file>, import.meta.url)` 相对包入口解析：
 
-- **打包器**（Vite dev 预打包与生产构建——已在 Vite 8 验证；webpack 5 文档同样支持该资产模式）会重写该表达式并产出哈希资产：无需插件、无需 `?url`、无需拷贝到 `public/`；
+- **生产构建**（Vite / webpack 5——已在 Vite 8 验证；webpack 5 文档同样支持该资产模式）会重写该表达式并产出哈希资产：无需插件、无需 `?url`、无需拷贝到 `public/`；
+- **Vite dev 是例外**（见 README「Bundlers」段与文档站 guide/02-installation 的同一说明）：`optimizeDeps` 依赖预打包**不**重写产物内的该表达式，URL 会指向 `/node_modules/.vite/deps/` 下并不存在的文件——HTML 兜底返回页面而非 wasm，编译失败后导出**静默降级为无样式 stream**（样式/列宽/冻结全丢，`result.error` 为 `Fallback: styles stripped`）。`export.worker.js` 走同一机制、同样受影响，因此不限小数据量。修法二选一：`vite.config.ts` 里 `optimizeDeps: { exclude: ["@marcusok/excel-exporter"] }`（重启 dev server），或改用下方 `?url` 显式接线；
 - **Node** 从安装目录磁盘读取二进制并同步初始化（`initWasmSync`，见 4.5 `tryNodeAutoInit`），无 fetch、无样板代码。
 
 `configureWasm` 保留为可选兜底（自托管 CDN、Service Worker 环境、无资产 URL 支持的打包器）；带资产导入的打包器也可显式接线（pre-2.0 推荐写法，仍受支持）：

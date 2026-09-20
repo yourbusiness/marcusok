@@ -587,6 +587,31 @@ describe("indexColumn validation", () => {
     expect(r.error?.message).toMatch(/is reserved for the index column/);
   });
 
+  // 回归：构建器对 INDEX_PROP 的特判是**无条件**的（只按 prop 判定即写行号、
+  // 永不读 data），而冲突检查原先只在 applyIndexColumn 内——它在未启用
+  // indexColumn 时直接 return sheet。于是不开 indexColumn 的用户自带的
+  // `__index__` 列会被行号静默顶替、数据丢失且 success 仍为 true。检查上移到
+  // validateInput 后，两条路由都必须在构建前以结构化错误失败。
+  it("rejects the reserved index prop even when indexColumn is not enabled", async () => {
+    for (const mode of ["main", "stream"] as const) {
+      const r = await exportExcel({
+        filename: "prop-clash-no-index",
+        download: false,
+        mode,
+        sheets: [
+          baseSheet({
+            columns: [
+              { prop: "__index__", label: "ID" },
+              { prop: "a", label: "A" },
+            ],
+          }),
+        ],
+      });
+      expect(r.success).toBe(false);
+      expect(r.error?.message).toMatch(/is reserved for the index column/);
+    }
+  });
+
   // 回归：序号列在 validateInput 之后才由 applyIndexColumn 注入，width 曾因此
   // 绕过早前的 col.width 校验——NaN 会以 serde 错误让整份导出降级为无样式
   // stream（success 仍为 true），与 >=50k 路由静默忽略 width 的行为分裂。
