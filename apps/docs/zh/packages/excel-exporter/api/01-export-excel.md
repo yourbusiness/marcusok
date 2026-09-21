@@ -68,4 +68,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> 入口还重导出了若干底层工具与类型（如 `format-utils` 的 `applyFormat` / `validateSheetName`、`LoaderOptions` / `LoadState`、`BorderStyle` 等），本文档只覆盖常用的稳定 API，完整列表见 `src/index.ts`。另有两条用于按需拆分的子路径：`@marcusok/excel-exporter/styles`（独立的 `StylePresets` 入口，主入口也重导出它）与 `@marcusok/excel-exporter/worker-utils`（`exportInWorker` / `terminateWorker`，源入口 `src/worker-exporter.ts`——主入口不提供）。
+> 入口还重导出了若干底层工具与类型（如 `format-utils` 的 `applyFormat` / `validateSheetName`、`LoaderOptions` / `LoadState`、`BorderStyle` 等），本文档只覆盖常用的稳定 API，完整列表见 `src/index.ts`。另有三条用于按需拆分的子路径：`@marcusok/excel-exporter/styles`（独立的 `StylePresets` 入口，主入口也重导出它）、`@marcusok/excel-exporter/worker-utils`（`exportInWorker` / `terminateWorker`，源入口 `src/worker-exporter.ts`——主入口不提供）与 `@marcusok/excel-exporter/overlay`（`exportExcelWithOverlay` / `showExportOverlay`，源入口 `src/overlay.ts`——见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)）。

@@ -148,6 +148,23 @@ describe("遮罩生命周期", () => {
     vi.advanceTimersByTime(1_000);
     expect(root()).toBeNull();
   });
+
+  it("并发下延迟定时器揭开遮罩时，文案取当前驱动者的（回归：曾泄漏发起者的文案）", () => {
+    // A 先 show：refs=1，挂 200ms 的 revealTimer（闭包携带 A 的文案）
+    const a = show({ delayMs: 200, text: { title: "A 的导出" } });
+    // B 再 show：refs=2，跳过延迟门控（只有首个调用方起定时器），driver 换成 B
+    const b = show({ text: { title: "B 的导出" } });
+    expect(root()).toBeNull(); // A 的 delayMs 未到，遮罩未显示
+
+    a.close(); // refs 2->1：close 提前返回，A 的 revealTimer 仍然存活
+    vi.advanceTimersByTime(200); // 定时器到点揭开——内容必须属于 B
+    expect(root()).not.toBeNull();
+    expect(root()!.querySelector(".mxe-title")!.textContent).toBe("B 的导出");
+
+    b.close();
+    vi.advanceTimersByTime(1_000);
+    expect(root()).toBeNull();
+  });
 });
 
 describe("遮罩渲染", () => {

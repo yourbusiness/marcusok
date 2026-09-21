@@ -61,7 +61,7 @@ jobs:
           # participate in the cache key (slow, and flaky with symlinks).
           # Hash the whole packages/ tree (not just excel-exporter): any
           # package can contribute registry data to the docs site.
-          key: ${{ runner.os }}-vitepress-${{ hashFiles('pnpm-lock.yaml', 'apps/docs/**/*.md', 'apps/docs/**/*.{ts,vue,css}', 'apps/docs/package.json', 'apps/docs/turbo.json', 'packages/**/package.json', 'packages/**/src/**/*.ts') }}
+          key: ${{ runner.os }}-vitepress-${{ hashFiles('pnpm-lock.yaml', 'apps/docs/**/*.md', 'apps/docs/**/*.{ts,vue,css}', 'apps/docs/package.json', 'packages/**/package.json', 'packages/**/src/**/*.ts') }}
           restore-keys: |
             ${{ runner.os }}-vitepress-
 

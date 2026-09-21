@@ -52,6 +52,9 @@ export class WorkbookBuilder {
     // Same validation as the stream path: invalid merge input must
     // fail with a clear error, not zip a corrupt workbook.
     validateMerges(config, leaves.length);
+    // 表名校验前移到数据映射之前：非法表名此前要白付一次 O(rows×cols)
+    // 的行映射才报错（校验本身与数据无关）。
+    validateSheetName(config.name);
 
     // Auto-inject an Excel numFormat for typed FormatSpecs (date/datetime/number)
     // so the cell renders correctly without forcing the caller to also set
@@ -79,7 +82,6 @@ export class WorkbookBuilder {
     );
     const aoa = [...headerGrid, ...rows];
 
-    validateSheetName(config.name);
     const ws = this.wb.addSheet(config.name);
     sheetAddAoa(ws, aoa, { origin: "A1" });
 

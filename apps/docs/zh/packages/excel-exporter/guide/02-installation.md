@@ -63,7 +63,7 @@ configureWasm({ wasmUrl, workerUrl });
 
 Vite 开发服务器用 esbuild 把依赖预构建进 `/node_modules/.vite/deps/`。预构建产物里 `import.meta.url` 指向 `.vite/deps/` 下的 chunk，`new URL("./modern-xlsx.wasm", import.meta.url)` 因此解析到 `/node_modules/.vite/deps/modern-xlsx.wasm`——一个不存在的路径。Vite 的 HTML fallback（对 `Accept: text/html` **和** `Accept: */*` 都生效——普通 `fetch` 发的是后者）会用 `index.html` 应答该请求（HTTP 200，`text/html`；`appType: 'mpa'` 项目下则是 404——原因相同、修复相同），WASM 拿 HTML 字节去编译即失败（`expected magic word 00 61 73 6d, found 3c 21 64 6f`——`3c 21 64 6f` 即 `<!doctype html>` 开头的 `<!do`），随后导出**静默降级为无样式流式路径**：文件照常下载、`result.success` 为 `true`，但样式、列宽、冻结窗格、自动筛选全部丢失，`result.error` 里带 `Fallback: styles stripped (fast stream)`。
 
-影响范围：**`vite build` 不受影响**——生产构建管线会把 wasm 正确发射为 hash 资产，只有开发服务器 + 默认 `optimizeDeps` 会踩坑。worker 资源（`export.worker.js`，auto 模式 ≥ 20,000 行）走同一套定位机制、同样会失败，所以该问题不限小数据量导出。一个诊断陷阱：首次尝试失败后，后续导出的 Reason 只显示 `WASM load previously failed` 而非原始错误——真实原因只出现在**第一次**导出（或刷新页面后首次导出）的 console 警告里。
+影响范围：**`vite build` 不受影响**——生产构建管线会把 wasm 正确发射为 hash 资产，只有开发服务器 + 默认 `optimizeDeps` 会踩坑。worker 资源（`export.worker.js`，auto 模式 ≥ 20,000 行）走同一套定位机制、同样会失败，所以该问题不限小数据量导出。一个诊断陷阱：首次尝试失败后，后续导出的 Reason 只显示 `WASM load previously failed` 而非原始错误——真实原因只出现在**第一次**导出（或刷新页面后首次导出）的 console 警告里。一个例外：慢网络下底层加载可能在所有重试都超时**之后**才成功，此时 loader 会自动恢复为 ready，后续导出重新走完整样式路径，无需调用 `configureWasm`（"previously failed" 报错也随之消失）。
 
 修复——在 `vite.config.ts` 中把本包排除出预构建：
 

@@ -125,7 +125,12 @@ export interface ColumnConfig {
   width?: number;
   /** Style applied to all data cells in this column (not the header). Leaf columns only. */
   style?: CellStyle;
-  /** Style applied to this column's header cell(s). Takes precedence over SheetConfig.headerStyle. */
+  /**
+   * Style applied to this column's header cell(s) (group header cells
+   * included). **Replaces** `SheetConfig.headerStyle` wholesale when present —
+   * unlike `style`, which deep-merges over `dataStyle` field by field (see
+   * style-utils.ts: deliberately asymmetric).
+   */
   headerStyle?: CellStyle;
   /**
    * Value formatter: FormatSpec (worker-compatible) or function (main-thread
@@ -199,7 +204,10 @@ export interface SheetConfig {
    * the same content.
    */
   data: Record<string, unknown>[];
-  /** Style applied to every header cell, unless overridden by ColumnConfig.headerStyle. */
+  /**
+   * Style applied to every header cell. A column-level `headerStyle` replaces
+   * this wholesale when present (no field-level merge — see ColumnConfig.headerStyle).
+   */
   headerStyle?: CellStyle;
   /**
    * Base style applied to every data cell; a column's own `style` is

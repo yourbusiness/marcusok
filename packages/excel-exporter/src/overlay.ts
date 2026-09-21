@@ -238,6 +238,20 @@ interface OverlayDom {
   bar: HTMLDivElement;
   fill: HTMLDivElement;
   label: HTMLDivElement;
+  title: HTMLDivElement;
+  hint: HTMLDivElement;
+}
+
+/**
+ * 当前驱动渲染的状态机与其文案，**配对不可拆**：并发导出共用一份遮罩、
+ * 以最后更新者为准，但揭开的定时器（revealTimer）可能属于另一个已 close
+ * 的调用方——渲染时若取定时器发起者的文案，会把前一个导出的 title/hint
+ * 泄漏给当前驱动者。状态与文案绑成一体后，无论哪个定时器触发 reveal，
+ * 用的都是当前 driver 自己的文案。
+ */
+interface OverlayDriver {
+  state: OverlayState;
+  text: Required<OverlayTextOptions>;
 }
 
 function createDom(cfg: ResolvedOptions): OverlayDom {
@@ -288,7 +302,7 @@ function createDom(cfg: ResolvedOptions): OverlayDom {
 
   panel.append(title, bar, label, hint);
   root.appendChild(panel);
-  return { root, bar, fill, label };
+  return { root, bar, fill, label, title, hint };
 }
 
 function render(
@@ -307,6 +321,11 @@ function render(
   } else {
     dom.bar.removeAttribute("aria-valuenow");
   }
+  // title/hint 与 label 一样随当前 driver 刷新：DOM 是并发导出共享的单例，
+  // createDom 时写入的是创建者的文案，接管者若不重写，后来者会一直看着
+  // 前一个导出的标题。同样仅在变化时写，避免无谓的 DOM 变更。
+  if (dom.title.textContent !== text.title) dom.title.textContent = text.title;
+  if (dom.hint.textContent !== text.hint) dom.hint.textContent = text.hint;
   const next = text[snap.label];
   // 仅在变化时写：该节点是 aria-live 区域，重复写同一文本会被读屏重复播报。
   if (dom.label.textContent !== next) dom.label.textContent = next;
@@ -320,8 +339,8 @@ interface ActiveOverlay {
   container: HTMLElement;
   dom: OverlayDom;
   refs: number;
-  /** 当前驱动渲染的状态机（最后一次 show / progress / phase 的实例）。 */
-  driver: OverlayState | null;
+  /** 当前驱动渲染的状态机+文案（最后一次 show / progress / phase 的实例）。 */
+  driver: OverlayDriver | null;
   /** 延迟显示定时器。close 时必须清掉，否则导出比 delayMs 快时它会迟到弹出。 */
   revealTimer: ReturnType<typeof setTimeout> | null;
   unmountTimer: ReturnType<typeof setTimeout> | null;
@@ -351,11 +370,13 @@ function teardown(h: ActiveOverlay, fadeOutMs: number): void {
   }, fadeOutMs);
 }
 
-function reveal(h: ActiveOverlay, text: Required<OverlayTextOptions>): void {
+function reveal(h: ActiveOverlay): void {
   h.revealTimer = null;
   if (h.refs <= 0 || h.revealed || !h.driver) return;
   h.revealed = true;
-  render(h.dom, h.driver.reveal(), text);
+  // 文案取当前 driver 的（见 OverlayDriver 注释）：定时器可能由一个已
+  // close 的并发调用方挂起，它只负责"到点揭开"，不决定内容。
+  render(h.dom, h.driver.state.reveal(), h.driver.text);
   if (!h.dom.root.isConnected) h.container.appendChild(h.dom.root);
   // 先落 opacity:0 再强制样式计算，再置 1——不这样做首帧就是终值，过渡不生效。
   h.dom.root.style.opacity = "0";
@@ -432,7 +453,7 @@ export function showExportOverlay(
         container: cfg.container,
         dom: createDom(cfg),
         refs: 0,
-        driver: state,
+        driver: { state, text: cfg.text },
         revealTimer: null,
         unmountTimer: null,
         fadeTimer: null,
@@ -449,15 +470,18 @@ export function showExportOverlay(
     const wasFadingOut = h.fadeTimer !== null;
     clearTimer(h.fadeTimer);
     h.fadeTimer = null;
-    h.driver = state;
+    h.driver = { state, text: cfg.text };
     h.refs += 1;
 
     if (h.refs === 1 && !h.revealed) {
       const remaining = state.delayRemaining();
-      if (remaining <= 0) reveal(h, cfg.text);
+      // reveal 不携带本次 cfg.text：并发下第二个调用方会跳过这段（refs>1），
+      // 到点揭开遮罩的定时器属于第一个调用方，而它可能已 close——内容必须
+      // 取当时的 driver（最后更新者），不能取定时器发起者的文案。
+      if (remaining <= 0) reveal(h);
       else
         h.revealTimer = setTimeout(() => {
-          reveal(h, cfg.text);
+          reveal(h);
         }, remaining);
     } else if (wasFadingOut) {
       h.dom.root.style.opacity = "1";
@@ -469,7 +493,7 @@ export function showExportOverlay(
         // 遮罩的任何异常都不允许影响导出：整块吞掉。
         try {
           if (closed || active !== h) return;
-          h.driver = state;
+          h.driver = { state, text: cfg.text };
           const snap = state.progress(progress);
           if (snap && h.revealed) render(h.dom, snap, cfg.text);
         } catch {
@@ -479,7 +503,7 @@ export function showExportOverlay(
       handlePhase: (phase: ExportPhase): void => {
         try {
           if (closed || active !== h) return;
-          h.driver = state;
+          h.driver = { state, text: cfg.text };
           const snap = state.phase(phase);
           if (snap && h.revealed) render(h.dom, snap, cfg.text);
         } catch {

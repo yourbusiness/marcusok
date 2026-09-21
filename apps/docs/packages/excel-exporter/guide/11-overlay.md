@@ -97,7 +97,7 @@ try {
 
 ## Concurrency
 
-Overlays share one DOM node, reference-counted: concurrent exports render into the same overlay (last writer wins) and it is removed when the last one closes. `exportTable`/`exportExcel` are safe to call concurrently; nothing leaks between runs.
+Overlays share one DOM node, reference-counted: concurrent exports render into the same overlay (last writer wins) and it is removed when the last one closes. `exportTable`/`exportExcel` are safe to call concurrently; nothing leaks between runs. The rendered content (title, hint, label, progress) always belongs to the most recent `show` / progress / phase event's caller — including the moment the delayed reveal fires while its initiating export has already closed. Two consequences of the shared node: a second export started while the overlay is still pending does not get its own `delayMs` gate (the reveal timing follows the first caller's timer), and a second export started while it is already visible takes over the display on its first progress/phase event.
 
 ## Node and SSR
 
