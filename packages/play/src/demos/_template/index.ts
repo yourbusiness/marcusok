@@ -15,7 +15,8 @@
  * 注意：vite.config.ts 会自动为所有 @marcusok/* 包的主入口生成源码别名，
  * 所以 import "@marcusok/your-pkg" 直接走源码，无需额外配置。
  * 前提是包遵循约定提供 src/index.ts（或 src/index.tsx），否则会有启动警告并走 dist。
- * 接入完整性由测试强制校验：pnpm --filter play test。
+ * 接入完整性由测试强制校验：pnpm --filter @marcusok/play test（包名是
+ * scoped 的 @marcusok/play，--filter play 匹配不到）。
  *
  * 如果 demo 有异步操作（定时器、fetch、WebSocket 等），在 React 组件里用
  * useEffect 的 cleanup 清理资源，避免导航离开后残留。参考 excel-exporter demo。

@@ -544,11 +544,25 @@ export function showExportOverlay(
   }
 }
 
-/** 让出一帧（实际两帧，确保样式与布局都已提交）。 */
+/**
+ * 让出一帧（实际两帧，确保样式与布局都已提交）。
+ *
+ * RAF 在不可见页面（后台标签、最小化窗口）中被浏览器完全暂停：没有兜底的
+ * 话，后台触发的导出（定时报表等）会在本 Promise 上永久挂起，finally 里的
+ * close 不执行，遮罩一旦揭开就永不结束。与一个短定时器竞速——等不到绘制就
+ * 继续往下走，可见页面下双 RAF 几乎总是先到，行为不变。
+ */
 function nextPaint(): Promise<void> {
   if (typeof requestAnimationFrame !== "function") return Promise.resolve();
   return new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    requestAnimationFrame(() => requestAnimationFrame(settle));
+    setTimeout(settle, 250);
   });
 }
 

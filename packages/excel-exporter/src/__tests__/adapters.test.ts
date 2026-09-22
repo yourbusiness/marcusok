@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   exportEcharts,
   exportTable,
@@ -261,6 +261,101 @@ describe("echartsToSheet / exportEcharts", () => {
         },
       }),
     ).toThrow(/mixing scatter coordinate data/);
+  });
+
+  it("exports multi-dimensional scatter [x, y, ...dims] via the first two dims, warning once", () => {
+    // ECharts 散点支持多维数组（第三维起供 symbolSize / visualMap）：之前
+    // 只认长度恰为 2 的对子，多维数据静默挤进 name/value 分支、坐标全变 null。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const sheet = echartsToSheet({
+        option: {
+          series: [
+            { name: "点", data: [[1, 2, 9], [3, 4, 8], { value: [5, 6, 7] }] },
+          ],
+        },
+      });
+
+      expect(sheet.columns.map((c) => c.label)).toEqual(["系列", "X", "Y"]);
+      expect(sheet.data).toEqual([
+        { 系列: "点", X: 1, Y: 2 },
+        { 系列: "点", X: 3, Y: 4 },
+        { 系列: "点", X: 5, Y: 6 },
+      ]);
+      // 整次导出告警一次，不是每个数据点一条。
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toMatch(/dimensions beyond/);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("mixes 2-dim and multi-dim scatter in one series without the misleading mixing error", () => {
+    // 两者都是散点坐标拼写：长度不同不得触发 "mixing scatter coordinate
+    // data with name/value data"（用户根本没用 name/value 数据）。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const sheet = echartsToSheet({
+        option: {
+          series: [
+            {
+              name: "s",
+              data: [
+                [1, 2],
+                [3, 4, 5],
+              ],
+            },
+          ],
+        },
+      });
+      expect(sheet.data).toEqual([
+        { 系列: "s", X: 1, Y: 2 },
+        { 系列: "s", X: 3, Y: 4 },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("rejects multiple x/y axes explicitly instead of measuring series against axis[0]", () => {
+    // 双轴图没有单一表格形状：静默取第一根轴会让另一根轴的 series 以
+    // 长度不匹配的错误报出来，误导排障。
+    expect(() =>
+      echartsToSheet({
+        option: {
+          xAxis: [{ data: ["a", "b"] }, { data: ["c", "d"] }],
+          series: [{ name: "s", data: [1, 2] }],
+        },
+      }),
+    ).toThrow(/multiple x axes/);
+
+    expect(() =>
+      echartsToSheet({
+        option: {
+          yAxis: [{ data: ["a", "b"] }, {}],
+          series: [{ name: "s", data: [1, 2] }],
+        },
+      }),
+    ).toThrow(/multiple y axes/);
+  });
+
+  it("takes categories from yAxis.data for horizontal bar charts", () => {
+    // 水平条形图把类目放在 yAxis.data（xAxis 是数值轴、不带 data）：之前
+    // 静默落到 name/value 布局，类目列整个丢失、"名称"列退化为行号。
+    const sheet = echartsToSheet({
+      option: {
+        yAxis: { type: "category", data: ["a", "b", "c"] },
+        xAxis: { type: "value" },
+        series: [{ name: "s", type: "bar", data: [1, 2, 3] }],
+      },
+    });
+
+    expect(sheet.columns.map((c) => c.label)).toEqual(["类目", "s"]);
+    expect(sheet.data).toEqual([
+      { 类目: "a", __series_0: 1 },
+      { 类目: "b", __series_0: 2 },
+      { 类目: "c", __series_0: 3 },
+    ]);
   });
 
   it("rejects dataset mode instead of guessing", () => {

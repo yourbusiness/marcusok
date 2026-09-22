@@ -25,7 +25,22 @@ export function toStr(value: unknown): string {
     return String(value);
   if (typeof value === "symbol" || typeof value === "function")
     return String(value);
-  return JSON.stringify(value);
+  // toJSON 可能返回 undefined（不少第三方对象的惯例），JSON.stringify 随之
+  // 返回 undefined，与本函数的 string 契约不符：若放行，undefined 直入 aoa，
+  // modern-xlsx 会跳过该格不建单元格，破坏"数据行稠密"假设——同行右侧列
+  // 的样式错位一格，值也静默丢失。兜底成可见字符串，一个坏对象不丢整格；
+  // 兜底意图就是默认字符串化（"[object Object]"也远好于静默丢值）。
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
+  return JSON.stringify(value) ?? String(value);
+}
+
+/**
+ * 空串/纯空白串在 number 列视同缺失。这是数据库、表单、CSV 导入里最常见的
+ * 缺失值形态，而 `Number("") === 0`（`Number(" ")` 同）会把它静默变成 0——
+ * 0 在财务数据里是有意义的值。与 null/undefined 同等对待（渲染空单元格）。
+ */
+function isBlankString(value: unknown): boolean {
+  return typeof value === "string" && value.trim() === "";
 }
 
 /**
@@ -53,11 +68,11 @@ export function applyFormat(value: unknown, spec: FormatSpec): string | number {
       return d === null ? toStr(value) : dateToSerial(d);
     }
     case "number": {
-      // null/undefined render as an empty cell on every path. Without this
-      // guard Number(null) === 0 would silently turn missing values into 0
-      // while undefined became "" (asymmetric, and 0 is a meaningful value in
-      // financial data).
-      if (value == null) return "";
+      // null/undefined (and blank strings — see isBlankString) render as an
+      // empty cell on every path. Without this guard Number(null) === 0 would
+      // silently turn missing values into 0 while undefined became ""
+      // (asymmetric, and 0 is a meaningful value in financial data).
+      if (value == null || isBlankString(value)) return "";
       const n = Number(value);
       if (!Number.isFinite(n)) return toStr(value);
       // Keep full precision: the stored cell value must not be truncated.
@@ -68,6 +83,9 @@ export function applyFormat(value: unknown, spec: FormatSpec): string | number {
       return n;
     }
     case "padding": {
+      // 缺失值不填充：null 经 toStr 变 ""，padStart 会把空串填成 "00000"
+      // 这类有业务含义的假编号——与 number 分支的缺失守卫对称。
+      if (value == null) return "";
       const s = toStr(value);
       return spec.align === "left"
         ? s.padEnd(spec.length, spec.fill)
@@ -191,10 +209,10 @@ export function displayValue(
       // The stream path has no numFormat support, so the configured
       // decimals must be baked into the displayed value here. The workbook
       // path keeps full precision and renders decimals via numFormat instead.
-      // null/undefined render as an empty cell, mirroring applyFormat (never
-      // Number(null) === 0).
+      // null/undefined/blank strings render as an empty cell, mirroring
+      // applyFormat (never Number(null) === 0 — see isBlankString there).
       const raw = row == null ? undefined : row[columnProp(col) ?? ""];
-      if (raw == null) return "";
+      if (raw == null || isBlankString(raw)) return "";
       const n = Number(raw);
       if (!Number.isFinite(n)) return toStr(raw);
       return Number(n.toFixed(spec.decimals ?? 0));

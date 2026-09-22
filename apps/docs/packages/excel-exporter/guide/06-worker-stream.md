@@ -57,3 +57,13 @@ const bytes = await builder.toBuffer();
 // streaming
 const { bytes, rowCount } = await exportAsStream(sheets, onProgress);
 ```
+
+::: warning
+These lower-level entries only recognize an **already-expanded** `__index__`
+column — unlike `exportExcel`, they do not expand `SheetConfig.indexColumn`
+themselves, so an `indexColumn` on a sheet passed to them directly is silently
+ignored. Call `applyIndexColumn(sheet)` first if you need the row-number column
+on these paths (the same helper `exportExcel` uses internally). See
+[`applyIndexColumn` in the API reference](/packages/excel-exporter/api/01-export-excel)
+for details.
+:::

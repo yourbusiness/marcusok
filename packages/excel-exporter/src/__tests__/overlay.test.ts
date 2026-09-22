@@ -268,6 +268,29 @@ describe("exportExcelWithOverlay", () => {
     await assertion;
     expect(root()).toBeNull();
   });
+
+  it("RAF 永不回调（后台标签页）时靠兜底定时器放行，导出不永久挂起", async () => {
+    // 不可见页面里浏览器完全暂停 RAF：没有兜底的话这个 await 永久挂起、
+    // finally 里的 close 不执行，遮罩一旦揭开就永不结束。
+    vi.stubGlobal("requestAnimationFrame", () => {});
+    let resolved = false;
+    const tracked = exportExcelWithOverlay(
+      { filename: "x.xlsx", sheets: [] },
+      { delayMs: 0, minVisibleMs: 0, fadeOutMs: 0 },
+    ).then((r) => {
+      resolved = true;
+      return r;
+    });
+    // 兜底定时器（250ms）到点前不得放行——防止测试因别的路径意外 resolve 而失真
+    await vi.advanceTimersByTimeAsync(200);
+    expect(resolved).toBe(false);
+    await vi.advanceTimersByTimeAsync(100);
+    const result = await tracked;
+    expect(resolved).toBe(true);
+    expect(result.success).toBe(true);
+    // finally 的 close 仍然执行，遮罩被移除
+    expect(root()).toBeNull();
+  });
 });
 
 describe("非浏览器环境", () => {

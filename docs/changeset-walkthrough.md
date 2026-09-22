@@ -130,7 +130,7 @@ env:
   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
-- **`GITHUB_TOKEN`**：给 action 用来打 commit、开 PR 的凭证。优先用 `CHANGESETS_GITHUB_TOKEN`（一个 PAT），因为 GitHub 默认 token 触发的事件不会再触发别的 workflow（防递归），用 PAT 能让发版 PR 正常触发 ci.yml。没配 PAT 就退回默认 token，PR 照开但 CI 不跑。
+- **`GITHUB_TOKEN`**：给 action 用来打 commit、开 PR 的凭证。优先用 `CHANGESETS_GITHUB_TOKEN`（一个 PAT），因为 GitHub 默认 token 触发的事件不会再触发别的 workflow（防递归），用 PAT 能让发版 PR 触发其它 workflow（如 deploy）。注意：发版 PR 的 CI 与 PAT 无关——`ci.yml` 对 `changeset-release/**` 分支显式 `branches-ignore`（有意设计，发布链路自带质量门，避免同一套检查跑两遍），配不配 PAT 发版 PR 都不跑 ci.yml（口径与 release.yml 注释、release-guide.md 一致）。
 - **`NPM_TOKEN` / `NODE_AUTH_TOKEN`**：发包认证。`setup-node` 步骤配了 `registry-url`，会写一份 `~/.npmrc`，让 `npm publish` 实际读取 `NODE_AUTH_TOKEN` 这个变量——所以 `NODE_AUTH_TOKEN` 是当前配置下真正生效的那个。`NPM_TOKEN` 也指向同一个 secret，属于冗余（保留它不会出错，但本项目的 publish 链路并不直接读它）。
 - **`NPM_CONFIG_PROVENANCE: "true"`**：让 `npm publish` 自动带上来源签名（provenance）。配合 workflow 顶部的 `permissions.id-token: write`，npm 会用这次构建的来源信息签一份公开声明。前提是仓库 public。
 

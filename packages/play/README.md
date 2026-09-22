@@ -26,9 +26,12 @@ pnpm dev:play
 The difference:
 
 - `pnpm dev`: runs `node scripts/dev.mjs`, which first runs `turbo run build` once
-  (building `excel-exporter` and friends into `dist/`), then starts all three
+  (building `excel-exporter` and friends into `dist/`), then starts all four
   dev services in parallel: excel-exporter's `tsup --watch`, play's `vite`
-  (5173), and docs' `vitepress dev` (5174).
+  (5173), docs' `vitepress dev` (5174), and `vitepress preview` (4174). The
+  preview server serves the docs build snapshot from the initial `turbo run
+build` (it does not watch); use it to check the production build while
+  iterating on docs in `vitepress dev`.
 - `pnpm dev:play`: runs `node scripts/dev.mjs play` — same upstream build, then
   only play's vite.
 
@@ -143,8 +146,10 @@ in the component's `useEffect` cleanup, which runs automatically on navigation
 - Third-party subpaths not exposed via `exports`: add a
   `{ pkg, dir, excludeFromOptimizeDeps }` entry to `externalOverrides` in
   `vite.config.ts` and the resolver rewrites it to the physical file. The list
-  is currently empty — `@marcusok/excel-exporter` >= 2.0 re-publishes its
-  wasm/worker under its own `exports` map (`@marcusok/excel-exporter/dist/*`),
+  is currently empty — `@marcusok/excel-exporter` re-publishes its wasm/worker
+  under its own `exports` map (explicit `./dist/export.worker.js` and
+  `./dist/modern-xlsx.wasm` entries — there is no `./dist/*` wildcard, so a new
+  dist asset must be added to the exports map first),
   so no third-party override is needed.
 - The pure-function resolution/alias logic lives in
   `src/vite/workspace-resolver.ts` with unit-test coverage

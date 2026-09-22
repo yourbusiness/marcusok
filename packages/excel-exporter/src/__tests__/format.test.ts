@@ -62,6 +62,15 @@ describe("applyFormat", () => {
     expect(applyFormat(undefined, { type: "number", decimals: 2 })).toBe("");
   });
 
+  it("number: blank strings are missing values, never Number('') === 0", () => {
+    // 空串/纯空白串是数据库、表单、CSV 导入里最常见的缺失值形态，
+    // Number("") === 0（Number("  ") 同）会把它静默变成有意义的 0。
+    expect(applyFormat("", { type: "number", decimals: 2 })).toBe("");
+    expect(applyFormat("   ", { type: "number", decimals: 2 })).toBe("");
+    // 真正的数字字符串不受影响。
+    expect(applyFormat("42", { type: "number", decimals: 2 })).toBe(42);
+  });
+
   it("padding: left/right align", () => {
     expect(applyFormat(42, { type: "padding", fill: "0", length: 5 })).toBe(
       "00042",
@@ -74,6 +83,17 @@ describe("applyFormat", () => {
         align: "left",
       }),
     ).toBe("ab   ");
+  });
+
+  it("padding: null/undefined render empty instead of a padded fake code", () => {
+    // toStr(null) === ""，不加守卫 padStart 会把空串填成 "00000" 这类有
+    // 业务含义的假编号——与 number 分支的缺失守卫对称。
+    expect(applyFormat(null, { type: "padding", fill: "0", length: 5 })).toBe(
+      "",
+    );
+    expect(
+      applyFormat(undefined, { type: "padding", fill: "0", length: 5 }),
+    ).toBe("");
   });
 
   it("date/datetime: returns Excel serial numbers (numFormat-compatible)", () => {
@@ -257,6 +277,27 @@ describe("displayValue (stream number-decimals baking)", () => {
         { n: undefined },
       ),
     ).toBe("");
+    // 空串/纯空白串同缺失（与 applyFormat 对齐，跨 50k 阈值两路径一致）
+    expect(
+      displayValue(
+        {
+          prop: "n",
+          label: "N",
+          format: { type: "number" as const, decimals: 2 },
+        },
+        { n: "" },
+      ),
+    ).toBe("");
+    expect(
+      displayValue(
+        {
+          prop: "n",
+          label: "N",
+          format: { type: "number" as const, decimals: 2 },
+        },
+        { n: "  " },
+      ),
+    ).toBe("");
   });
 });
 
@@ -272,6 +313,15 @@ describe("toStr / Invalid Date", () => {
     // ...and through a date spec whose value does not parse to a real date.
     expect(applyFormat(new Date(NaN), { type: "date" })).toBe("Invalid Date");
     expect(applyFormat("not a date", { type: "datetime" })).toBe("not a date");
+  });
+
+  it("stringifies a toJSON: () => undefined object instead of returning undefined", () => {
+    // JSON.stringify 对 toJSON 返回 undefined 的对象返回 undefined（违反
+    // toStr 的 string 契约）：undefined 直入 aoa 会让该格不创建，稠密样式
+    // 循环错位一格、值静默丢失。兜底成可见字符串。
+    const tricky = { toJSON: () => undefined };
+    expect(toStr(tricky)).toBe("[object Object]");
+    expect(typeof toStr(tricky)).toBe("string");
   });
 });
 

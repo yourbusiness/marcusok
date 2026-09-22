@@ -1,4 +1,10 @@
-import type { ExportOptions, ExportResult, ExportMode } from "./types";
+import type {
+  CellStyle,
+  ColumnConfig,
+  ExportOptions,
+  ExportResult,
+  ExportMode,
+} from "./types";
 import { WorkbookBuilder } from "./workbook-builder";
 import { exportAsStream } from "./streaming-builder";
 import { exportInWorker } from "./worker-exporter";
@@ -99,6 +105,48 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
 }
 
 /**
+ * 样式数值字段的前置校验（与 freezeRows / width 同类）：非法值（如
+ * textRotation: 270）直通引擎会以晦涩的 serde 错误失败，并把整份导出降级
+ * 为无样式 stream——正是前置校验要消除的"同一错误一边降级一边成功"分裂。
+ * 范围只限 types.ts 明确承诺了取值区间的字段（textRotation 注释 0-180），
+ * 不替引擎承诺未文档化的上限（如 font.size 的 409）。
+ */
+function validateCellStyle(style: CellStyle | undefined, at: string): void {
+  if (!style) return;
+  const rotation = style.alignment?.textRotation;
+  if (
+    rotation !== undefined &&
+    (!Number.isInteger(rotation) || rotation < 0 || rotation > 180)
+  ) {
+    throw new Error(
+      `[excel-exporter] ${at}: alignment.textRotation must be an integer between 0 and 180`,
+    );
+  }
+  const size = style.font?.size;
+  if (
+    size !== undefined &&
+    (typeof size !== "number" || !Number.isFinite(size) || size <= 0)
+  ) {
+    throw new Error(
+      `[excel-exporter] ${at}: font.size must be a finite positive number`,
+    );
+  }
+}
+
+/** 递归校验列树（含分组列）上的样式；分组列的 style 虽被忽略，非法值一并拦截。 */
+function validateColumnStyles(
+  columns: ColumnConfig[],
+  sheetName: string,
+): void {
+  for (const col of columns) {
+    const at = `sheet "${sheetName}" column "${columnLabel(col)}"`;
+    validateCellStyle(col.style, `${at} style`);
+    validateCellStyle(col.headerStyle, `${at} headerStyle`);
+    if (col.children) validateColumnStyles(col.children, sheetName);
+  }
+}
+
+/**
  * Pre-flight validation of user input. Runs the same checks as the
  * Workbook/stream build paths (same functions, same messages), hoisted
  * to the entry so a configuration error fails immediately with `{ success:
@@ -154,6 +202,21 @@ function validateInput(options: ExportOptions): void {
     // 未启用 indexColumn 时它直接返回原表，静默路径正好漏在最外层入口上。
     assertNoReservedIndexProp(leaves);
     validateMerges(sheet, leaves.length);
+    // 样式数值字段（textRotation / font.size）前置校验，覆盖 sheet 级、列级
+    //（含分组列）与 indexColumn 注入列的全部出现点。
+    validateCellStyle(sheet.headerStyle, `sheet "${sheet.name}" headerStyle`);
+    validateCellStyle(sheet.dataStyle, `sheet "${sheet.name}" dataStyle`);
+    validateColumnStyles(sheet.columns, sheet.name);
+    if (typeof sheet.indexColumn === "object" && sheet.indexColumn !== null) {
+      validateCellStyle(
+        sheet.indexColumn.style,
+        `sheet "${sheet.name}" indexColumn style`,
+      );
+      validateCellStyle(
+        sheet.indexColumn.headerStyle,
+        `sheet "${sheet.name}" indexColumn headerStyle`,
+      );
+    }
     // 数值型布局/格式字段的前置校验：缺了这层，非法 width/freezeRows 会直通
     // 引擎并以晦涩的 serde 错误失败（"JSON parse error: invalid type: null,
     // expected f64"），随后整份导出被降级为无样式 stream；而同一输入在

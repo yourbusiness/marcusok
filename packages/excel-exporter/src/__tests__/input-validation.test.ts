@@ -509,6 +509,52 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
       message:
         /column "A" format\.length must be an integer between 0 and 10000/,
     },
+    {
+      label: "textRotation above the documented 0-180 range",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            style: { alignment: { textRotation: 270 } },
+          },
+        ],
+      },
+      message:
+        /column "A" style: alignment\.textRotation must be an integer between 0 and 180/,
+    },
+    {
+      label: "textRotation fractional",
+      sheet: {
+        headerStyle: { alignment: { textRotation: 45.5 } },
+        columns: [{ prop: "a", label: "A" }],
+      },
+      message:
+        /sheet "S" headerStyle: alignment\.textRotation must be an integer between 0 and 180/,
+    },
+    {
+      label: "font.size non-positive",
+      sheet: {
+        dataStyle: { font: { size: 0 } },
+        columns: [{ prop: "a", label: "A" }],
+      },
+      message:
+        /sheet "S" dataStyle: font\.size must be a finite positive number/,
+    },
+    {
+      label: "font.size NaN (JS caller)",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            headerStyle: { font: { size: Number.NaN } },
+          },
+        ],
+      },
+      message:
+        /column "A" headerStyle: font\.size must be a finite positive number/,
+    },
   ];
 
   for (const { label, sheet, message } of cases) {
@@ -542,6 +588,24 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
             { prop: "a", label: "A", width: 0 },
             { prop: "b", label: "B" },
           ],
+        }),
+      ],
+    });
+    expect(r.success).toBe(true);
+    expect(r.error).toBeUndefined();
+  });
+
+  it("style numeric fields at their documented boundaries stay legal", async () => {
+    // textRotation 0/180（types.ts 注释承诺的区间端点）与正的 font.size
+    // 都是合法输入，前置校验不得误伤。
+    const r = await exportExcel({
+      filename: "style-validation-legal",
+      download: false,
+      mode: "main",
+      sheets: [
+        baseSheet({
+          headerStyle: { alignment: { textRotation: 180 } },
+          columns: [{ prop: "a", label: "A", style: { font: { size: 12 } } }],
         }),
       ],
     });

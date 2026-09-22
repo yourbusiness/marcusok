@@ -53,7 +53,7 @@ configureWasm(options: LoaderOptions): void
 - `exportAsStream(sheets, onProgress?)`：底层流式导出，返回 `Promise<{ bytes, rowCount }>`。`indexColumn` 的注意事项同 `WorkbookBuilder`；
 - `applyIndexColumn(sheet)` / `INDEX_PROP`：把 `indexColumn` 展开为最左侧的保留 `__index__` 列（`exportExcel` 内部所做的正是这一步，也是上面两个底层入口唯一的公开补偿手段）；
 - `exportTable(options)`：常见表格数据便捷导出，支持 Element Plus `prop`/`label`（即本库命名）、AntD `dataIndex`/`title` 与旧名 `key`/`header`；sheet 名默认 `"Sheet1"`（可用 `sheetName` 覆盖）；`freezeRows` / `autoFilter` / `merges` / `dataStyle` / `indexColumn` 会透传给 sheet；
-- `exportEcharts(options)`：常见 ECharts 数据便捷导出，支持类目轴多系列、饼图 `name/value`、散点数据两种写法（`[x,y]` 或 `{ value: [x,y] }`）。`layout` 可选 `"wide"`（默认，每系列一列）或 `"long"`（每系列-类目对一行），**仅对类目轴布局有意义**——item 数据（饼图/散点）会忽略它；`xAxis.data` 为空或缺失时走 item（名称/数值）布局。默认 sheet 名（`图表数据`）与表头为中文，可通过 `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader` 覆盖；散点布局的坐标表头是字面量 `X` / `Y`。long/item 布局下表头兼作行键，重复表头会被明确拒绝；
+- `exportEcharts(options)`：常见 ECharts 数据便捷导出，支持类目轴多系列（类目取自 `xAxis.data`；水平条形图取 `yAxis.data`）、饼图 `name/value`、散点数据两种写法（`[x,y]`、`[x,y,...dims]`——多维散点取前两维作 `X`/`Y`，被丢弃的额外维度以一次 console.warn 告知，或 `{ value: [x,y] }`）。`dataset` 模式与多根 x/y 轴会被明确报错拒绝。`layout` 可选 `"wide"`（默认，每系列一列）或 `"long"`（每系列-类目对一行），**仅对类目轴布局有意义**——item 数据（饼图/散点）会忽略它；`xAxis.data` 为空或缺失时走 item（名称/数值）布局。默认 sheet 名（`图表数据`）与表头为中文，可通过 `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader` 覆盖；散点布局的坐标表头是字面量 `X` / `Y`。long/item 布局下表头兼作行键，重复表头会被明确拒绝；
 - `getWasmLoader()`：访问全局 WASM 加载器（状态：idle / loading / ready / error）。
 
 ```ts

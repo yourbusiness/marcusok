@@ -42,7 +42,7 @@ Accepts `Date` / parseable string / timestamp. The Workbook path writes an Excel
 
 Cross-path `thousands`: the Workbook path renders the separator via an auto-injected `#,##0` `numFormat`; the stream path (>= 50,000 rows / degraded exports) cannot use `numFormat` and keeps the cell a **number**, so separators are not visible there (baking them into the value would turn data cells into text and break downstream calculations).
 
-`null`/`undefined` values render as empty cells on every path — never `0`.
+`null`/`undefined` values (and blank/whitespace-only strings — the most common missing-value shape coming out of databases, forms and CSV imports) render as empty cells on every path — never `0`. `padding` treats them the same way: an empty cell, not a padded fake code like `"00000"`.
 
 ### padding
 

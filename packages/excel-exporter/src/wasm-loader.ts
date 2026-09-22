@@ -187,7 +187,16 @@ export class WasmLoader {
       // Test suites mock modern-xlsx with a bare { initWasm } factory; a
       // missing initWasmSync must skip auto-init, not throw a TypeError.
       if (typeof initWasmSync !== "function") return false;
-      const fsNs = await import("node:fs");
+      // esbuild（platform:"browser"，见 tsup.config.ts）会把字面量 "node:fs"
+      // 重写成裸 "fs"——恰是 tsup 配置为 modern-xlsx 消除的那类消费方浏览器
+      // 构建警告源（tsup.config.ts:50-52 注释明确要求本处 import 保留）。
+      // 计算式说明符不参与静态分析，前缀原样进入产物；运行时 join 出来的
+      // 就是同一个 Node 内置模块。@vite-ignore 同理抑制 Vite 的动态导入
+      // 分析警告。
+      const fsSpecifier = ["node:", "fs"].join("");
+      const fsNs = (await import(/* @vite-ignore */ fsSpecifier)) as {
+        readFileSync: (path: string | URL) => Uint8Array;
+      };
       let bytes: Uint8Array;
       try {
         bytes = fsNs.readFileSync(defaultWasmUrl());

@@ -57,3 +57,11 @@ const bytes = await builder.toBuffer();
 // 流式导出
 const { bytes, rowCount } = await exportAsStream(sheets, onProgress);
 ```
+
+::: warning
+这两个底层入口只识别**已展开**的 `__index__` 列——与 `exportExcel` 不同，
+它们不会自行展开 `SheetConfig.indexColumn`，直接传入时该配置会被静默忽略。
+若在这些路径上需要序号列，须先调用 `applyIndexColumn(sheet)`（即
+`exportExcel` 内部使用的同一工具）。详见
+[API 参考中的 `applyIndexColumn`](/zh/packages/excel-exporter/api/01-export-excel)。
+:::

@@ -151,8 +151,13 @@ export interface ColumnConfig {
    * difference is intentional — do not rely on visible separators above the
    * 50k threshold.
    *
-   * `null`/`undefined` values in a `{ type: "number" }` column render as empty
-   * cells on every path (never `0`).
+   * Missing values in numeric-ish specs: `null`/`undefined` (and blank/whitespace-only
+   * strings — the most common missing-value shape coming out of databases, forms
+   * and CSV imports; `Number("") === 0` would silently turn them into a meaningful
+   * `0`) render as empty cells on every path in `{ type: "number" }` columns.
+   * `{ type: "padding" }` likewise leaves them empty instead of padding the empty
+   * string into a fake-looking `"00000"`. `{ type: "enum" }` maps them through the
+   * `""` key like any other value (hit your `fallback` unless `""` is mapped).
    */
   format?:
     | FormatSpec
