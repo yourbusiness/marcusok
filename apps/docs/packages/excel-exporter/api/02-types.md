@@ -20,7 +20,7 @@
 | -------------- | ------------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `prop?`        | `string`                 | leaf columns | Field name on the data row (Element Plus naming); group columns (with `children`) may omit it                                                 |
 | `key?`         | `string`                 | —            | Deprecated alias of `prop` (pre-2.2 naming); `prop` wins when both are present                                                                |
-| `label?`       | `string`                 | yes*         | Header text (leaf and group columns alike); `label` or legacy `header` — exactly one required (*validated at export time)                     |
+| `label?`       | `string`                 | yes*         | Header text (leaf and group columns alike); `label` or legacy `header` — at least one required (*validated at export time)                    |
 | `header?`      | `string`                 | —            | Deprecated alias of `label` (pre-2.2 naming); `label` wins when both are present                                                              |
 | `children?`    | `ColumnConfig[]`         | —            | Group column: produces a multi-row header; its header cell merges across all descendant leaf columns. `children: []` is a leaf                |
 | `width?`       | `number`                 | —            | Column width (Excel character units; `0` hides the column); validated as a finite non-negative number; leaf columns only                      |

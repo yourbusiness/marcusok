@@ -83,9 +83,10 @@ export function applyFormat(value: unknown, spec: FormatSpec): string | number {
       return n;
     }
     case "padding": {
-      // 缺失值不填充：null 经 toStr 变 ""，padStart 会把空串填成 "00000"
-      // 这类有业务含义的假编号——与 number 分支的缺失守卫对称。
-      if (value == null) return "";
+      // 缺失值不填充：null/undefined 与空串/纯空白串（isBlankString，与
+      // number 分支同一判定）都会被 padStart 填成 "00000" 这类有业务含义
+      // 的假编号——与 number 分支的缺失守卫对称。
+      if (value == null || isBlankString(value)) return "";
       const s = toStr(value);
       return spec.align === "left"
         ? s.padEnd(spec.length, spec.fill)

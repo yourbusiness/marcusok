@@ -96,6 +96,20 @@ describe("applyFormat", () => {
     ).toBe("");
   });
 
+  it("padding: blank strings are missing values, never a padded fake code", () => {
+    // 与 number 分支同一判定（isBlankString）：空串/纯空白串是数据库、表单、
+    // CSV 里最常见的缺失值形态，padStart 会把它们填成 "00000" 这类有业务
+    // 含义的假编号——文档承诺渲染空单元格。
+    expect(applyFormat("", { type: "padding", fill: "0", length: 5 })).toBe("");
+    expect(applyFormat("   ", { type: "padding", fill: "0", length: 5 })).toBe(
+      "",
+    );
+    // 有内容的值照常填充，不受影响。
+    expect(applyFormat("42", { type: "padding", fill: "0", length: 5 })).toBe(
+      "00042",
+    );
+  });
+
   it("date/datetime: returns Excel serial numbers (numFormat-compatible)", () => {
     const d = new Date(2025, 0, 5, 14, 30);
     const s = applyFormat(d, { type: "date" });

@@ -111,5 +111,5 @@ try {
 
 ## 相关内容
 
-- [进度与阶段回调](./10-advanced#progress-and-phase-callbacks)——底层的 `onProgress` / `onPhase` 契约。
+- [进度与阶段回调](./10-advanced#进度与阶段回调)——底层的 `onProgress` / `onPhase` 契约。
 - [Worker 与 stream 模式](./06-worker-stream)——给定行数会走哪条路由。

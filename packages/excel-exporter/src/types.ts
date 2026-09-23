@@ -156,8 +156,10 @@ export interface ColumnConfig {
    * and CSV imports; `Number("") === 0` would silently turn them into a meaningful
    * `0`) render as empty cells on every path in `{ type: "number" }` columns.
    * `{ type: "padding" }` likewise leaves them empty instead of padding the empty
-   * string into a fake-looking `"00000"`. `{ type: "enum" }` maps them through the
-   * `""` key like any other value (hit your `fallback` unless `""` is mapped).
+   * string into a fake-looking `"00000"`. `{ type: "enum" }` maps them like any
+   * other value: `null`/`undefined` and `""` through the `""` key, a whitespace
+   * string through its own literal text (hit your `fallback` unless that key is
+   * mapped).
    */
   format?:
     | FormatSpec
