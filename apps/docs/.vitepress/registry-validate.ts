@@ -1,5 +1,5 @@
 import docsAppPkg from "../package.json" with { type: "json" };
-import { packages } from "./registry";
+import { PACKAGE_CATEGORIES, packages } from "./registry";
 
 const RESERVED_STAT_KEYS = new Set(["packages"]);
 
@@ -33,6 +33,13 @@ export function validateRegistry(): void {
     if (!SAFE_DIR_RE.test(p.dir)) {
       throw new Error(
         `[registry] "${p.npmName}": dir "${p.dir}" must match ${SAFE_DIR_RE}`,
+      );
+    }
+    // 分类必须是已登记的大类：拼错的值会静默落进错误的导航分组
+    if (!PACKAGE_CATEGORIES.some((c) => c.id === p.category)) {
+      throw new Error(
+        `[registry] "${p.npmName}": unknown category "${p.category}" ` +
+          `(known: ${PACKAGE_CATEGORIES.map((c) => c.id).join(", ")})`,
       );
     }
     if (!Object.hasOwn(declaredDeps, p.npmName)) {

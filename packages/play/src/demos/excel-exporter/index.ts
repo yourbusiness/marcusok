@@ -5,6 +5,7 @@ const GROUP = "excel-exporter";
 
 registerDemo({
   name: "excel-exporter",
+  category: "export", // 大类：导出
   label: "excel-exporter — Excel 导出引擎",
   menuLabel: "性能对比",
   group: GROUP,
@@ -21,6 +22,7 @@ registerDemo({
 // 为键），样式预览与导出共用同一份 SheetConfig。
 registerDemo({
   name: "excel-exporter-styles",
+  category: "export",
   label: "excel-exporter — 样式系统演示",
   menuLabel: "样式系统",
   group: GROUP,

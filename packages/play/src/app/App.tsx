@@ -25,12 +25,12 @@ import {
 import type { MenuProps } from "antd";
 import {
   AppstoreOutlined,
-  ArrowLeftOutlined,
   ExperimentOutlined,
   MoonOutlined,
   SunOutlined,
 } from "@ant-design/icons";
 import {
+  demosByCategory,
   getDemos,
   groupDemos,
   groupRepresentative,
@@ -54,28 +54,41 @@ export function AppShell() {
   const demos = useMemo(() => getDemos(), []);
   const activeDemo = demos.find((demo) => demo.name === route);
 
-  // 声明了 group 的 demo 聚合为子菜单（父项 key 带 group: 前缀、仅作展开
-  // 容器不可导航）；未分组的保持一级菜单。分组顺序按注册先后顺序。
+  // 菜单按大类分区：分类用 group 型菜单项渲染为小节标题（不可折叠、
+  // 不可点击），分类内仍按 group 聚合为子菜单（父项 key 带 group: 前缀、
+  // 仅作展开容器不可导航），未分组的保持一级菜单。空大类不产出分区。
   const { menuItems, groupKeys } = useMemo(() => {
-    const { groups, ungrouped } = groupDemos(demos);
-    const items: MenuProps["items"] = [
-      { key: "home", icon: <AppstoreOutlined />, label: "概览" },
-      ...groups.map(([group, children]) => ({
-        key: `group:${group}`,
-        icon: <ExperimentOutlined />,
-        label: group,
-        children: children.map((demo) => ({
+    const keys: string[] = [];
+    const buildSectionItems = (list: DemoEntry[]): MenuProps["items"] => {
+      const { groups, ungrouped } = groupDemos(list);
+      keys.push(...groups.map(([g]) => `group:${g}`));
+      return [
+        ...groups.map(([group, children]) => ({
+          key: `group:${group}`,
+          icon: <ExperimentOutlined />,
+          label: group,
+          children: children.map((demo) => ({
+            key: demo.name,
+            label: demo.menuLabel ?? demo.label,
+          })),
+        })),
+        ...ungrouped.map((demo) => ({
           key: demo.name,
+          icon: <ExperimentOutlined />,
           label: demo.menuLabel ?? demo.label,
         })),
-      })),
-      ...ungrouped.map((demo) => ({
-        key: demo.name,
-        icon: <ExperimentOutlined />,
-        label: demo.menuLabel ?? demo.label,
+      ];
+    };
+    const items: MenuProps["items"] = [
+      { key: "home", icon: <AppstoreOutlined />, label: "概览" },
+      ...demosByCategory(demos).map((section) => ({
+        key: `category:${section.category}`,
+        type: "group" as const,
+        label: section.label,
+        children: buildSectionItems(section.demos),
       })),
     ];
-    return { menuItems: items, groupKeys: groups.map(([g]) => `group:${g}`) };
+    return { menuItems: items, groupKeys: keys };
   }, [demos]);
 
   const navigate = (key: string): void => {
@@ -194,13 +207,10 @@ export function AppShell() {
 
 function HomePage({ onOpen }: { onOpen: (name: string) => void }) {
   const demos = getDemos();
-  // 一个包一张卡：分组 demo 收敛为代表 demo（name === group 的包级页面，
-  // 如 excel-exporter 的性能对比），点击卡片即进入该默认页
-  const { groups, ungrouped } = groupDemos(demos);
-  const cards: DemoEntry[] = [
-    ...groups.map(([group, children]) => groupRepresentative(group, children)),
-    ...ungrouped,
-  ];
+  // 首页按大类分区：每个分类一个区块（类标题 + 卡片网格），区内一个包
+  // 一张卡——分组 demo 收敛为代表 demo（name === group 的包级页面，如
+  // excel-exporter 的性能对比），点击卡片即进入该默认页
+  const sections = demosByCategory(demos);
   return (
     <Space orientation="vertical" size={24} style={{ width: "100%" }}>
       <div>
@@ -212,7 +222,7 @@ function HomePage({ onOpen }: { onOpen: (name: string) => void }) {
           API、性能与降级行为。
         </Typography.Paragraph>
       </div>
-      {cards.length === 0 ? (
+      {demos.length === 0 ? (
         <Alert
           type="info"
           showIcon
@@ -220,27 +230,46 @@ function HomePage({ onOpen }: { onOpen: (name: string) => void }) {
           description="在 src/demos/<pkg>/index.ts 里调用 registerDemo() 后即可在此显示。"
         />
       ) : (
-        <Row gutter={[16, 16]}>
-          {cards.map((demo) => (
-            <Col xs={24} md={12} xl={8} key={demo.name}>
-              <Card
-                hoverable
-                style={{ height: "100%" }}
-                onClick={() => onOpen(demo.name)}
+        sections.map((section) => {
+          const { groups, ungrouped } = groupDemos(section.demos);
+          const cards: DemoEntry[] = [
+            ...groups.map(([group, children]) =>
+              groupRepresentative(group, children),
+            ),
+            ...ungrouped,
+          ];
+          return (
+            <div key={section.category}>
+              <Typography.Title
+                level={4}
+                style={{ marginTop: 0, marginBottom: 12 }}
               >
-                <Card.Meta
-                  avatar={
-                    <ExperimentOutlined
-                      style={{ fontSize: 26, color: "#6366f1" }}
-                    />
-                  }
-                  title={demo.label}
-                  description={demo.description ?? "暂无描述"}
-                />
-              </Card>
-            </Col>
-          ))}
-        </Row>
+                {section.label}
+              </Typography.Title>
+              <Row gutter={[16, 16]}>
+                {cards.map((demo) => (
+                  <Col xs={24} md={12} xl={8} key={demo.name}>
+                    <Card
+                      hoverable
+                      style={{ height: "100%" }}
+                      onClick={() => onOpen(demo.name)}
+                    >
+                      <Card.Meta
+                        avatar={
+                          <ExperimentOutlined
+                            style={{ fontSize: 26, color: "#6366f1" }}
+                          />
+                        }
+                        title={demo.label}
+                        description={demo.description ?? "暂无描述"}
+                      />
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            </div>
+          );
+        })
       )}
     </Space>
   );
@@ -263,15 +292,13 @@ function DemoPage({ name, onBack }: { name: string; onBack: () => void }) {
     );
   }
 
-  return <DemoDetail demo={demo} onBack={onBack} />;
+  return <DemoDetail demo={demo} />;
 }
 
-function DemoDetail({ demo, onBack }: { demo: DemoEntry; onBack: () => void }) {
+// 详情页不放返回按钮：侧边栏菜单常驻，任何页面都可直达，按钮冗余
+function DemoDetail({ demo }: { demo: DemoEntry }) {
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
-        返回概览
-      </Button>
       <div>
         <Typography.Title level={3} style={{ marginBottom: 4 }}>
           {demo.label}

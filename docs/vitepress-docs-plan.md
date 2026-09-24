@@ -94,7 +94,7 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 ├─ turbo.json                            # extends ["//"]，覆写 build.outputs
 ├─ .vitepress/
 │  ├─ config.ts                          # 站点配置：base、title、nav、sidebar、search、lastUpdated
-│  ├─ registry.ts                        # ★ 包注册表：包名/描述/版本/图标/文档目录 → 自动生成导航与首页卡片
+│  ├─ registry.ts                        # ★ 包注册表：包名/所属分类/描述/版本/图标/文档目录 → 自动生成导航与首页卡片
 │  └─ theme/
 │     ├─ index.ts                        # 扩展默认主题（布局插槽、全局组件）
 │     ├─ components/                     # 自定义 Vue 组件（见 §6）
@@ -116,8 +116,8 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 ### 新增包的约定（可拓展性核心）
 
 1. 在 `apps/docs/packages/<name>/` 建文档目录（guide / examples / api）；
-2. 在 `.vitepress/registry.ts` 增加一条记录（npm 名、简介、版本来源、目录、关键词）；
-3. 侧边栏、顶部导航、首页包卡片**全部由 registry 自动生成**，无需再改三处；
+2. 在 `.vitepress/registry.ts` 增加一条记录（npm 名、所属分类 category、简介、版本来源、目录、关键词）——分类目前两大类：导出（export）/ 文档预览（preview），定义在 registry 的 PACKAGE_CATEGORIES，只作元数据、不落物理目录；
+3. 侧边栏、顶部导航、首页包卡片**全部由 registry 自动生成**（包区按分类分组，空分类不渲染），无需再改三处；
 4. 包版本号在构建期从 `packages/<name>/package.json` 读取，**不手工硬编码**，发版后文档自动同步。
 
 ## 5. 内容规划（第一版）

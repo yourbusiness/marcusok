@@ -80,10 +80,43 @@ export interface BenchmarkSeries {
   series: BenchmarkSeriesDef[];
 }
 
+/**
+ * 包大类：导出（现有 excel-exporter，后续或补其他文档类型导出）/
+ * 文档预览。分类只是注册表里的元数据，不落物理目录——目录结构仍按
+ * packages/<name> 平铺，避免破坏各处按目录名工作的链接与约定。
+ */
+export type PackageCategory = "export" | "preview";
+
+export interface PackageCategoryDef {
+  id: PackageCategory;
+  label: LocalizedText;
+}
+
+/** 全部分类（含展示顺序与双语文案）：导航、侧边栏与首页卡片共用。 */
+export const PACKAGE_CATEGORIES: PackageCategoryDef[] = [
+  { id: "export", label: { zh: "导出", en: "Export" } },
+  { id: "preview", label: { zh: "文档预览", en: "Document Preview" } },
+];
+
+/**
+ * 按大类聚包（分类保持 PACKAGE_CATEGORIES 顺序，包保持注册顺序）。
+ * 没有包的大类不产出分组——尚无交付包的分类不渲染空标题。
+ */
+export function groupPackagesByCategory(
+  pkgs: readonly PackageEntry[],
+): { category: PackageCategoryDef; pkgs: PackageEntry[] }[] {
+  return PACKAGE_CATEGORIES.flatMap((category) => {
+    const matched = pkgs.filter((p) => p.category === category.id);
+    return matched.length > 0 ? [{ category, pkgs: matched }] : [];
+  });
+}
+
 export interface PackageEntry {
   /** Directory name under the docs root: packages/<dir>/*.md */
   dir: string;
   npmName: string;
+  /** 包所属大类：导航、侧边栏与首页卡片按它分组（见 PACKAGE_CATEGORIES）。 */
+  category: PackageCategory;
   version: string;
   status: "stable" | "beta" | "alpha";
   tagline: LocalizedText;
@@ -176,14 +209,16 @@ export function getAllHomeStats(
 /**
  * Package registry — the single source of truth for the docs site.
  * Adding a new package: add it to apps/docs/package.json dependencies,
- * create packages/<dir>/ markdown, then append one entry here. Sidebar, nav,
- * home cards, highlights and stats are generated from this list. Version is
- * read from the package's own package.json (single source of truth).
+ * create packages/<dir>/ markdown, then append one entry here (declaring
+ * its `category`). Sidebar, nav, home cards, highlights and stats are
+ * generated from this list. Version is read from the package's own
+ * package.json (single source of truth).
  */
 export const packages: PackageEntry[] = [
   {
     dir: "excel-exporter",
     npmName: "@marcusok/excel-exporter",
+    category: "export",
     version: excelExporterPkg.version,
     status: "stable",
     zh: true,

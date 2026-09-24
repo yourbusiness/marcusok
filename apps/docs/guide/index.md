@@ -4,9 +4,9 @@
 
 ## Current packages
 
-| Package                                                 | Status | Description                                                                                                  |
-| ------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------ |
-| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback |
+| Package                                                 | Category | Status | Description                                                                                                  |
+| ------------------------------------------------------- | -------- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback |
 
 ## Engineering conventions
 
@@ -20,10 +20,9 @@
 
 ## Roadmap
 
-The ecosystem grows on demand. Planned directions:
+The ecosystem grows on demand and is organized around two package categories:
 
-- PDF export
-- File upload (chunking / progress)
-- Virtual table rendering
+- **Export** — turn application data into downloadable documents. Excel export ([`@marcusok/excel-exporter`](/packages/excel-exporter/)) is available today; other document formats (e.g. PDF) may follow.
+- **Document preview** — preview documents in the browser. Nothing shipped in this category yet.
 
-When a new package ships, register it in `apps/docs/.vitepress/registry.ts` and add its docs; it automatically appears in the navigation, sidebar and home cards.
+When a new package ships, register it in `apps/docs/.vitepress/registry.ts` with its category and add its docs; it automatically appears in the navigation, sidebar and home cards.

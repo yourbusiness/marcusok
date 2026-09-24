@@ -88,9 +88,11 @@ randomness.
 1. Copy `src/demos/_template/` → `src/demos/<your-pkg>/`
 2. Declare `"@marcusok/<your-pkg>": "workspace:*"` in play's `package.json`
    dependencies, then run `pnpm install`
-3. Uncomment the template in `index.ts`, fill in `name` / `label` /
-   `description`, and dynamically import the implementation in `load()`
-   (returning `{ default: React component }`)
+3. Uncomment the template in `index.ts`, fill in `name` / `category` /
+   `label` / `description`, and dynamically import the implementation in
+   `load()` (returning `{ default: React component }`) — `category` is the
+   package category (`"export"` / `"preview"`); the sidebar and home page
+   group demos by it
 4. **Restart the dev server**: `import.meta.glob` is expanded statically at
    startup, so demo directories added at runtime are not discovered (adding a
    demo or renaming one both require a restart)
@@ -107,6 +109,8 @@ non-compliant package fails the suite outright:
 - Every `@marcusok/*` package declared in dependencies must have
   `src/demos/<pkg>/index.ts` registering itself via
   `registerDemo({ name: "<pkg>", ... })`.
+- Every registered demo must declare a known `category` (`"export"` /
+  `"preview"`, mirrored from the docs-site registry).
 
 ### Demo lifecycle
 
@@ -118,6 +122,7 @@ Each demo's `index.ts` entry only registers lightweight metadata (`name` /
 // index.ts — metadata only; do not statically import heavy dependencies here
 registerDemo({
   name: "your-pkg",
+  category: "export", // package category: "export" / "preview"
   label: "your-pkg · summary",
   description: "One sentence on what this demo shows.",
   async load() {

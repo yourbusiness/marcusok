@@ -12,6 +12,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import {
+  groupPackagesByCategory,
   resolvePackageSections,
   type PackageEntry,
   type RuntimeAsset,
@@ -260,24 +261,32 @@ function buildSidebar(
   lang: "zh" | "en",
 ): SidebarItem[] {
   const l = labels[lang];
-  const packageGroups = visiblePackages(lang).map((p) => {
-    const pdir = `packages/${p.dir}`;
-    const sections = resolvePackageSections(p).filter((s) =>
-      existsSync(join(docsRoot, localeDir, pdir, s.id)),
-    );
-    return {
-      text: p.npmName,
+  // 包区按大类分层：分类标题层 + 其下的包组。空分类（如尚无包的
+  // "文档预览"）不产出分组，避免渲染空标题。
+  const categoryGroups = groupPackagesByCategory(visiblePackages(lang)).map(
+    ({ category, pkgs }) => ({
+      text: category.label[lang],
       collapsed: false,
-      items: [
-        { text: l.intro, link: `${linkPrefix}/${pdir}/` },
-        ...sections.map((s) => ({
-          text: s.label[lang],
-          collapsed: s.collapsed ?? false,
-          items: pageItems(localeDir, `${pdir}/${s.id}`, linkPrefix),
-        })),
-      ],
-    };
-  });
+      items: pkgs.map((p) => {
+        const pdir = `packages/${p.dir}`;
+        const sections = resolvePackageSections(p).filter((s) =>
+          existsSync(join(docsRoot, localeDir, pdir, s.id)),
+        );
+        return {
+          text: p.npmName,
+          collapsed: false,
+          items: [
+            { text: l.intro, link: `${linkPrefix}/${pdir}/` },
+            ...sections.map((s) => ({
+              text: s.label[lang],
+              collapsed: s.collapsed ?? false,
+              items: pageItems(localeDir, `${pdir}/${s.id}`, linkPrefix),
+            })),
+          ],
+        };
+      }),
+    }),
+  );
 
   return [
     {
@@ -288,7 +297,7 @@ function buildSidebar(
         { text: l.demo, link: `${linkPrefix}/play` },
       ],
     },
-    ...packageGroups,
+    ...categoryGroups,
   ];
 }
 
@@ -300,10 +309,16 @@ function buildNav(lang: "zh" | "en", linkPrefix: string) {
     { text: l.guide, link: `${linkPrefix}/guide/` },
     {
       text: l.packages,
-      items: visiblePackages(lang).map((p) => ({
-        text: p.npmName,
-        link: `${linkPrefix}/packages/${p.dir}/`,
-      })),
+      // 下拉内按大类分组：分类作小标题（不可点击），空分类不渲染
+      items: groupPackagesByCategory(visiblePackages(lang)).map(
+        ({ category, pkgs }) => ({
+          text: category.label[lang],
+          items: pkgs.map((p) => ({
+            text: p.npmName,
+            link: `${linkPrefix}/packages/${p.dir}/`,
+          })),
+        }),
+      ),
     },
     { text: l.demo, link: `${linkPrefix}/play` },
   ];

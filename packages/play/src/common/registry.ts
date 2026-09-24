@@ -1,7 +1,22 @@
 import type { ComponentType } from "react";
 
+/**
+ * 包大类，与文档站 registry 的分类口径一致（导出 / 文档预览）。
+ * category 管包所属大类（侧边栏与首页按它分区），与 group（包内 demo
+ * 聚合为子菜单）正交。
+ */
+export type DemoCategory = "export" | "preview";
+
+/** 全部分类与菜单文案（含展示顺序），新增分类时在此登记。 */
+export const DEMO_CATEGORIES: { id: DemoCategory; label: string }[] = [
+  { id: "export", label: "导出" },
+  { id: "preview", label: "文档预览" },
+];
+
 export interface DemoEntry {
   name: string;
+  /** 包所属大类：侧边栏与首页按它分区（见 DEMO_CATEGORIES）。 */
+  category: DemoCategory;
   label: string;
   /** 一句话说明这个 demo 演示什么，展示在首页卡片与详情页头部。 */
   description?: string;
@@ -44,6 +59,27 @@ export function registerDemo(entry: DemoEntry): void {
 
 export function getDemos(): readonly DemoEntry[] {
   return [...demos.values()];
+}
+
+export interface DemoCategorySection {
+  category: DemoCategory;
+  label: string;
+  demos: DemoEntry[];
+}
+
+/**
+ * 按大类分区（保持 DEMO_CATEGORIES 顺序、区内保持注册顺序）。
+ * 没有包的大类不产出分区——空分类不渲染标题。
+ */
+export function demosByCategory(
+  entries: readonly DemoEntry[],
+): DemoCategorySection[] {
+  return DEMO_CATEGORIES.flatMap((c) => {
+    const matched = entries.filter((d) => d.category === c.id);
+    return matched.length > 0
+      ? [{ category: c.id, label: c.label, demos: matched }]
+      : [];
+  });
 }
 
 /**

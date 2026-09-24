@@ -2,7 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { getDemos, groupDemos, groupRepresentative } from "../common/registry";
+import {
+  DEMO_CATEGORIES,
+  demosByCategory,
+  getDemos,
+  groupDemos,
+  groupRepresentative,
+} from "../common/registry";
 import type { DemoEntry } from "../common/registry";
 
 const packageRoot = resolve(
@@ -62,11 +68,32 @@ describe("demo registration completeness", () => {
     const names = getDemos().map((demo) => demo.name);
     expect(names).not.toContain("_template");
   });
+
+  it("every registered demo declares a known category", () => {
+    const valid = new Set(DEMO_CATEGORIES.map((c) => c.id));
+    for (const demo of getDemos()) {
+      expect(
+        valid.has(demo.category),
+        `demo "${demo.name}" 的 category "${demo.category}" 不在 DEMO_CATEGORIES 内`,
+      ).toBe(true);
+    }
+  });
+
+  it("the preview placeholder keeps the doc-preview menu section visible", () => {
+    // "文档预览"分区依赖一个 preview 类的占位 demo（空分类不渲染）；
+    // 占位被删时菜单与首页的该分区会一并消失，此断言用于拦截误删。
+    const sections = demosByCategory(getDemos());
+    expect(
+      sections.map((s) => s.category),
+      "缺少 preview 分类的 demo：文档预览分区将从菜单与首页消失",
+    ).toContain("preview");
+  });
 });
 
 describe("groupDemos", () => {
   const demo = (name: string, group?: string): DemoEntry => ({
     name,
+    category: "export",
     label: name,
     ...(group !== undefined && { group }),
     load: () => Promise.reject(new Error("test stub")),

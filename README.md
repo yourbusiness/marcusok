@@ -1,12 +1,12 @@
 # marcusok
 
-A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. The first shared package is an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM); PDF export, file upload, virtual table rendering and more will follow.
+A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Packages are organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser, planned).
 
 ## Packages
 
-| Package                                                 | Description                                                                                                      |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](./packages/excel-exporter) | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters) |
+| Package                                                 | Category | Description                                                                                                      |
+| ------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](./packages/excel-exporter) | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters) |
 
 ## Quick Start
 
@@ -41,7 +41,7 @@ marcusok/
 ├── apps/                       # Applications (scales horizontally)
 │   └── docs/                   # VitePress public docs site (English default + Chinese, GitHub Pages)
 ├── packages/                   # Shared packages (scales horizontally)
-│   ├── excel-exporter/         # Current: Excel export
+│   ├── excel-exporter/         # Export category: Excel export
 │   │   ├── src/                # Source (incl. workers/ entry) and __tests__/
 │   │   └── dist/               # tsup build output
 │   └── play/                   # Local integration sandbox (React 19 + antd 6, private package)
@@ -65,6 +65,7 @@ marcusok/
 3. Reuse the repo-root `tsconfig.base.json` and `eslint.config.mjs` for cross-package shared config (there is no `packages/_shared/` yet; extract one when a real need arises).
 4. Turborepo's `^build` dependency graph handles build order automatically; new packages require no CI/CD changes.
 5. Changesets releases each package independently — nothing blocks anything else.
+6. Declare the package's category (`export` / `preview`) in the docs registry (`apps/docs/.vitepress/registry.ts`) so the docs site groups it correctly; categories live only in that registry, not in the directory layout.
 
 ## Release Process
 

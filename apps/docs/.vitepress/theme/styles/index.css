@@ -325,6 +325,21 @@
 }
 
 /* --------------------------- package cards --------------------------- */
+/* 分类区块标题：双类选择器（0-2-0）压过主题的 .vp-doc h3（0-1-1），
+ * 避免继承大号字与上边距。 */
+.vp-doc .package-section__title {
+  margin: 28px 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--vp-c-text-2);
+}
+
+/* 区块内网格收紧上边距，与分类标题组成一个视觉组 */
+.vp-doc .package-section .package-grid {
+  margin: 12px 0 0;
+}
+
 .vp-doc .package-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
