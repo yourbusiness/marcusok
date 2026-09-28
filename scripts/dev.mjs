@@ -161,11 +161,15 @@ function spawnTask(key) {
     if (shuttingDown) return;
     if (code === 0 || code === null) {
       console.log(`[${key}] 已退出`);
+      // 正常退出且无剩余服务才立即退：exit(0) 必须收窄在正常分支里——
+      // 异常分支的 shutdown(code) 已在 killAll 里 children.clear()，
+      // 若此处无条件执行会恒成立，用退出码 0 覆盖 process.exitCode = code，
+      // 外层脚本按码判断 pnpm dev 成败时失败被掩盖。
+      if (children.size === 0) process.exit(0);
     } else {
       console.error(`[${key}] 异常退出 (code ${code})，正在停止全部服务…`);
       shutdown(code);
     }
-    if (children.size === 0) process.exit(0);
   });
   return child;
 }

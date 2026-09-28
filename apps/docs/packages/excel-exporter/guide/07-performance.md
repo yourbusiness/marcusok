@@ -1,6 +1,6 @@
 # Performance
 
-Numbers below come from local measurements (real Chrome, 6 mixed-type columns); Node independent-process regression lives in `src/__tests__/performance.test.ts`.
+Numbers below come from local measurements (real Chrome, 6 mixed-type columns). The Node **in-process** regression baseline (SLA 200/500/1000 ms) lives in `src/__tests__/performance.test.ts`; the toBuffer cliff is verified out-of-band via independent processes (see the package README).
 
 ## Benchmarks
 

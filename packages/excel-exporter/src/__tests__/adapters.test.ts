@@ -119,6 +119,30 @@ describe("tableToSheet / exportTable", () => {
     expect(ws.cell("A1").value).toBe("订单号");
     expect(ws.cell("C3").value).toBe(88);
   });
+
+  it("returns a structured failure instead of rejecting on conversion errors", async () => {
+    // 转换期错误（列缺 prop）发生在 exportExcel 之前，原先以裸 reject
+    // 出去——同一份坏输入走 exportExcel 是 {success:false}，走 wrapper
+    // 是 reject，错误契约不一致。现在统一为结构化失败。
+    const result = await exportTable({
+      filename: "table-adapter-bad",
+      columns: [{ title: "无 prop 列" }],
+      data: [],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/has no usable prop/);
+  });
+
+  it("exportEcharts likewise resolves with a structured failure", async () => {
+    const result = await exportEcharts({
+      filename: "echarts-adapter-bad",
+      option: { dataset: { source: [] }, series: [] },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/dataset mode is not supported/);
+  });
 });
 
 describe("echartsToSheet / exportEcharts", () => {
@@ -399,6 +423,45 @@ describe("echartsToSheet / exportEcharts", () => {
       { 类目: "b", __series_0: 2 },
       { 类目: "c", __series_0: 3 },
     ]);
+  });
+
+  it("falls back to yAxis.data when xAxis.data is an empty array", () => {
+    // 动态加载中间态：xAxis.data 已建但为空、yAxis.data 已到。原先 ?? 只挡
+    // nullish，空数组会把 yAxis 类目静默丢弃、落进 item 布局（表形状突变）。
+    const sheet = echartsToSheet({
+      option: {
+        xAxis: { type: "category", data: [] },
+        yAxis: { type: "category", data: ["a", "b"] },
+        series: [{ name: "s", type: "bar", data: [1, 2] }],
+      },
+    });
+
+    expect(sheet.columns.map((c) => c.label)).toEqual(["类目", "s"]);
+    expect(sheet.data).toEqual([
+      { 类目: "a", __series_0: 1 },
+      { 类目: "b", __series_0: 2 },
+    ]);
+  });
+
+  it("rejects sparse series arrays with a clear error instead of a raw TypeError", () => {
+    // series.every((s) => s.data ...) 对 undefined 元素抛裸 TypeError；原先
+    // category 分支用可选链、item 分支没有，两分支防御口径不一。
+    expect(() =>
+      echartsToSheet({ option: { series: [undefined] as never } }),
+    ).toThrow(/option\.series must be an array of series objects/);
+  });
+
+  it("falls back to the default series name for empty-string names", () => {
+    // 空串 name 原先直通 column-tree，只得到不含 series 索引的
+    // "non-empty label" 报错，无从定位。
+    const sheet = echartsToSheet({
+      option: {
+        xAxis: { data: ["A", "B"] },
+        series: [{ name: "", type: "line", data: [1, 2] }],
+      },
+    });
+
+    expect(sheet.columns.map((c) => c.label)).toEqual(["类目", "系列1"]);
   });
 
   it("rejects dataset mode instead of guessing", () => {

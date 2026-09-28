@@ -70,7 +70,9 @@ type ResolvedEChartsSheetInput = EChartsSheetInput & {
 };
 
 function seriesName(series: EChartsSeriesInput, index: number): string {
-  return series.name ?? `系列${index + 1}`;
+  // 空串与 nullish 同等视为未命名：把 "" 传给 column-tree 只会得到不含
+  // series 索引的 "non-empty label" 报错，用户无从定位到具体系列。
+  return series.name || `系列${index + 1}`;
 }
 
 /**
@@ -344,6 +346,18 @@ export function echartsToSheet(input: EChartsSheetInput): SheetConfig {
   if (series.length === 0) {
     throw new Error("[excel-exporter] ECharts option has no series to export.");
   }
+  // series 本身或元素形状校验：稀疏数组（[undefined]）在 item 分支的
+  // series.every((s) => s.data ...) 直接抛裸 TypeError，而 category 分支
+  // 用可选链只把 undefined 报成"长度不匹配"——两分支防御口径不一。入口
+  // 统一拦截，报错能自解释。
+  if (
+    !Array.isArray(series) ||
+    series.some((s) => s == null || typeof s !== "object")
+  ) {
+    throw new Error(
+      "[excel-exporter] ECharts option.series must be an array of series objects (found a non-object element).",
+    );
+  }
 
   // 双轴图（数组多于一根轴）没有单一的列表格形状：静默取第一根轴会让另一根
   // 轴的 series 以长度不匹配的错误报出来，误导排障——显式拒绝。
@@ -362,7 +376,11 @@ export function echartsToSheet(input: EChartsSheetInput): SheetConfig {
   const xAxis = firstAxis(input.option.xAxis, "x");
   const yAxis = firstAxis(input.option.yAxis, "y");
   // 水平条形图把类目放在 yAxis.data（xAxis 是数值轴、不带 data）。
-  const categories = xAxis?.data ?? yAxis?.data;
+  // xAxis.data 为空数组（动态加载中间态）时 ?? 不生效，会把 yAxis 类目
+  // 静默丢弃、落进 item 布局——空数组在此视为"未提供"，回退 yAxis。
+  const xData = xAxis?.data;
+  const categories =
+    Array.isArray(xData) && xData.length > 0 ? xData : yAxis?.data;
 
   if (categories && categories.length > 0) {
     return buildCategorySheet({ ...input, series }, categories);

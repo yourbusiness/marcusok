@@ -1,6 +1,6 @@
 # 性能参考
 
-以下数字为本机实测（真实 Chrome，6 列混合类型数据），用来说明自动路由的取舍依据；Node 独立进程回归见 `src/__tests__/performance.test.ts`。
+以下数字为本机实测（真实 Chrome，6 列混合类型数据），用来说明自动路由的取舍依据。Node **进程内**回归基线（SLA 200/500/1000 ms）在 `src/__tests__/performance.test.ts`；toBuffer 断崖的独立进程验证见包 README。
 
 ## 基准数据
 

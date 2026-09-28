@@ -311,6 +311,55 @@ function validateInput(options: ExportOptions): void {
       }
       if (col.format && typeof col.format === "object") {
         const spec = col.format;
+        // type 枚举校验：拼错的判别值（如 "percent"）会落进 applyFormat 的
+        // default 分支被 toStr 字符串化——数字列整列变文本且 success:true
+        // 零告警，正是 mode 枚举校验注释里要消灭的"显式指定被无声忽略"。
+        // 先取到 string 变量再比较：直接对 spec.type 做全量不等比较会把
+        // spec 收窄成 never，后续分支用不了。
+        const specType: string = spec.type;
+        if (
+          specType !== "number" &&
+          specType !== "date" &&
+          specType !== "datetime" &&
+          specType !== "enum" &&
+          specType !== "padding"
+        ) {
+          throw new Error(
+            `[excel-exporter] column "${columnLabel(col)}" format.type must be one of "number", "date", "datetime", "enum", "padding" (got ${JSON.stringify(specType)})`,
+          );
+        }
+        // enum.map 为必填对象：缺失/null/数组会在渲染期以晦涩 TypeError
+        // （Object.hasOwn 目标非法）直通降级链——与 decimals/length 同类，
+        // 前置拦截且报错能定位到列。
+        if (
+          spec.type === "enum" &&
+          (typeof spec.map !== "object" ||
+            spec.map === null ||
+            Array.isArray(spec.map))
+        ) {
+          throw new Error(
+            `[excel-exporter] column "${columnLabel(col)}" format.map must be an object mapping values to strings`,
+          );
+        }
+        // date/datetime.pattern：非字符串在 formatDateByPattern 的
+        // toLowerCase 即抛裸 TypeError（stream 路径 displayValue 消费）。
+        if (
+          (spec.type === "date" || spec.type === "datetime") &&
+          spec.pattern !== undefined &&
+          typeof spec.pattern !== "string"
+        ) {
+          throw new Error(
+            `[excel-exporter] column "${columnLabel(col)}" format.pattern must be a string`,
+          );
+        }
+        // padding.fill：非字符串不抛错但产出怪输出（padStart 把 fill 先
+        // String() 化再取首字符），与 length 校验同类前置；类型上必填，
+        // undefined 一并拦截。
+        if (spec.type === "padding" && typeof spec.fill !== "string") {
+          throw new Error(
+            `[excel-exporter] column "${columnLabel(col)}" format.fill must be a string`,
+          );
+        }
         // decimals 两路径共享：Workbook 路径拼 numFormat 字符串（任意值都
         // "能出"），stream 路径烧入 toFixed(decimals)——收敛到 toFixed 自身
         // 的 0..100 上限，同一 spec 才不会在 50k 行上下一边成功一边抛错。
@@ -594,7 +643,15 @@ export async function exportExcel(
 export async function exportTable(
   options: TableExportOptions,
 ): Promise<ExportResult> {
-  return exportExcel(tableExportToOptions(options));
+  // 转换期（tableExportToOptions）的结构化错误发生在进入 exportExcel 之前，
+  // 不会落入其内部的结构化 catch——包一层让错误契约与主入口一致
+  // （{success:false, error} 而非裸 reject），同一份坏输入走两条入口
+  // 得到同一种失败形态。
+  try {
+    return await exportExcel(tableExportToOptions(options));
+  } catch (error) {
+    return { success: false, error: error as Error };
+  }
 }
 
 /**
@@ -607,5 +664,10 @@ export async function exportTable(
 export async function exportEcharts(
   options: EChartsExportOptions,
 ): Promise<ExportResult> {
-  return exportExcel(echartsExportToOptions(options));
+  // 同 exportTable：转换期错误统一为结构化失败，不裸 reject。
+  try {
+    return await exportExcel(echartsExportToOptions(options));
+  } catch (error) {
+    return { success: false, error: error as Error };
+  }
 }

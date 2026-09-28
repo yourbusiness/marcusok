@@ -4,6 +4,7 @@ import { WorkbookBuilder } from "../workbook-builder";
 import { exportAsStream } from "../streaming-builder";
 import { StylePresets } from "../style-presets";
 import { applyIndexColumn } from "../sheet-normalize";
+import type { SheetConfig } from "../types";
 import { readBuffer, makeData } from "./setup";
 
 describe("WorkbookBuilder round-trip", () => {
@@ -646,5 +647,41 @@ describe("indexColumn with a multi-row grouped header", () => {
     const ws = wb.getSheet("NullIdx")!;
     expect(ws.cell("A1").value).toBe("名称");
     expect(ws.cell("A2").value).toBe("a");
+  });
+});
+
+describe("empty-string cells are physical blanks on both paths", () => {
+  // 归一后的空串=缺失值（isBlankString 口径）：workbook 路径此前经引擎对
+  // "" 建格（空文本格，ISBLANK()=FALSE），stream 路径跳格（缺失格，
+  // TRUE）——同一份数据跨 50k 阈值会让 COUNTA/ISBLANK 类公式结果漂移，
+  // 违反 types.ts 的跨路径同一性契约。统一为缺失格（无 <c> 元素）。
+  const sheet: SheetConfig = {
+    name: "S",
+    columns: [
+      { prop: "a", label: "A" },
+      { prop: "b", label: "B" },
+    ],
+    data: [
+      { a: 1, b: "x" },
+      { a: 2, b: "" },
+    ],
+  };
+
+  it("workbook path emits no <c> element for an empty string", async () => {
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(sheet);
+    const xml = strFromU8(
+      unzipSync(await builder.toBuffer())["xl/worksheets/sheet1.xml"],
+    );
+    // 第 1 行是表头，B2 有值、B3 为空串 → B3 不建格。
+    expect(xml).toContain('<c r="B2"');
+    expect(xml).not.toContain('<c r="B3"');
+  });
+
+  it("stream path keeps the identical physical shape", async () => {
+    const { bytes } = await exportAsStream([sheet]);
+    const xml = strFromU8(unzipSync(bytes)["xl/worksheets/sheet1.xml"]);
+    expect(xml).toContain('<c r="B2"');
+    expect(xml).not.toContain('<c r="B3"');
   });
 });

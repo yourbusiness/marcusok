@@ -43,6 +43,8 @@
 
 > 🔄 **v2.22（全仓再梳理：echarts 适配器边界两修 + 表名查重对齐 Excel + overlay 建窗兜底，2026-09-28）**：① **代码四处**——`echarts-export.ts` 空 `data` 系列曾误判散点布局（`every()` 在空数组上恒为 true，未加载到数据的饼图/柱图系列导出成 系列/X/Y 空表而非 系列/名称/数值），散点归类改以「确实存在坐标项」（`anyCoordinate`）为准，混合情形的显式拒绝不变；同文件类目布局对对象形式数据点的报错指引修正（旧文案建议 "use long layout"，但该校验在 wide/long 分支之前执行，换 layout 一样报错、指引无效，新文案指引拍平成标量或摘掉类目轴走 item 布局）；`index.ts` 与 `fast-xlsx.ts` 的表名查重改为大小写不敏感（Excel 的唯一性判定同口径，"Sheet1"/"SHEET1" 原可放行产出 Excel 可能要求修复的工作簿而 `success: true`；fast-xlsx 侧非字符串 name 不 `toLowerCase`，把清晰报错留给表名校验）；`overlay.ts` 建窗期渲染兜底（`refs += 1`、driver 入栈之后同步调用的 `render`/`reveal` 若抛错，原会被外层 catch 吞成 `NOOP_HANDLE`，调用方的 `close()` 变空操作、refs 永不归零，已揭示的遮罩永久挂屏拦截交互——现经 `renderSafely` 包裹，渲染异常只影响当帧、后续事件自愈）。② **测试**——新增回归 5 个（空 data/缺 data 归类、双 layout 报错与新文案、大小写变体查重 workbook/stream 两侧），259 全量 / CI 实跑 255。③ **快照同步**——4.8（fast-xlsx 查重段）、4.10（validateInput 查重段）；echarts-export 无嵌入快照，overlay 建窗段为文字描述均不涉及。
 
+> 🔄 **v2.23（全仓再梳理：校验覆盖缺口五处 + 空串跨路径统一 + echarts 边界三处 + wrapper 错误契约，2026-09-28）**：① **代码八处**——`index.ts` validateInput 补 `format.type` 枚举校验（拼错值原落进 `applyFormat` 的 default 分支被 `toStr` 字符串化，数字列整列变文本且 `success: true` 零告警）与 `enum.map`/`date.pattern`/`padding.fill` 形状校验（原先以晦涩 TypeError 走完降级链）；`format-utils.ts` 的 `validateMerges` 补非数组拦截（`merges: {}` 原绕过 `?.length` 放行，两路消费端裸 TypeError 且降级链白跑全量构建）；`workbook-builder.ts` 空串单元格改写物理缺失格（原经引擎对 `""` 建格产出空文本格 `ISBLANK()=FALSE`，与 stream 路径跳格语义相反，同一数据跨 50k 阈值公式结果漂移，违反 `types.ts` 跨路径同一性契约——现归一为 `null`，引擎 `writeAoaRow` 对 null 跳格，三路径统一）；`echarts-export.ts` 三处：稀疏 series 数组入口拦截（item 分支 `series.every((s) => s.data…)` 原对 undefined 元素抛裸 TypeError，与 category 分支可选链防御不一）、`xAxis.data` 为空数组时回退 `yAxis.data`（`??` 挡不住空数组，水平条形图加载中间态原被静默落进 item 布局）、`seriesName` 空串回退默认名（原直通 column-tree 的 non-empty label 报错且不含 series 索引）；`exportTable`/`exportEcharts` 转换期错误统一为结构化失败（原以裸 reject 出去，同一份坏输入走 `exportExcel` 是 `{success:false}`，两条入口契约不一致）。② **工程两处**——`turbo.json` build outputs 补 `.vitepress/dist/**`（docs 包产物原不匹配 `dist/**`，缓存命中时产物不回盘，删产物后 `preview:docs` 直接失败）；`scripts/dev.mjs` 服务异常退出的 `process.exit(0)` 收窄到正常分支（`shutdown(code)` 内 `killAll` 已 `children.clear()`，原无条件 `size===0` 恒成立，失败退出码被 0 覆盖）。③ **快照口径降级**——4.4/4.5/4.10 标题与文末脚注声明快照基准为 2.6.4、以 `src/` 现行代码为准（2.6.5–2.6.8 变更未逐版同步快照，脚注原「快照与源码 diff 一致」声明已失实，撤销）；`release-workflow-analysis.md` 的 release.yml 注释引文更新为现行原文；版本口径 2.6.6 → 2.6.8（release-workflow-analysis / vitepress-docs-plan / 本注）。④ **测试**——新增回归 16 个（校验 9 + 合法边界 1 + echarts/wrapper 5 + 跨路径空格 2），275 全量 / CI 实跑 271。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -808,7 +810,7 @@ packages/excel-exporter/
 
 > **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照曾是 2.4.0 现状（v2.11 自 2.1.1 同步 2.1.3；v2.13 同步 2.1.4：`build` 简化为 `tsup`，wasm 转发移入 tsup 主配置 onSuccess，见 4.2/4.3；v2.16 同步 2.4.0——版本号字段本身由 Changesets 维护，**其余字段自 2.1.4 起未变**）。
 >
-> **v2.17 注（订正上一条的"未变"断言）**：devDependencies 此后新增 `happy-dom`（overlay 的 happy-dom 环境测试引入，见 6.x overlay 章节），"其余字段自 2.1.4 起未变"至此失效；版本号现由 Changesets 推进到 2.6.6。快照不再逐版同步，以 `packages/excel-exporter/package.json` 为准。
+> **v2.17 注（订正上一条的"未变"断言）**：devDependencies 此后新增 `happy-dom`（overlay 的 happy-dom 环境测试引入，见 6.x overlay 章节），"其余字段自 2.1.4 起未变"至此失效；版本号现由 Changesets 推进到 2.6.8。快照不再逐版同步，以 `packages/excel-exporter/package.json` 为准。
 
 **设计要点**：
 
@@ -970,7 +972,7 @@ export default defineConfig([
 >
 > **S5 · Worker 自包含打包的 go/no-go 关卡**：上述「modern-xlsx 打进 worker」的技术路径已做最小验证——esbuild/tsup 打包时，modern-xlsx glue（`dist/modern-xlsx.worker.js` 源码核实）里的 `new URL("modern_xlsx_wasm_bg.wasm", import.meta.url)` 会被**原样保留**（v2.1 核实：worker.js glue 内确实是 `modern_xlsx_wasm_bg.wasm`；但 `dist/modern-xlsx.wasm` 也存在且是主入口 `detectWasmUrl()` 引用的文件，二者并存，见 2.1；实测 esbuild 不报错、不重写、不触发 asset 拷贝，因为 `.wasm` 不在 import graph 里）。运行时 worker 内 `import.meta.url` 指向 `export.worker.js`，本方案靠显式 `initWasm(wasmUrl)` 注入绕过该路径（见 4.9），故不依赖 `import.meta.url` 兜底。**但必须真机验证**：Phase 1 预研阶段需确认 ① tsup 产物 `export.worker.js` 体积合理（预期 modern-xlsx ESM ~133KB + 本库 worker 逻辑）；② `new Worker(url,{type:'module'})` 在 Chrome/Firefox/Safari 均能加载；③ worker 内 `initWasm(wasmUrl)` + `sheetAddAoa` + `wb.toBuffer()` 全链路跑通。若打包阶段报错（如 esbuild 对 wasm-bindgen glue 的 `__wbg_init` 处理异常），备选方案：worker 也 `external: ['modern-xlsx']`，改用运行时 `import(/* @vite-ignore */ url)` 动态加载或 import map（需消费方配合）。
 
-### 4.4 类型定义 + 格式化工具（`types.ts` + `format-utils.ts`）
+### 4.4 类型定义 + 格式化工具（`types.ts` + `format-utils.ts`）— 源码快照（基准 2.6.4，以 `src/` 现行代码为准）
 
 > 以下类型已对齐真实 API。颜色统一使用 **6 位 RGB hex（如 `'FF0000'`）**，与 modern-xlsx 的 `FontData.color` / `FillData.fgColor` 一致（非 `#FF0000`，非 8 位 ARGB）。
 
@@ -1616,7 +1618,7 @@ export function validateMerges(sheet: SheetConfig, leafCount: number): void {
 }
 ```
 
-### 4.5 WASM 加载器（`wasm-loader.ts`）
+### 4.5 WASM 加载器（`wasm-loader.ts`）— 源码快照（基准 2.6.4，以 `src/` 现行代码为准）
 
 设计要点：单例、幂等、超时重试、能力检测降级、Node 自动同步初始化（2.0 起 `tryNodeAutoInit`）、Worker 导出超时可配置（2.1 起 `workerTimeoutMs`）。`initWasm` 本身幂等（README 明确），但叠加超时与重试更稳健。
 
@@ -3012,7 +3014,7 @@ export function terminateWorker(): void {
 > - Worker 内的构建逻辑与主线程 `WorkbookBuilder`/`exportAsStream` 完全等价，无重复实现。
 > - `wb.toBuffer()` / `writer.finish()` 在 Worker 线程执行，主线程零阻塞。
 
-### 4.10 统一入口（`index.ts`）
+### 4.10 统一入口（`index.ts`）— 源码快照（基准 2.6.4，以 `src/` 现行代码为准）
 
 ````ts
 import type { ExportOptions, ExportResult, ExportMode } from "./types";
@@ -4546,7 +4548,7 @@ const blob = new Blob([bytes], {
 
 ---
 
-**文档版本**：v2.22 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-09-28（v2.22：全仓再梳理——echarts 空 data 系列误判散点与类目布局报错指引两修、表名查重对齐 Excel 大小写不敏感口径、overlay 建窗期渲染兜底，新增回归 5 个，测试 259/255；v2.21：overlay 并发渲染内容归属当前驱动者、addSheet 校验顺序、headerStyle 替换语义注释、api/01 子路径 2→3、guide/02+08 补 wasm 自愈例外、guide/11 并发说明、deploy.yml 幽灵引用清理，测试 229/225；v2.18–v2.20：遮罩淡出复用修复与 workerUrl 警告（2.6.1）、wasm 迟到成功自愈（2.6.2）、保留列 **index** 无条件拦截（2.6.3）。历史见顶部版本注与文末修订历史）
+**文档版本**：v2.23 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`；4.4/4.5/4.10 内嵌源码快照基准为 2.6.4，此后不逐版同步，以 `src/` 现行代码为准）｜ **最后更新**：2026-09-28（v2.23：全仓再梳理——validateInput 校验覆盖缺口五处（format.type 枚举/map/pattern/fill/merges 形状）、空串单元格跨路径统一为物理缺失格、echarts 稀疏 series 与空类目数组回退与空名兜底、exportTable/exportEcharts 错误契约对齐、turbo outputs 与 dev.mjs 退出码两处工程修复、快照口径降级（基准 2.6.4、以 src/ 为准），新增回归 16 个，测试 275/271；v2.22：全仓再梳理——echarts 空 data 系列误判散点与类目布局报错指引两修、表名查重对齐 Excel 大小写不敏感口径、overlay 建窗期渲染兜底，新增回归 5 个，测试 259/255；v2.21：overlay 并发渲染内容归属当前驱动者、addSheet 校验顺序、headerStyle 替换语义注释、api/01 子路径 2→3、guide/02+08 补 wasm 自愈例外、guide/11 并发说明、deploy.yml 幽灵引用清理，测试 229/225；v2.18–v2.20：遮罩淡出复用修复与 workerUrl 警告（2.6.1）、wasm 迟到成功自愈（2.6.2）、保留列 **index** 无条件拦截（2.6.3）。历史见顶部版本注与文末修订历史）
 
 ---
 

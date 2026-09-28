@@ -76,7 +76,13 @@ export class WorkbookBuilder {
         // "[object Object]" instead of JSON) and Dates (localized long form
         // instead of ISO) all become the same visible strings on every path.
         if (typeof v === "number") return Number.isFinite(v) ? v : toStr(v);
-        if (typeof v === "string" || typeof v === "boolean") return v;
+        if (typeof v === "boolean") return v;
+        // 归一后的空串 = 缺失值（format-utils 的 isBlankString 口径），写出
+        // 物理缺失格而非空文本格：引擎 writeAoaRow 对 null 跳格（不建 <c>），
+        // 与 stream 路径 fast-xlsx 的 v === "" continue 语义对齐。空文本格
+        // ISBLANK()=FALSE，同一份数据跨 50k 阈值会让 COUNTA/ISBLANK 类公式
+        // 结果漂移，违反 types.ts 的跨路径同一性契约。
+        if (typeof v === "string") return v === "" ? null : v;
         return toStr(v);
       }),
     );

@@ -308,6 +308,16 @@ export function validateSheetName(name: string): void {
  */
 export function validateMerges(sheet: SheetConfig, leafCount: number): void {
   const merges = sheet.merges;
+  // 非数组真值（JS 调用方传 {} 之类）会绕过下方的 ?.length 放行，随后在
+  // 两条构建路径的消费端（workbook 的 merges?.forEach / stream 的
+  // (merges ?? []).map）都以裸 TypeError 失败，且降级链会把 stream 全量
+  // 构建再白跑一遍——与 columns/data 的 Array.isArray 前置拦截对齐。
+  // null/undefined 仍视为未提供（消费端本就安全）。
+  if (merges != null && !Array.isArray(merges)) {
+    throw new Error(
+      `[excel-exporter] sheet "${sheet.name}" merges must be an array of MergeRange`,
+    );
+  }
   if (!merges?.length) return;
   for (let i = 0; i < merges.length; i++) {
     const m = merges[i];

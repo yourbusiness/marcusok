@@ -632,6 +632,90 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
       message:
         /column "A" headerStyle: font\.size must be a finite positive number/,
     },
+    {
+      // 拼错的判别值原先落进 applyFormat 的 default 分支被 toStr 字符串化：
+      // 数字列整列变文本、success:true 零告警。
+      label: "format.type misspelled (JS caller)",
+      sheet: {
+        columns: [
+          { prop: "a", label: "A", format: { type: "percent" } as never },
+        ],
+      },
+      message: /column "A" format\.type must be one of/,
+    },
+    {
+      label: "format.type undefined (JS caller)",
+      sheet: {
+        columns: [{ prop: "a", label: "A", format: {} as never }],
+      },
+      message: /column "A" format\.type must be one of/,
+    },
+    {
+      label: "enum map missing (JS caller)",
+      sheet: {
+        columns: [{ prop: "a", label: "A", format: { type: "enum" } as never }],
+      },
+      message: /column "A" format\.map must be an object/,
+    },
+    {
+      label: "enum map null (JS caller)",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            format: { type: "enum", map: null } as never,
+          },
+        ],
+      },
+      message: /column "A" format\.map must be an object/,
+    },
+    {
+      label: "date pattern non-string (JS caller)",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            format: { type: "date", pattern: 123 } as never,
+          },
+        ],
+      },
+      message: /column "A" format\.pattern must be a string/,
+    },
+    {
+      label: "padding fill non-string (JS caller)",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            format: { type: "padding", fill: 0, length: 4 } as never,
+          },
+        ],
+      },
+      message: /column "A" format\.fill must be a string/,
+    },
+    {
+      label: "padding fill missing (JS caller)",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            format: { type: "padding", length: 4 } as never,
+          },
+        ],
+      },
+      message: /column "A" format\.fill must be a string/,
+    },
+    {
+      // 非数组真值原先绕过 ?.length 放行，随后在两路消费端以裸 TypeError
+      // 失败，且降级链把 stream 全量构建白跑一遍。
+      label: "merges non-array object (JS caller)",
+      sheet: { merges: {} as never },
+      message: /sheet "S" merges must be an array of MergeRange/,
+    },
   ];
 
   for (const { label, sheet, message } of cases) {
@@ -683,6 +767,35 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
         baseSheet({
           headerStyle: { alignment: { textRotation: 180 } },
           columns: [{ prop: "a", label: "A", style: { font: { size: 12 } } }],
+        }),
+      ],
+    });
+    expect(r.success).toBe(true);
+    expect(r.error).toBeUndefined();
+  });
+
+  it("every documented format.type variant stays legal (no false positive)", async () => {
+    // 枚举校验按 FormatSpec 的全部五个变体收窄，任一合法 spec 被误伤都会
+    // 在这里红：date/datetime 的 pattern 可省略（有默认），enum 的 map 是
+    // 必填对象，padding 的 fill/length 必填。
+    const r = await exportExcel({
+      filename: "format-type-legal",
+      download: false,
+      mode: "main",
+      sheets: [
+        baseSheet({
+          columns: [
+            {
+              prop: "a",
+              label: "A",
+              format: { type: "datetime", pattern: "yyyy-MM-dd HH:mm" },
+            },
+            {
+              prop: "b",
+              label: "B",
+              format: { type: "enum", map: { x: "是" }, fallback: "否" },
+            },
+          ],
         }),
       ],
     });

@@ -240,7 +240,7 @@ registry-url: https://registry.npmjs.org
 
 不要以为这是理论，本项目已经实打实发布过了。看 git 历史：
 
-- **git tag（版本标签）**：`@marcusok/excel-exporter@0.1.1`、`@marcusok/excel-exporter@0.1.2`（写作本文时只有这两个；此后随每次发布累积，现已到 2.6.6）。这些 tag 正是 `changeset publish` 自动打的。
+- **git tag（版本标签）**：`@marcusok/excel-exporter@0.1.1`、`@marcusok/excel-exporter@0.1.2`（写作本文时只有这两个；此后随每次发布累积，现已到 2.6.8，不逐版更新此括注、以 `package.json` 为准）。这些 tag 正是 `changeset publish` 自动打的。
 - **真实的发布提交**：`3a5782f chore: release packages`，作者署名是 `github-actions[bot]`（机器人），正好对应 release.yml 里的 `commit: "chore: release packages"`。这条提交做的事，和 changeset 文档描述的一模一样：
   - 删掉了 `.changeset/solid-worlds-design.md`（消化掉那张小纸条）。
   - 更新了 [packages/excel-exporter/CHANGELOG.md](../packages/excel-exporter/CHANGELOG.md)（追加 0.1.2 的更新记录）。
@@ -279,7 +279,9 @@ env:
 
 为什么搞这么复杂？注释里说得很明白：
 
-> `# PAT so the Version PR triggers ci.yml. The default GITHUB_TOKEN is exempt from GitHub's anti-recursion rule (it cannot trigger other workflows).`
+> `# PAT so the Version PR can trigger other workflows: the default`
+> `# GITHUB_TOKEN is exempt from GitHub's anti-recursion rule (it cannot`
+> `# trigger workflows). NOTE this currently buys no CI on that PR --`
 
 翻译成人话：GitHub 有个**防递归规则**——用默认的 `GITHUB_TOKEN` 创建的提交/PR，**不会触发其他 workflow**（比如不会触发 ci.yml）。这是 GitHub 故意的，防止"机器人的动作又触发机器人，无限循环"。
 
