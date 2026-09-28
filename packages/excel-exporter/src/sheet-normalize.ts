@@ -67,8 +67,13 @@ export function applyIndexColumn(sheet: SheetConfig): SheetConfig {
   const column: ColumnConfig = {
     prop: INDEX_PROP,
     label: opt.label ?? "序号",
-    // 用 ?? 而非 ||：width 0 合法（隐藏列），不能被默认值 6 吞掉
-    width: opt.width ?? 6,
+    // width 仅在用户显式给出时写入（width 0 合法隐藏列，用 !== undefined
+    // 判定）：此前无条件注入默认宽 6，会让 stream 路径的
+    // "features not supported (width)" 探测把库自己填的默认值当成用户配置，
+    // 启用 indexColumn 的 stream 导出即使从未设置任何 width 也每次必然告警。
+    // 默认宽 6 是文档承诺的视觉行为，改由真正消费宽度的 Workbook 路径补
+    // （workbook-builder 的 setColumnWidth 处）；stream 路径本就不输出列宽。
+    ...(opt.width !== undefined && { width: opt.width }),
     ...(opt.style !== undefined && { style: opt.style }),
     ...(opt.headerStyle !== undefined && { headerStyle: opt.headerStyle }),
   };

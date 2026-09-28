@@ -337,6 +337,30 @@ describe("toStr / Invalid Date", () => {
     expect(toStr(tricky)).toBe("[object Object]");
     expect(typeof toStr(tricky)).toBe("string");
   });
+
+  it("stringifies a circular object instead of failing the whole export", async () => {
+    // JSON.stringify 对循环引用直接抛 TypeError：不兜底的话一个坏对象
+    // 会弄挂整次导出（≥50k 的 worker-stream 路由还会 worker 与主线程
+    // 重试各白跑一次），与"一个坏对象不丢整格"的注释承诺相反。
+    const row: Record<string, unknown> = { name: "a" };
+    row.self = row; // ORM 实体互指等场景
+    expect(toStr(row)).toBe("[object Object]");
+    expect(typeof toStr(row)).toBe("string");
+
+    // 端到端验证：stream 路径的 displayValue 同样不因循环引用抛错
+    const { exportAsStream } = await import("../streaming-builder");
+    const { bytes } = await exportAsStream([
+      {
+        name: "S",
+        columns: [
+          { prop: "name", label: "N" },
+          { prop: "self", label: "Self" },
+        ],
+        data: [row],
+      },
+    ]);
+    expect(bytes.length).toBeGreaterThan(0);
+  });
 });
 
 describe("validateSheetName", () => {

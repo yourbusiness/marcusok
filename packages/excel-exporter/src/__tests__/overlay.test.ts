@@ -152,7 +152,8 @@ describe("遮罩生命周期", () => {
   it("并发下延迟定时器揭开遮罩时，文案取当前驱动者的（回归：曾泄漏发起者的文案）", () => {
     // A 先 show：refs=1，挂 200ms 的 revealTimer（闭包携带 A 的文案）
     const a = show({ delayMs: 200, text: { title: "A 的导出" } });
-    // B 再 show：refs=2，跳过延迟门控（只有首个调用方起定时器），driver 换成 B
+    // B 再 show：refs=2，与已挂定时器的截止取更晚者（B 的 delayMs=0 不顺延），
+    // driver 换成 B
     const b = show({ text: { title: "B 的导出" } });
     expect(root()).toBeNull(); // A 的 delayMs 未到，遮罩未显示
 
@@ -163,6 +164,67 @@ describe("遮罩生命周期", () => {
 
     b.close();
     vi.advanceTimersByTime(1_000);
+    expect(root()).toBeNull();
+  });
+
+  it("并发接管已显示的遮罩时立即重渲染文案（回归：曾停留前任文案直到新调用方首个有效事件）", () => {
+    const a = show({ text: { title: "A 的导出" } });
+    expect(root()!.querySelector(".mxe-title")!.textContent).toBe("A 的导出");
+    // A 已揭示且仍在导出，B 接管（refs=2）：接管分支此前不渲染，title/
+    // hint/label 会一直显示 A 的，直到 B 收到第一个有效进度/阶段事件。
+    const b = show({ text: { title: "B 的导出" } });
+    expect(root()!.querySelector(".mxe-title")!.textContent).toBe("B 的导出");
+    expect(root()!.querySelector(".mxe-label")!.textContent).toBe("准备中…");
+
+    a.close();
+    b.close();
+    vi.advanceTimersByTime(1_000);
+    expect(root()).toBeNull();
+  });
+
+  it("并发后来者更晚的 delayMs 顺延揭示（回归：揭示曾被前任的定时器提前）", () => {
+    const a = show({ delayMs: 200 });
+    // B 要求 2000ms 内不打扰：揭示截止应取并发调用方中的最晚者
+    const b = show({ delayMs: 2_000 });
+    vi.advanceTimersByTime(1_999);
+    expect(root()).toBeNull(); // A 的 200ms 定时器到点也不得提前揭示
+    vi.advanceTimersByTime(1);
+    expect(root()).not.toBeNull();
+
+    a.close();
+    b.close();
+    vi.advanceTimersByTime(1_000);
+    expect(root()).toBeNull();
+  });
+
+  it("早退调用方挂起的揭示定时器到点时，文案回退到仍活动调用方（回归：曾显示已结束调用方的文案）", () => {
+    // A 挂起 200ms 定时器；B show 后重挂为两者中更晚的截止（遮罩级定时器）
+    const a = show({ delayMs: 200, text: { title: "A 的导出" } });
+    const b = show({ text: { title: "B 的导出" } });
+    // B 先结束（refs 2->1 早退）：driver 必须按栈回退到 A，而非留在已结束的 B
+    b.close();
+    vi.advanceTimersByTime(200);
+    expect(root()).not.toBeNull();
+    expect(root()!.querySelector(".mxe-title")!.textContent).toBe("A 的导出");
+
+    a.close();
+    vi.advanceTimersByTime(1_000);
+    expect(root()).toBeNull();
+  });
+
+  it("并发揭示后末位 close 的最短可见按 DOM 揭示时刻计（回归：曾立即拆台一闪而过）", () => {
+    // A 挂定时器期间 B 接管并成为揭示时的 driver；B 先结束，A 末位 close 时
+    // 自己的 state 从未 reveal——修复前 state.close() 算出 wait=0 立即淡出。
+    const a = show({ delayMs: 200, minVisibleMs: 300, fadeOutMs: 100 });
+    const b = show({ minVisibleMs: 300, fadeOutMs: 100 });
+    vi.advanceTimersByTime(200); // 揭示：内容 driver=B，A 的 state 未记 revealedAt
+    expect(root()).not.toBeNull();
+    b.close();
+    a.close(); // 末位 close：仍须遵守 minVisible（按 h.revealedAt 而非 state_A）
+    expect(root()!.style.opacity).toBe("1"); // 不得立即开始淡出
+    vi.advanceTimersByTime(300);
+    expect(root()!.style.opacity).toBe("0"); // 最短可见到时才开始淡出
+    vi.advanceTimersByTime(100);
     expect(root()).toBeNull();
   });
 });

@@ -28,10 +28,17 @@ export function toStr(value: unknown): string {
   // toJSON 可能返回 undefined（不少第三方对象的惯例），JSON.stringify 随之
   // 返回 undefined，与本函数的 string 契约不符：若放行，undefined 直入 aoa，
   // modern-xlsx 会跳过该格不建单元格，破坏"数据行稠密"假设——同行右侧列
-  // 的样式错位一格，值也静默丢失。兜底成可见字符串，一个坏对象不丢整格；
-  // 兜底意图就是默认字符串化（"[object Object]"也远好于静默丢值）。
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string
-  return JSON.stringify(value) ?? String(value);
+  // 的样式错位一格，值也静默丢失。循环引用对象（ORM 实体互指等）则会让
+  // JSON.stringify 直接抛 TypeError。两种病态都兜底成可见字符串——一个坏
+  // 对象不丢整格、更不能弄挂整次导出；兜底意图就是默认字符串化
+  // （"[object Object]"也远好于静默丢值）。
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
+    return String(value);
+  }
 }
 
 /**

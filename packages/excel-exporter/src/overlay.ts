@@ -341,11 +341,28 @@ interface ActiveOverlay {
   refs: number;
   /** 当前驱动渲染的状态机+文案（最后一次 show / progress / phase 的实例）。 */
   driver: OverlayDriver | null;
+  /**
+   * 按介入顺序的调用方栈（show 压入、close 摘除自己）。并发 close 早退
+   * （refs>0）时 driver 按栈回退到最后介入的仍活动调用方：挂起的揭示
+   * 定时器可能正是早退者发起的，到点揭开时显示的必须是仍活动者的文案。
+   */
+  driverStack: OverlayDriver[];
+  /**
+   * 挂起的揭示定时器的截止时刻（Date.now 基准）。并发后来者的 delayMs 与
+   * 已挂定时器的截止取更晚者——任一活动调用方的 delay 期未过都不揭示。
+   */
+  revealDeadline: number | null;
   /** 延迟显示定时器。close 时必须清掉，否则导出比 delayMs 快时它会迟到弹出。 */
   revealTimer: ReturnType<typeof setTimeout> | null;
   unmountTimer: ReturnType<typeof setTimeout> | null;
   fadeTimer: ReturnType<typeof setTimeout> | null;
   revealed: boolean;
+  /**
+   * 遮罩实际揭示的时刻（DOM 级）。minVisible 按它计算而非各 driver 自己的
+   * state.revealedAt——并发下 reveal 记录在揭示当时的 driver 上，末位
+   * close 者直取自己的 state 会得出 0 而提前拆台（一闪而过）。
+   */
+  revealedAt: number | null;
 }
 
 let active: ActiveOverlay | null = null;
@@ -372,10 +389,13 @@ function teardown(h: ActiveOverlay, fadeOutMs: number): void {
 
 function reveal(h: ActiveOverlay): void {
   h.revealTimer = null;
+  h.revealDeadline = null;
   if (h.refs <= 0 || h.revealed || !h.driver) return;
   h.revealed = true;
+  h.revealedAt = Date.now();
   // 文案取当前 driver 的（见 OverlayDriver 注释）：定时器可能由一个已
-  // close 的并发调用方挂起，它只负责"到点揭开"，不决定内容。
+  // close 的并发调用方挂起（其文案已随 driver 栈回退丢弃），它只负责
+  // "到点揭开"，不决定内容。
   render(h.dom, h.driver.state.reveal(), h.driver.text);
   if (!h.dom.root.isConnected) h.container.appendChild(h.dom.root);
   // 先落 opacity:0 再强制样式计算，再置 1——不这样做首帧就是终值，过渡不生效。
@@ -453,37 +473,57 @@ export function showExportOverlay(
         container: cfg.container,
         dom: createDom(cfg),
         refs: 0,
-        driver: { state, text: cfg.text },
+        driver: null,
+        driverStack: [],
+        revealDeadline: null,
         revealTimer: null,
         unmountTimer: null,
         fadeTimer: null,
         revealed: false,
+        revealedAt: null,
       };
     }
     const h = active;
     // 上一轮挂起的移除（淡出 / 最短可见延时）取消：本次复用同一份 DOM。
     clearTimer(h.unmountTimer);
     h.unmountTimer = null;
-    // teardown 已把 opacity 压到 "0"、摘除只差 fadeTimer 到点——此刻取消淡出
-    // 复用节点却不恢复透明度的话，新导出的遮罩会以 opacity:0 挂完整场（不可见
-    // 且仍在拦截交互）。拉回 "1" 并按新驱动者的初始快照重渲染（回到不确定态）。
-    const wasFadingOut = h.fadeTimer !== null;
+    // teardown 已把 opacity 压到 "0"、摘除只差 fadeTimer 到点——取消淡出后，
+    // 复用节点要在下方分支里恢复 "1" 并重渲染，否则新导出的遮罩会以
+    // opacity:0 挂完整场（不可见且仍在拦截交互）。
     clearTimer(h.fadeTimer);
     h.fadeTimer = null;
-    h.driver = { state, text: cfg.text };
+    // refs 归零后的复用是全新生命周期：栈中理论上已空（每次 close 都摘除
+    // 自己），再清一次兜底上一场可能的异常残留。
+    if (h.refs === 0) h.driverStack.length = 0;
+    const driver: OverlayDriver = { state, text: cfg.text };
+    h.driverStack.push(driver);
+    h.driver = driver;
     h.refs += 1;
 
-    if (h.refs === 1 && !h.revealed) {
-      const remaining = state.delayRemaining();
-      // reveal 不携带本次 cfg.text：并发下第二个调用方会跳过这段（refs>1），
-      // 到点揭开遮罩的定时器属于第一个调用方，而它可能已 close——内容必须
-      // 取当时的 driver（最后更新者），不能取定时器发起者的文案。
-      if (remaining <= 0) reveal(h);
-      else
+    if (!h.revealed) {
+      // 揭示截止取并发调用方中的最晚者：任一活动调用方的 delayMs 未过都
+      // 不揭示——后来者不会被前任已挂的定时器提前揭开，前任时序也不变。
+      const deadline = Date.now() + state.delayRemaining();
+      const merged =
+        h.revealDeadline === null
+          ? deadline
+          : Math.max(h.revealDeadline, deadline);
+      clearTimer(h.revealTimer);
+      h.revealTimer = null;
+      const wait = Math.max(0, merged - Date.now());
+      if (wait === 0) {
+        reveal(h);
+      } else {
+        h.revealDeadline = merged;
         h.revealTimer = setTimeout(() => {
           reveal(h);
-        }, remaining);
-    } else if (wasFadingOut) {
+        }, wait);
+      }
+    } else {
+      // 已揭示：并发接管显示中的遮罩（refs>1），或淡出/最短可见延迟窗口内
+      // 的复活。立即按本次调用方重渲染——从接管的瞬间起，title/hint/label
+      // 不得停留于前任调用方（此前只在淡出复活分支渲染，并发接管分支漏掉，
+      // 文案会停留到新调用方收到第一个有效进度/阶段事件为止）。
       h.dom.root.style.opacity = "1";
       render(h.dom, state.snapshot(), cfg.text);
     }
@@ -493,7 +533,7 @@ export function showExportOverlay(
         // 遮罩的任何异常都不允许影响导出：整块吞掉。
         try {
           if (closed || active !== h) return;
-          h.driver = { state, text: cfg.text };
+          h.driver = driver;
           const snap = state.progress(progress);
           if (snap && h.revealed) render(h.dom, snap, cfg.text);
         } catch {
@@ -503,7 +543,7 @@ export function showExportOverlay(
       handlePhase: (phase: ExportPhase): void => {
         try {
           if (closed || active !== h) return;
-          h.driver = { state, text: cfg.text };
+          h.driver = driver;
           const snap = state.phase(phase);
           if (snap && h.revealed) render(h.dom, snap, cfg.text);
         } catch {
@@ -516,18 +556,36 @@ export function showExportOverlay(
           closed = true;
           if (active !== h) return;
           h.refs -= 1;
-          const wait = state.close();
-          if (h.refs > 0) return;
+          // 从调用方栈摘除自己（末位与否都摘）：并发早退时 driver 才能回退。
+          const stackIndex = h.driverStack.indexOf(driver);
+          if (stackIndex >= 0) h.driverStack.splice(stackIndex, 1);
+          // state.close() 只取其置 closed 的副作用（拒绝本 state 的后续事件），
+          // 返回的 wait 不再使用——minVisible 改按 DOM 揭示时刻（h.revealedAt）
+          // 计算：并发下 reveal 记在揭示当时的 driver 的 state 上，末位 close
+          // 者直取自己的 state 会得出 0 而立即拆台，minVisible 形同虚设。
+          state.close();
+          if (h.refs > 0) {
+            // 并发早退：driver 回退到最后介入的仍活动调用方。挂起的揭示定时
+            // 器可能正是本调用方发起的，到点揭开时必须显示仍活动者的文案，
+            // 而不是已结束的本调用方（否则遮罩会以"已结束导出"的文案挂到
+            // 仍活动导出的全程）。
+            h.driver = h.driverStack[h.driverStack.length - 1] ?? null;
+            return;
+          }
           // 关键：从未显示过时必须清掉延迟定时器，否则它会在 close 之后触发
           // 并把遮罩弹出来（导出比 delayMs 还快时必然发生）。
           clearTimer(h.revealTimer);
           h.revealTimer = null;
+          h.revealDeadline = null;
           if (!h.revealed) {
             // 压根没插进 DOM，无需淡出
             h.driver = null;
             detach(h);
             return;
           }
+          const elapsed =
+            h.revealedAt === null ? Infinity : Date.now() - h.revealedAt;
+          const wait = Math.max(0, cfg.minVisibleMs - elapsed);
           if (wait <= 0) teardown(h, cfg.fadeOutMs);
           else
             h.unmountTimer = setTimeout(() => {

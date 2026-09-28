@@ -105,9 +105,14 @@ export class WorkbookBuilder {
     headerRowCount: number,
     dataRowCount: number,
   ): this {
-    // Column widths (1-based) -- leaf columns only.
+    // Column widths (1-based) -- leaf columns only. The injected index column
+    // carries width only when the user set one (see applyIndexColumn): its
+    // documented default of 6 is applied here, at the only place that consumes
+    // widths -- the stream path never outputs column widths and its
+    // feature-detect must not see the library's own default as user config.
     columns.forEach((c, i) => {
-      if (c.width !== undefined) ws.setColumnWidth(i + 1, c.width);
+      const width = columnProp(c) === INDEX_PROP ? (c.width ?? 6) : c.width;
+      if (width !== undefined) ws.setColumnWidth(i + 1, width);
     });
 
     // Header styles. Column-level headerStyle wins over the sheet-level default.

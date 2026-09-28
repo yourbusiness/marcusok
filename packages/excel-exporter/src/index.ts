@@ -40,6 +40,8 @@ const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const STREAM_THRESHOLD = 50_000; // Workbook.toBuffer cliff starts ~55k rows
 const WORKER_THRESHOLD = 20_000; // main-mode sync work is acceptable below this
+/** validateInput 的 mode 枚举校验用；与 ExportMode 类型一一对应。 */
+const VALID_MODES = new Set<ExportMode>(["auto", "main", "worker", "stream"]);
 
 /**
  * Fire-and-forget browser download. The export itself has already succeeded
@@ -155,6 +157,22 @@ function validateColumnStyles(
  * (WASM unavailable, build errors) still degrade to the stream as before.
  */
 function validateInput(options: ExportOptions): void {
+  // `options` 本身可能为 null/undefined（JS 调用方）：不守住这里，入口处在
+  // try 之前解引用 options 的属性会以裸 TypeError reject，绕过下方承诺的
+  // 结构化 { success: false } 契约。
+  if (options === null || typeof options !== "object") {
+    throw new Error("[excel-exporter] options must be an object");
+  }
+  // mode 是路由的显式意图输入：拼错的枚举值（"Main"/"STREAM"）会被 pickMode
+  // 静默当作 auto 路由，用户的显式指定被无声忽略。与 filename/sheets 等
+  // 字段同一口径前置报错；undefined = 未指定，走 auto。
+  if (options.mode !== undefined && !VALID_MODES.has(options.mode)) {
+    throw new Error(
+      `[excel-exporter] mode must be one of "auto", "main", "worker", "stream" (got ${JSON.stringify(
+        options.mode,
+      )})`,
+    );
+  }
   // Guard the other core input alongside the sheets checks below: without it,
   // a JS caller omitting `filename` only fails inside triggerDownload with a
   // masked TypeError (caught as a cryptic warning), leaving success:true and
@@ -347,7 +365,11 @@ export async function exportExcel(
 
   // Leading 0 fires exactly once here, on every route (the stream fallback
   // included), so consumers always see the documented 0 -> ... -> 1 pair.
-  options.onProgress?.(0);
+  // The outer optional chain also covers a null/undefined `options` from a JS
+  // caller: dereferencing it here (before the try) would reject with a raw
+  // TypeError, bypassing the structured { success: false } contract the
+  // comment below promises; validateInput reports it properly instead.
+  options?.onProgress?.(0);
 
   // Invalid input fails here on every route (same messages as before; the
   // build paths keep their own checks for direct callers). The trailing 1 is
@@ -365,7 +387,9 @@ export async function exportExcel(
     // 拿到的 sheets 已含虚拟列，构建器只需特判 INDEX_PROP 取行号。
     options = { ...options, sheets: options.sheets.map(applyIndexColumn) };
   } catch (e) {
-    options.onProgress?.(1);
+    // options 可能正是校验失败的原因（null/undefined），可选链同入口处的
+    // 首个 0 一样兜住空 options。
+    options?.onProgress?.(1);
     return {
       success: false,
       error: e as Error,

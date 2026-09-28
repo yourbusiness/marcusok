@@ -26,7 +26,7 @@
 | CI/CD     | `.github/workflows/ci.yml`（lint/typecheck/test/build）、`release.yml`（changesets 发布 npm）       |
 | 内部文档  | 根目录 `docs/` 存放设计/流程文档（excel-export-design.md 等），属于内部文档，与公开文档站**不混用** |
 
-> 注：上表为 2026-08-03 规划时的快照。此后 workspace 已加入 `apps/*`，excel-exporter 已发布到 2.x（当前 2.4.0），CI/CD 增加了 `deploy.yml`（文档站部署）。
+> 注：上表为 2026-08-03 规划时的快照。此后 workspace 已加入 `apps/*`，excel-exporter 已发布到 2.x（当前 2.6.6），CI/CD 增加了 `deploy.yml`（文档站部署）。
 
 ### 2.2 excel-exporter 公开 API（文档站内容来源）
 
@@ -172,7 +172,7 @@ apps/docs/                          # workspace 包 @marcusok/docs（private）
 - 自研**确定性生成器**：mulberry32 种子 PRNG + 数据模板（不引入 faker 等额外依赖）；
 - 确定性是关键：VitePress 页面在构建期 SSR，随机数据会导致每次构建内容漂移甚至 hydration 不匹配；种子固定则构建结果稳定、可测试；
 - 提供数据集：销售订单（含金额/状态/日期/区域）、库存台账、人员花名册、多部门销售汇总等，规模参数化（1 千 / 1 万 / 10 万行）；
-- mock 模块同时被文档站 live demo 与示例页复用；配套单元测试（Vitest）校验生成行数与字段完整性（复用仓库现有 Vitest 能力）。
+- mock 模块同时被文档站 live demo 与示例页复用；配套单元测试（Vitest）校验生成行数与字段完整性（**未实施**：apps/docs 的 `test` 目前仅 `check-i18n`，不含任何 Vitest 用例——确定性由固定种子本身保证，测试属规划项）。
 
 ## 8. 部署方案与前置条件
 

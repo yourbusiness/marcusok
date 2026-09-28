@@ -33,14 +33,17 @@ describe("applyIndexColumn", () => {
     expect(applyIndexColumn(falsy)).toBe(falsy);
   });
 
-  it("expands the shorthand true into defaults: 序号 header, width 6, first leaf", () => {
+  it("expands the shorthand true into defaults: 序号 header, first leaf, no width", () => {
     const sheet = baseSheet({ indexColumn: true });
     const out = applyIndexColumn(sheet);
     expect(out.columns).toHaveLength(3);
+    // 不注入默认 width：stream 路径的 "features not supported (width)"
+    // 探测会把库填的默认值误当用户配置，启用 indexColumn 的 stream 导出
+    // 即使零 width 配置也每次必然告警。默认宽 6 由消费宽度的 Workbook
+    // 路径补（workbook-builder 的 setColumnWidth 处，有对应用例覆盖）。
     expect(out.columns[0]).toEqual({
       prop: INDEX_PROP,
       label: "序号",
-      width: 6,
     });
     expect(out.columns[1]).toEqual({ prop: "name", label: "名称" });
     // 原 sheet 不被就地修改（入口归一化后用户对象保持原样）
@@ -146,6 +149,17 @@ describe("index-column helpers exported from the public entry", () => {
     // 值由行号生成（start 10 起），不读 data
     expect(ws.cell("A2").value).toBe(10);
     expect(ws.cell("B2").value).toBe("a");
+  });
+
+  it("the Workbook path still applies the documented default width 6 to the injected column", async () => {
+    // 注入列不再自带 width（否则 stream 路径的 width 探测会把库填的默认值
+    // 误当用户配置而必然告警，见 input-validation 的 stream 用例）：默认宽
+    // 由唯一真正消费宽度的 Workbook 路径在 setColumnWidth 处补。
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(publicApplyIndexColumn(baseSheet({ indexColumn: true })));
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("S")!;
+    expect(ws.columns[0]?.width).toBe(6);
   });
 
   it("a hand-written `key: __index__` column is also driven by the row number", async () => {

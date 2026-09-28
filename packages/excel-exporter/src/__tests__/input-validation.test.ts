@@ -257,6 +257,33 @@ describe("missing or invalid filename", () => {
   });
 });
 
+describe("null/undefined options and invalid mode", () => {
+  // 入口处在 try 之前解引用 options（发首个 0）：不守住这里，null options
+  // 会以裸 TypeError reject，绕过结构化 { success: false } 契约。
+  it("null/undefined options resolves with a structured failure (no throw)", async () => {
+    for (const bad of [null, undefined]) {
+      const r = await exportExcel(bad as never);
+      expect(r.success).toBe(false);
+      expect(r.error?.message).toMatch(/options must be an object/);
+    }
+  });
+
+  it("a misspelled mode is rejected instead of silently routing as auto", async () => {
+    // pickMode 对未知值静默落入 auto 分支：用户的显式意图被无声忽略。
+    const r = await exportExcel({
+      filename: "bad-mode",
+      download: false,
+      // @ts-expect-error runtime JS callers can pass a misspelled mode
+      mode: "Main",
+      sheets: [baseSheet()],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(
+      /mode must be one of "auto", "main", "worker", "stream" \(got "Main"\)/,
+    );
+  });
+});
+
 describe("structurally malformed sheets input", () => {
   // Pre-fix, `totalRows` was reduce()d before validateInput ran, so these
   // shapes rejected the promise with a raw TypeError instead of resolving
@@ -381,6 +408,37 @@ describe("stream feature warnings on nested columns", () => {
       expect(messages).toContain("width");
       expect(messages).toContain("style");
       expect(messages).toContain("headerStyle");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("stream route does not warn (width) for the injected index column's default width", async () => {
+    // 回归：applyIndexColumn 曾给注入列无条件填默认 width 6，启用 indexColumn
+    // 的 stream 导出即使从未配置任何 width 也必然触发 "features not
+    // supported (width)" 误告警。注入列现在不带 width（默认宽由 Workbook
+    // 路径消费时补），只有用户显式配置了宽度才告警。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const r = await exportExcel({
+        filename: "idx-stream-default",
+        download: false,
+        mode: "stream",
+        sheets: [baseSheet({ indexColumn: true })],
+      });
+      expect(r.success).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
+
+      // 对照：用户显式给 indexColumn.width 仍要如实告警（它确实会被丢弃）
+      const r2 = await exportExcel({
+        filename: "idx-stream-explicit",
+        download: false,
+        mode: "stream",
+        sheets: [baseSheet({ indexColumn: { width: 8 } })],
+      });
+      expect(r2.success).toBe(true);
+      const messages = warn.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(messages).toContain("width");
     } finally {
       warn.mockRestore();
     }

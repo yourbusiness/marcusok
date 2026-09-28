@@ -804,7 +804,9 @@ packages/excel-exporter/
 }
 ```
 
-> **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照已是 2.4.0 现状（v2.11 自 2.1.1 同步 2.1.3；v2.13 同步 2.1.4：`build` 简化为 `tsup`，wasm 转发移入 tsup 主配置 onSuccess，见 4.2/4.3；v2.16 同步 2.4.0——版本号字段本身由 Changesets 维护，**其余字段自 2.1.4 起未变**）。
+> **v2.10 注**：2.0.0 起依赖模型变更——**零运行时依赖**（无 `dependencies`/`peerDependencies`；`modern-xlsx` 与 `fflate` 均为 devDependencies，构建期打包进产物），消费方只装本包即可；SheetJS 兜底已移除（终局兜底为包内纯 JS 快速流）。下方快照曾是 2.4.0 现状（v2.11 自 2.1.1 同步 2.1.3；v2.13 同步 2.1.4：`build` 简化为 `tsup`，wasm 转发移入 tsup 主配置 onSuccess，见 4.2/4.3；v2.16 同步 2.4.0——版本号字段本身由 Changesets 维护，**其余字段自 2.1.4 起未变**）。
+>
+> **v2.17 注（订正上一条的"未变"断言）**：devDependencies 此后新增 `happy-dom`（overlay 的 happy-dom 环境测试引入，见 6.x overlay 章节），"其余字段自 2.1.4 起未变"至此失效；版本号现由 Changesets 推进到 2.6.6。快照不再逐版同步，以 `packages/excel-exporter/package.json` 为准。
 
 **设计要点**：
 
@@ -3940,7 +3942,7 @@ if ("requestIdleCallback" in window) {
 >
 > **stream 的样式限制（已知取舍；v2.6 注，v2.12 修正）**：现行 fast-xlsx 完全不产出样式（`style`/`headerStyle` 数据列样式 warn 后丢弃），但**支持多行表头（列树分组）与数据区 `merges`**（输出 `<mergeCells>`，见 4.8 现行源码）；v2.0 时代的 `StreamingXlsxWriter` 也只接受 `StreamingCellInput.style` 数字索引（需配合 `setStylesXml`）。v1 的 stream 路径只支持纯数据，`width`/`freezeRows`/`autoFilter` 等 `SheetConfig` 布局字段在 stream 模式下仅 `console.warn` 后丢弃（见 4.8 现行源码的 skipped 清单）。需要完整样式的大数据导出（≥5万行）在 Phase 1 暂不支持，业务侧需：① 拆分为 <5 万行（≤49,999）/文件走 Workbook；② 或接受纯数据。这是工程取舍，非 bug。
 >
-> **v2.7 注（多级表头与合并）**：fast-xlsx 已支持多行表头（`ColumnConfig.children`）与合并（表头合并 + 数据区 `merges`，输出 `<mergeCells>`），`merges` 已从 skipped 清单移除；stream 仍不支持 `style`/`headerStyle`/`width`/`freezeRows`/`autoFilter`。SheetJS 兜底同样支持多级表头与合并（`!merges`）。扁平列输出与改造前逐字节一致（单格跨度的表头不产生 merge）。
+> **v2.7 注（多级表头与合并）**：fast-xlsx 已支持多行表头（`ColumnConfig.children`）与合并（表头合并 + 数据区 `merges`，输出 `<mergeCells>`），`merges` 已从 skipped 清单移除；stream 仍不支持 `style`/`headerStyle`/`width`/`freezeRows`/`autoFilter`。SheetJS 兜底当时同样支持多级表头与合并（`!merges`；历史口径——SheetJS 兜底已于 2.0.0 移除，见 4.2 的 v2.10 注，现行终局兜底为包内纯 JS 快速流）。扁平列输出与改造前逐字节一致（单格跨度的表头不产生 merge）。
 >
 > **Worker 阈值 20,000 行（v2.6 对齐源码）**：main 模式 1万行4列实测 ~117ms、1万行10列 263ms 全阻塞（toBuffer 占大头）。现行产品决策为 <20,000 行接受主线程短阻塞、≥20,000 行进 Worker（提交 0c0fbd5，v1.8 时代曾为 500）。阈值可由调用方通过 `mode` 显式覆盖。
 
