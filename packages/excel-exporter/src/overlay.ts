@@ -243,6 +243,21 @@ interface OverlayDom {
 }
 
 /**
+ * 建窗/揭示路径上的渲染兜底：show 流程在 `refs += 1`、driver 入栈**之后**才
+ * 同步调用 render/reveal，若让渲染异常逃出建窗 try，外层 catch 会返回
+ * NOOP_HANDLE——调用方的 close() 变成空操作，refs 永远归零不了，已揭示的
+ * 遮罩永久挂屏并持续拦截交互。渲染失败只影响当帧内容（后续 progress/phase
+ * 事件会自愈重渲染），绝不许打断建窗。
+ */
+function renderSafely(run: () => void): void {
+  try {
+    run();
+  } catch {
+    /* 渲染失败不影响导出，也不破坏建窗 */
+  }
+}
+
+/**
  * 当前驱动渲染的状态机与其文案，**配对不可拆**：并发导出共用一份遮罩、
  * 以最后更新者为准，但揭开的定时器（revealTimer）可能属于另一个已 close
  * 的调用方——渲染时若取定时器发起者的文案，会把前一个导出的 title/hint
@@ -512,11 +527,12 @@ export function showExportOverlay(
       h.revealTimer = null;
       const wait = Math.max(0, merged - Date.now());
       if (wait === 0) {
-        reveal(h);
+        renderSafely(() => reveal(h));
       } else {
         h.revealDeadline = merged;
+        // 定时器回调里的渲染异常无人接住（会以 uncaught 上报），同样走兜底。
         h.revealTimer = setTimeout(() => {
-          reveal(h);
+          renderSafely(() => reveal(h));
         }, wait);
       }
     } else {
@@ -525,7 +541,7 @@ export function showExportOverlay(
       // 不得停留于前任调用方（此前只在淡出复活分支渲染，并发接管分支漏掉，
       // 文案会停留到新调用方收到第一个有效进度/阶段事件为止）。
       h.dom.root.style.opacity = "1";
-      render(h.dom, state.snapshot(), cfg.text);
+      renderSafely(() => render(h.dom, state.snapshot(), cfg.text));
     }
 
     return {

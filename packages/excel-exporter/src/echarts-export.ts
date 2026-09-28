@@ -134,8 +134,11 @@ function assertCategoryValue(value: EChartsDatum, context: string): void {
     isCoordinatePair(value) ||
     (value !== null && typeof value === "object")
   ) {
+    // 旧文案建议 "use long layout"——但本校验在 wide/long 分支之前执行，
+    // 换 layout 一样报错，指引无效。有效出路是把数据拍平成标量，或摘掉
+    // 类目轴改走 item 布局（name/value 或散点）。
     throw new Error(
-      `[excel-exporter] unsupported ECharts datum for category layout in ${context}. Use long layout for scatter/pie item data.`,
+      `[excel-exporter] unsupported ECharts datum for category layout in ${context} (object/array data points are not supported with a category axis). Flatten each datum to a scalar, or drop xAxis.data/yAxis.data to export via the item (name/value or scatter) layout.`,
     );
   }
 }
@@ -239,7 +242,11 @@ function buildItemSheet(input: ResolvedEChartsSheetInput): SheetConfig {
     );
   }
 
-  if (allCoordinate) {
+  // 散点归类必须以「确实存在坐标项」为准：空 data（图表尚未加载到数据）上
+  // every() 恒为 true，若按 allCoordinate 归类会把饼图/柱图空系列误判成散点，
+  // 导出一张 系列/X/Y 的空表而不是应有的 系列/名称/数值。混数据情形上面已抛错，
+  // 走到这里 anyCoordinate 为真即等价于全部坐标。
+  if (anyCoordinate) {
     const data: Record<string, unknown>[] = [];
     const xKey = "X";
     const yKey = "Y";

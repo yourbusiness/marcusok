@@ -376,6 +376,25 @@ describe("duplicate sheet names", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("rejects case-variant duplicates like Excel does (workbook path)", async () => {
+    // Excel 的表名唯一性大小写不敏感："S" 与 "s" 同名，放行会产出 Excel
+    // 可能要求修复的工作簿而 success 仍为 true。
+    const r = await exportExcel({
+      filename: "dup-case-main",
+      download: false,
+      mode: "main",
+      sheets: [baseSheet({ name: "S" }), baseSheet({ name: "s" })],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(/duplicate sheet name "s"/);
+  });
+
+  it("rejects case-variant duplicates on the stream path too", async () => {
+    await expect(
+      exportAsStream([baseSheet({ name: "S" }), baseSheet({ name: "s" })]),
+    ).rejects.toThrow(/duplicate sheet name "s"/);
+  });
 });
 
 describe("stream feature warnings on nested columns", () => {

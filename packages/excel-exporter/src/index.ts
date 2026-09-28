@@ -196,10 +196,14 @@ function validateInput(options: ExportOptions): void {
       throw new Error("[excel-exporter] each sheet must be an object");
     }
     validateSheetName(sheet.name);
-    if (seen.has(sheet.name)) {
+    // Excel 的表名唯一性是大小写不敏感的（"Sheet1" 与 "SHEET1" 视为同名，
+    // UI 层就拒绝这样命名），查重须同口径，否则会产出 Excel 可能要求修复的
+    // 工作簿而 success 仍为 true。
+    const nameKey = sheet.name.toLowerCase();
+    if (seen.has(nameKey)) {
       throw new Error(`[excel-exporter] duplicate sheet name "${sheet.name}"`);
     }
-    seen.add(sheet.name);
+    seen.add(nameKey);
     // Guard the two arrays the build paths index into; without these, a sheet
     // missing `columns`/`data` fails downstream with a raw TypeError instead
     // of a clear, actionable message.

@@ -235,15 +235,20 @@ export function exportFastXlsx(
   }
 
   // Duplicate sheet names violate ECMA-376 uniqueness and yield a workbook
-  // Excel flags as corrupt; reject before building anything.
+  // Excel flags as corrupt; reject before building anything. Excel 的唯一性
+  // 判定大小写不敏感（见 exportExcel validateInput 的同口径注释）。
   const seenSheetNames = new Set<string>();
 
   sheets.forEach((config, index) => {
     const sheetNumber = index + 1;
-    if (seenSheetNames.has(config.name)) {
+    // 本检查先于 buildWorksheetXml 里的 validateSheetName 执行：非字符串 name
+    // 不能在此处 toLowerCase 出裸 TypeError，原样入 set，把清晰报错留给表名校验。
+    const nameKey =
+      typeof config.name === "string" ? config.name.toLowerCase() : config.name;
+    if (seenSheetNames.has(nameKey)) {
       throw new Error(`[excel-exporter] duplicate sheet name "${config.name}"`);
     }
-    seenSheetNames.add(config.name);
+    seenSheetNames.add(nameKey);
     const skipped: string[] = [];
     // someColumn walks the whole tree: width/style/headerStyle may sit on
     // nested nodes, and a top-level-only scan would drop them silently.

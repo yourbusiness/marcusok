@@ -41,6 +41,8 @@
 
 > 🔄 **v2.21（全仓再梳理：overlay 并发文案归属 + 校验顺序 + 文档口径收敛，2026-09-21）**：① **代码三处**——`overlay.ts` 并发导出下渲染内容曾属于「DOM 创建者/定时器发起者」而非当前驱动者：`render` 此前只刷新 label，title/hint 是 `createDom` 一次性写死（共享单例 DOM 永远显示首个调用方的标题）；`revealTimer` 闭包又携带发起者的 `cfg.text`，A 挂起定时器后 close、B 接管，到点揭开时用 A 的文案渲染 B 的状态。现状态机与文案绑成 `OverlayDriver` 配对存储，`reveal` 不再接收 text 参数、统一取当前 driver 的，`render` 补 title/hint 的变化时刷新（附回归用例：并发 + 双方自定义文案 + A 先 close）。`workbook-builder.ts` 的 `validateSheetName` 前移到数据行映射之前（非法表名不再白付 O(rows×cols) 映射）。`types.ts` 两处 `headerStyle` 注释明确「整体替换」语义（与 `style` 对 `dataStyle` 的字段级深合并刻意不对称，原先只写 "Takes precedence" 未明说）。② **文档站（en+zh）**——api/01 子路径「两条」→「三条」（补 `./overlay`，此前只在 guide/11 讲述）；guide/02 与 guide/08 的「后续导出报 previously failed」补 2.6.2 自愈例外（慢网络迟到成功后不再报）；guide/11 并发段补内容归属与「后启动者无独立 delayMs 门控」说明。③ **工程**——deploy.yml 缓存 key 移除不存在的 `apps/docs/turbo.json`（hashFiles 幽灵引用，恒为空成分）。测试 229 全量 / CI 实跑 225。
 
+> 🔄 **v2.22（全仓再梳理：echarts 适配器边界两修 + 表名查重对齐 Excel + overlay 建窗兜底，2026-09-28）**：① **代码四处**——`echarts-export.ts` 空 `data` 系列曾误判散点布局（`every()` 在空数组上恒为 true，未加载到数据的饼图/柱图系列导出成 系列/X/Y 空表而非 系列/名称/数值），散点归类改以「确实存在坐标项」（`anyCoordinate`）为准，混合情形的显式拒绝不变；同文件类目布局对对象形式数据点的报错指引修正（旧文案建议 "use long layout"，但该校验在 wide/long 分支之前执行，换 layout 一样报错、指引无效，新文案指引拍平成标量或摘掉类目轴走 item 布局）；`index.ts` 与 `fast-xlsx.ts` 的表名查重改为大小写不敏感（Excel 的唯一性判定同口径，"Sheet1"/"SHEET1" 原可放行产出 Excel 可能要求修复的工作簿而 `success: true`；fast-xlsx 侧非字符串 name 不 `toLowerCase`，把清晰报错留给表名校验）；`overlay.ts` 建窗期渲染兜底（`refs += 1`、driver 入栈之后同步调用的 `render`/`reveal` 若抛错，原会被外层 catch 吞成 `NOOP_HANDLE`，调用方的 `close()` 变空操作、refs 永不归零，已揭示的遮罩永久挂屏拦截交互——现经 `renderSafely` 包裹，渲染异常只影响当帧、后续事件自愈）。② **测试**——新增回归 5 个（空 data/缺 data 归类、双 layout 报错与新文案、大小写变体查重 workbook/stream 两侧），259 全量 / CI 实跑 255。③ **快照同步**——4.8（fast-xlsx 查重段）、4.10（validateInput 查重段）；echarts-export 无嵌入快照，overlay 建窗段为文字描述均不涉及。
+
 > 🚨🚨🚨 **v2.0 评审修正（基于二次独立实测 + 源码核对，修正 v1.9 遗留的错误数字、内部矛盾与代码缺陷）**
 >
 > v1.9 用独立进程实测发现了 toBuffer 塌方（方向正确，已二次复现确认），但 v1.9 自身遗留三类问题：(A) 几个被夸大/记串的数字；(B) 文档内部前后矛盾（5.3 调度表是 v1.8 残留、4.9 format 两段自相矛盾）；(C) 代码缺陷（format 联合类型调用会运行时崩溃）。v2.0 逐一修正，并将性能验收口径对齐**真实可达水平**（原 5万<500ms / 10万<1000ms 的硬指标经实测证明在 modern-xlsx 下结构性不可达，见 1.2 说明）。
@@ -2429,15 +2431,20 @@ export function exportFastXlsx(
   }
 
   // Duplicate sheet names violate ECMA-376 uniqueness and yield a workbook
-  // Excel flags as corrupt; reject before building anything.
+  // Excel flags as corrupt; reject before building anything. Excel 的唯一性
+  // 判定大小写不敏感（见 exportExcel validateInput 的同口径注释）。
   const seenSheetNames = new Set<string>();
 
   sheets.forEach((config, index) => {
     const sheetNumber = index + 1;
-    if (seenSheetNames.has(config.name)) {
+    // 本检查先于 buildWorksheetXml 里的 validateSheetName 执行：非字符串 name
+    // 不能在此处 toLowerCase 出裸 TypeError，原样入 set，把清晰报错留给表名校验。
+    const nameKey =
+      typeof config.name === "string" ? config.name.toLowerCase() : config.name;
+    if (seenSheetNames.has(nameKey)) {
       throw new Error(`[excel-exporter] duplicate sheet name "${config.name}"`);
     }
-    seenSheetNames.add(config.name);
+    seenSheetNames.add(nameKey);
     const skipped: string[] = [];
     // someColumn walks the whole tree: width/style/headerStyle may sit on
     // nested nodes, and a top-level-only scan would drop them silently.
@@ -3138,10 +3145,14 @@ function validateInput(options: ExportOptions): void {
       throw new Error("[excel-exporter] each sheet must be an object");
     }
     validateSheetName(sheet.name);
-    if (seen.has(sheet.name)) {
+    // Excel 的表名唯一性是大小写不敏感的（"Sheet1" 与 "SHEET1" 视为同名，
+    // UI 层就拒绝这样命名），查重须同口径，否则会产出 Excel 可能要求修复的
+    // 工作簿而 success 仍为 true。
+    const nameKey = sheet.name.toLowerCase();
+    if (seen.has(nameKey)) {
       throw new Error(`[excel-exporter] duplicate sheet name "${sheet.name}"`);
     }
-    seen.add(sheet.name);
+    seen.add(nameKey);
     // Guard the two arrays the build paths index into; without these, a sheet
     // missing `columns`/`data` fails downstream with a raw TypeError instead
     // of a clear, actionable message.
@@ -4535,7 +4546,7 @@ const blob = new Blob([bytes], {
 
 ---
 
-**文档版本**：v2.21 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-09-21（v2.21：全仓再梳理——overlay 并发渲染内容归属当前驱动者、addSheet 校验顺序、headerStyle 替换语义注释、api/01 子路径 2→3、guide/02+08 补 wasm 自愈例外、guide/11 并发说明、deploy.yml 幽灵引用清理，测试 229/225；v2.18–v2.20：遮罩淡出复用修复与 workerUrl 警告（2.6.1）、wasm 迟到成功自愈（2.6.2）、保留列 **index** 无条件拦截（2.6.3）——此前三轮发布漏加注记，本次一并补齐。历史见顶部版本注与文末修订历史）
+**文档版本**：v2.22 ｜ **核对基准**：modern-xlsx@1.2.0（npm tarball 解包 + `dist/index.d.mts` + `dist/validate-chart-D1O7LOfU.d.mts` 类型定义 + `dist/utils-Fc_qcAP_.mjs` / `dist/modern-xlsx.worker.js` 源码）+ **Node v22.22.2 独立进程二次实测**（toBuffer 塌方/stream/结构化克隆/finish 分步，共 30+ 次）+ **仓库源码逐文件比对**（`packages/excel-exporter/src`，快照与源码 diff 一致）｜ **最后更新**：2026-09-28（v2.22：全仓再梳理——echarts 空 data 系列误判散点与类目布局报错指引两修、表名查重对齐 Excel 大小写不敏感口径、overlay 建窗期渲染兜底，新增回归 5 个，测试 259/255；v2.21：overlay 并发渲染内容归属当前驱动者、addSheet 校验顺序、headerStyle 替换语义注释、api/01 子路径 2→3、guide/02+08 补 wasm 自愈例外、guide/11 并发说明、deploy.yml 幽灵引用清理，测试 229/225；v2.18–v2.20：遮罩淡出复用修复与 workerUrl 警告（2.6.1）、wasm 迟到成功自愈（2.6.2）、保留列 **index** 无条件拦截（2.6.3）。历史见顶部版本注与文末修订历史）
 
 ---
 

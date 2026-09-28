@@ -182,6 +182,49 @@ describe("echartsToSheet / exportEcharts", () => {
     ]);
   });
 
+  it("classifies empty-data series as name/value, not scatter", () => {
+    // 图表尚未加载到数据时 data 为空数组：every() 在空数组上恒为 true，
+    // 曾因此误判成散点布局，导出 系列/X/Y 表头而不是 系列/名称/数值。
+    const sheet = echartsToSheet({
+      option: { series: [{ name: "占比", type: "pie", data: [] }] },
+    });
+    expect(sheet.columns.map((c) => c.label)).toEqual(["系列", "名称", "数值"]);
+    expect(sheet.data).toEqual([]);
+  });
+
+  it("classifies a series without the data field as name/value too", () => {
+    const sheet = echartsToSheet({
+      option: { series: [{ name: "占比", type: "pie" }] },
+    });
+    expect(sheet.columns.map((c) => c.label)).toEqual(["系列", "名称", "数值"]);
+    expect(sheet.data).toEqual([]);
+  });
+
+  it("rejects object-form data with a category axis, in both layouts, with actionable advice", () => {
+    // 对象形式数据点（{ value, itemStyle } 等）在类目布局两种 layout 下都拒绝；
+    // 旧文案建议 "use long layout"，但换 layout 同样报错，指引无效。
+    for (const layout of ["wide", "long"] as const) {
+      expect(() =>
+        echartsToSheet({
+          layout,
+          option: {
+            xAxis: { data: ["一", "二"] },
+            series: [{ data: [{ value: 1 }, { value: 2 }] }],
+          },
+        }),
+      ).toThrow(/unsupported ECharts datum for category layout/);
+    }
+    expect(() =>
+      echartsToSheet({
+        layout: "long",
+        option: {
+          xAxis: { data: ["一", "二"] },
+          series: [{ data: [{ value: 1 }, { value: 2 }] }],
+        },
+      }),
+    ).toThrow(/Flatten each datum to a scalar/);
+  });
+
   it("exports scatter-like coordinate pairs", () => {
     const sheet = echartsToSheet({
       option: {
