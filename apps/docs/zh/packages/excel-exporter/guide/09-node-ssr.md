@@ -1,6 +1,6 @@
 # Node / SSR 使用
 
-Node 服务端（含 SSR）无需部署浏览器静态资源，且**无需初始化样板**：未配置 `wasmUrl` 时，首次导出会自动定位安装目录旁的 `dist/modern-xlsx.wasm`（对 pnpm 符号链接安全）并同步初始化（`initWasmSync`），随后正常走带样式的 modern-xlsx 引擎。
+Node 服务端（含 SSR）无需部署浏览器静态资源，且**无需初始化样板**：未配置 `wasmUrl` 时，首次导出会自动定位随包发布的 `modern-xlsx.wasm`（位于 `@marcusok/xlsx-core` 的 `dist/`，对 pnpm 符号链接安全）并同步初始化（`initWasmSync`），随后正常走带样式的 modern-xlsx 引擎。
 
 > 自动初始化包含一次性的同步文件读取与 WASM 编译，实测约 20ms（读取 1.9MB 二进制约 4ms，编译约 15ms，Node 22 / 本仓库开发机），发生在首次导出时。若仍希望把它提前到进程启动期，用下方显式初始化。
 
@@ -67,7 +67,7 @@ import { getWasmLoader } from "@marcusok/excel-exporter";
 await getWasmLoader().ensureLoaded(); // 一次性读取并编译随包发布的 wasm
 ```
 
-> 不要用单独安装的 `modern-xlsx` 的 `initWasmSync` 来预热：引擎已打包进 `@marcusok/excel-exporter`，外部副本是另一个模块实例，预热不到打包内的这一份。
+> 不要用单独安装的 `modern-xlsx` 的 `initWasmSync` 来预热：引擎已打包进本包依赖的共享层 `@marcusok/xlsx-core`，外部副本是另一个模块实例，预热不到打包内的这一份。
 
 > 注意：自动初始化依赖运行时能从磁盘定位安装目录里的 wasm。若你的打包/部署形态不满足这一点（例如依赖被内联进产物且资产未随行输出），自动定位失败时不会报错，而是走降级链（无样式流式兜底，console 有 `[excel-exporter]` 前缀警告）；此时保持本包 external（Node 服务端构建的默认行为）、`configureWasm({ wasmUrl })` 指向 HTTP 地址，或把资产拷贝到产物可读的位置即可。
 

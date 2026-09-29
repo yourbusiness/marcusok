@@ -8,7 +8,7 @@
 pnpm add @marcusok/excel-exporter
 ```
 
-这就是全部——一个包、**零运行时依赖**：导出引擎（modern-xlsx JS 胶水 + fflate）已在构建期打包进来，WASM 二进制通过本包自己的 `exports` 暴露，既没有需要额外安装的引擎包，也不会被上游的 engines 声明影响安装。
+这就是全部——唯一运行时依赖是同 scope 的 `@marcusok/xlsx-core`（**共享引擎层**）：导出引擎（modern-xlsx JS 胶水 + fflate）已在构建期打包进核心层，WASM 二进制通过核心层的 `exports` 暴露，既没有需要额外接线的引擎包，也不会被上游的 engines 声明影响安装。
 
 ## 2. 第一个导出
 
@@ -57,7 +57,7 @@ await exportExcel({
 
 浏览器中运行会自动触发下载，文件名缺省 `.xlsx` 后缀时自动补全。`download: false` 时只返回 Blob，便于自托管上传等场景。
 
-无需在 `main.ts` 接线、无需打包器插件：随包发布的两份资产（`modern-xlsx.wasm`、`export.worker.js`）默认自动定位——打包器通过标准 `new URL(资产, import.meta.url)` 模式把它们发射为 hash 资产，Node 直接从磁盘读取 wasm。Node / SSR 环境同样零配置（详见 [Node/SSR](/zh/packages/excel-exporter/guide/09-node-ssr)）。只有自托管 / CDN 托管副本的场景才需要 [`configureWasm`](/zh/packages/excel-exporter/guide/02-installation)。
+无需在 `main.ts` 接线、无需打包器插件：随包发布的资产（共享层 `@marcusok/xlsx-core` 的 `modern-xlsx.wasm` 与本包的 `export.worker.js`）默认自动定位——打包器通过标准 `new URL(资产, import.meta.url)` 模式把它们发射为 hash 资产，Node 直接从磁盘读取 wasm。Node / SSR 环境同样零配置（详见 [Node/SSR](/zh/packages/excel-exporter/guide/09-node-ssr)）。只有自托管 / CDN 托管副本的场景才需要 [`configureWasm`](/zh/packages/excel-exporter/guide/02-installation)。
 
 ## 3. 下一步
 

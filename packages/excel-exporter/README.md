@@ -22,7 +22,7 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 pnpm add @marcusok/excel-exporter
 ```
 
-That is the entire setup. The package has **zero runtime dependencies** — the engine (modern-xlsx JS glue + fflate) is bundled in at build time, and the 1.9MB `modern-xlsx.wasm` binary ships under this package's own `exports` map (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`), so the binary always matches the JS glue. No engine package to install, no `engine-strict` conflicts from upstream `engines` ranges, no fallback package, nothing to wire in `main.ts`. Bundler config is needed in exactly one case — Vite's dev server (see [How assets resolve](#how-assets-resolve-zero-configuration) below).
+That is the entire setup. The package ships with a **single same-scope runtime dependency, `@marcusok/xlsx-core`** — the shared modern-xlsx engine layer used by every @marcusok spreadsheet package, so a page using several of them loads one engine instance and one WASM binary. The engine itself (modern-xlsx JS glue + fflate) is bundled in at build time (inside the core layer), and the 1.9MB `modern-xlsx.wasm` binary ships under the core package's `exports` map (`@marcusok/xlsx-core/dist/modern-xlsx.wasm`), so the binary always matches the JS glue. No engine package to wire in `main.ts`, no fallback package, and upstream `engines` ranges stay inert at runtime (the pinned type-resolution dependency declared by the core layer is only checked by installers that enable engine-strict). Bundler config is needed in exactly one case — Vite's dev server (see [How assets resolve](#how-assets-resolve-zero-configuration) below).
 
 ## Usage
 
@@ -97,10 +97,12 @@ configureWasm({
 Bundlers with asset imports can also wire the files explicitly (the pre-2.0 recommended setup — still fully supported):
 
 ```ts
-import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
+import wasmUrl from "@marcusok/xlsx-core/dist/modern-xlsx.wasm?url";
 import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
 configureWasm({ wasmUrl, workerUrl });
 ```
+
+> The `@marcusok/excel-exporter/dist/modern-xlsx.wasm` path still resolves (the identical binary is forwarded there for compatibility) but is deprecated — prefer the `@marcusok/xlsx-core` path above.
 
 Without a bundler (plain `<script type="module">`), copy the two files out of this package's `dist/` into a static directory and point `configureWasm` at them.
 
@@ -253,7 +255,7 @@ It appends to (never replaces) your existing `onProgress` / `onPhase` callbacks,
 
 Node has no Web Worker, so auto routing degrades to main (<50k rows) or stream (>=50k rows) on the main thread.
 
-**No boilerplate needed.** With nothing configured, the engine reads this package's `dist/modern-xlsx.wasm` from disk (relative to the installed package, pnpm-symlink-safe) and initializes it synchronously (`initWasmSync`) on first use — there is nothing to call and nothing to copy.
+**No boilerplate needed.** With nothing configured, the engine reads the shipped `modern-xlsx.wasm` from disk (in `@marcusok/xlsx-core`'s `dist/`, resolved relative to the installed package, pnpm-symlink-safe) and initializes it synchronously (`initWasmSync`) on first use — there is nothing to call and nothing to copy.
 
 To control initialization timing yourself (e.g. move the one-off synchronous read+compile to startup instead of the first request), await the loader once at boot:
 
@@ -268,7 +270,7 @@ Alternatively, `configureWasm({ wasmUrl })` with an HTTP(S) URL works too (fetch
 
 - **50k-row cutover**: `STREAM_THRESHOLD=50_000` (branch `>=`); below 50k rows uses Workbook (full styling), 50k and above uses Fast stream.
 - **Worker threshold at 20,000 rows**: below 20k rows uses main (10k×6 columns measures ~120ms in a browser); 20k and above uses a Worker to avoid long main-thread blocking.
-- **Zero runtime dependencies**: the engine (modern-xlsx glue, fflate) is bundled at build time and the wasm binary ships under this package's own `exports` map — consumers install one package, and upstream `engines` declarations never leak into their install.
+- **One same-scope dependency**: the engine (modern-xlsx glue, fflate) is bundled at build time inside the shared `@marcusok/xlsx-core` layer and the wasm binary ships under that package's `exports` map — upstream `engines` ranges stay inert at runtime, and multiple @marcusok packages share one engine instance.
 - **Self-contained worker**: `dist/export.worker.js` is a single ESM file with zero imports. Bundlers emit it verbatim as an asset (the default `new URL` resolution), so a chunked worker whose sibling imports are not tracked can never 404 in production builds.
 - **ESM-only**: this package provides no CJS build.
 - **Worker-compatible format**: functions cannot cross structured clone. The browser Worker path (including stream executed inside a Worker) accepts only `FormatSpec`, and `exportInWorker` strips function formats; Node's stream runs on the main thread, so functions are fine there.

@@ -17,7 +17,10 @@ const { initWasmMock, exportAsStreamMock, builderCreateMock } = vi.hoisted(
   },
 );
 
-vi.mock("modern-xlsx", () => ({ initWasm: initWasmMock }));
+// worker 经 @marcusok/xlsx-core 拿 initWasm（modern-xlsx 已打进 core 的 dist），
+// mock 目标随之从 "modern-xlsx" 换成 core；streaming-builder / workbook-builder
+// 仍按相对路径 mock，不经过 core。
+vi.mock("@marcusok/xlsx-core", () => ({ initWasm: initWasmMock }));
 vi.mock("../streaming-builder", () => ({
   exportAsStream: exportAsStreamMock,
 }));

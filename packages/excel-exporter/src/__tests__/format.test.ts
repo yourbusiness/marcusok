@@ -8,7 +8,7 @@ import {
   validateSheetName,
   toStr,
 } from "../format-utils";
-import { serialToDate } from "modern-xlsx";
+import { serialToDate } from "@marcusok/xlsx-core";
 import type { ColumnConfig } from "../types";
 
 describe("applyFormat", () => {

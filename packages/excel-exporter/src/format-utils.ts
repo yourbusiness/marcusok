@@ -1,6 +1,6 @@
 import type { ColumnConfig, FormatSpec, SheetConfig } from "./types";
 import { columnProp } from "./column-tree";
-import { dateToSerial } from "modern-xlsx";
+import { dateToSerial } from "@marcusok/xlsx-core";
 
 /** Default display patterns (Excel format codes) when FormatSpec omits `pattern`. */
 export const DEFAULT_DATE_PATTERN = "yyyy-MM-dd";

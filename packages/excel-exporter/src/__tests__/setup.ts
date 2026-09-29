@@ -1,16 +1,19 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { initWasmSync, readBuffer } from "modern-xlsx";
+import { initWasmSync, readBuffer } from "@marcusok/xlsx-core";
 
 /**
  * Shared WASM bootstrap for Node test environment.
  *
  * Node's undici fetch rejects file:// URLs, so initWasm(path) fails. Use
- * initWasmSync with a pre-loaded buffer instead (verified approach).
+ * initWasmSync with a pre-loaded buffer instead (verified approach). The
+ * binary resolves through @marcusok/xlsx-core (the repo's engine
+ * integration point; wasm is forwarded into its dist).
  */
 const require = createRequire(import.meta.url);
 const wasmPath =
-  require("path").dirname(require.resolve("modern-xlsx")) + "/modern-xlsx.wasm";
+  require("path").dirname(require.resolve("@marcusok/xlsx-core")) +
+  "/modern-xlsx.wasm";
 initWasmSync(readFileSync(wasmPath));
 
 export { readBuffer };

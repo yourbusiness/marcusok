@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@marcusok/excel-exporter": "workspace:*",
+    "@marcusok/excel-preview": "workspace:*",
     "vue": "^3.5.13"
   },
   "devDependencies": {

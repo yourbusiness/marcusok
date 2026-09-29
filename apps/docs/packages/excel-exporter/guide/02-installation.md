@@ -11,11 +11,11 @@
 pnpm add @marcusok/excel-exporter
 ```
 
-That is the entire setup. The package has **zero runtime dependencies**: the export engine (modern-xlsx JS glue + fflate) is bundled in at build time, and the WASM binary ships under this package's own `exports` map — there is no engine package to install and no optional fallback package. Bundler config is needed in exactly one case: Vite's dev server (see the [pre-bundling caveat](#vite-dev-server-pre-bundling-caveat) below).
+That is the entire setup. The package has a **single same-scope runtime dependency**: `@marcusok/xlsx-core`, the shared modern-xlsx engine layer — the export engine (modern-xlsx JS glue + fflate) is bundled in at build time inside the core layer, and the WASM binary ships under the core package's `exports` map. There is no engine package to wire in and no optional fallback package. Bundler config is needed in exactly one case: Vite's dev server (see the [pre-bundling caveat](#vite-dev-server-pre-bundling-caveat) below).
 
 ## Browser: assets resolve automatically
 
-Two files ship alongside the code and are located by default, so a plain `import { exportExcel } from "@marcusok/excel-exporter"` works out of the box:
+Two runtime assets are located by default — the WASM binary ships with the shared `@marcusok/xlsx-core` dependency, the worker with this package — so a plain `import { exportExcel } from "@marcusok/excel-exporter"` works out of the box:
 
 | Asset              | Description                                                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,7 +25,7 @@ Two files ship alongside the code and are located by default, so a plain `import
 Resolution order:
 
 1. **Bundlers** — both default to `new URL(<file>, import.meta.url)` next to the package entry. Production builds rewrite the expression and emit the file as a hashed asset (Vite, webpack 5 — the same `new URL(..., import.meta.url)` pattern webpack 5 documents); no plugins, no `?url` imports, no copy step. One exception: **Vite's dev server** does not rewrite the expression inside pre-bundled dependencies — see the caveat below.
-2. **Node** — the binary is read from disk next to the installed package and initialized synchronously (see [Node / SSR](#node-ssr)).
+2. **Node** — the binary is read from disk inside the installed packages (in `@marcusok/xlsx-core`'s `dist/`) and initialized synchronously (see [Node / SSR](#node-ssr)).
 
 ### Optional: `configureWasm`
 
@@ -44,10 +44,12 @@ configureWasm({
 Bundlers with asset imports can wire the shipped files explicitly instead (fully supported, the pre-2.0 recommended setup):
 
 ```ts
-import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
+import wasmUrl from "@marcusok/xlsx-core/dist/modern-xlsx.wasm?url";
 import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
 configureWasm({ wasmUrl, workerUrl });
 ```
+
+> The `@marcusok/excel-exporter/dist/modern-xlsx.wasm` path still resolves (the identical binary is forwarded there for compatibility) but is deprecated — prefer the `@marcusok/xlsx-core` path above.
 
 | Option            | Type            | Default                 | Description                                                            |
 | ----------------- | --------------- | ----------------------- | ---------------------------------------------------------------------- |
@@ -81,4 +83,4 @@ Restart the dev server afterwards (the `.vite/deps` cache must be re-created). W
 
 ## Node / SSR
 
-No browser static assets and **no initialization boilerplate** are needed in Node: with nothing configured, the engine locates this package's `dist/modern-xlsx.wasm` on disk (pnpm-symlink-safe) and initializes it synchronously on first use. `auto` never uses Workers in Node; ≥ 50k rows switch to streaming on the main thread (the stream path does not use WASM). See [Node/SSR](/packages/excel-exporter/guide/09-node-ssr) for explicit-init timing control and bundler caveats.
+No browser static assets and **no initialization boilerplate** are needed in Node: with nothing configured, the engine locates the shipped `modern-xlsx.wasm` on disk (in `@marcusok/xlsx-core`'s `dist/`, pnpm-symlink-safe) and initializes it synchronously on first use. `auto` never uses Workers in Node; ≥ 50k rows switch to streaming on the main thread (the stream path does not use WASM). See [Node/SSR](/packages/excel-exporter/guide/09-node-ssr) for explicit-init timing control and bundler caveats.

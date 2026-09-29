@@ -11,11 +11,11 @@
 pnpm add @marcusok/excel-exporter
 ```
 
-这就是全部。本包**零运行时依赖**：导出引擎（modern-xlsx JS 胶水 + fflate）已在构建期打包进来，WASM 二进制通过本包自己的 `exports` 暴露——没有需要额外安装的引擎包、没有可选兜底包。打包器配置仅在一种场景下需要：Vite 开发服务器（见下方[预构建注意事项](#vite-开发服务器-预构建注意事项)）。
+这就是全部。本包**唯一运行时依赖是同 scope 的 `@marcusok/xlsx-core`**（共享 modern-xlsx 引擎层）：导出引擎（modern-xlsx JS 胶水 + fflate）已在构建期打包进核心层，WASM 二进制通过核心层的 `exports` 暴露——没有需要额外接线的引擎包、没有可选兜底包。打包器配置仅在一种场景下需要：Vite 开发服务器（见下方[预构建注意事项](#vite-开发服务器-预构建注意事项)）。
 
 ## 浏览器：资源自动定位
 
-两份文件随包发布、默认自动定位，直接 `import { exportExcel } from "@marcusok/excel-exporter"` 即可使用：
+两份运行时资源默认自动定位——WASM 二进制随共享依赖 `@marcusok/xlsx-core` 发布、worker 随本包发布，直接 `import { exportExcel } from "@marcusok/excel-exporter"` 即可使用：
 
 | 资源               | 何时需要                                                                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,7 +25,7 @@ pnpm add @marcusok/excel-exporter
 定位顺序：
 
 1. **打包器**——两个 URL 默认为相对包入口的 `new URL(<文件>, import.meta.url)`。生产构建会改写该表达式并发射 hash 资产（Vite、webpack 5 文档支持同样的资产模式）；无需插件、无需 `?url` 导入、无需拷贝。唯一例外：**Vite 开发服务器**不会改写被预构建依赖内部的该表达式——见下方注意事项。
-2. **Node**——直接从安装目录旁的磁盘读取二进制并同步初始化（见 [Node / SSR](#node-ssr)）。
+2. **Node**——直接从磁盘读取二进制（位于 `@marcusok/xlsx-core` 的 `dist/`，随安装的依赖包定位）并同步初始化（见 [Node / SSR](#node-ssr)）。
 
 ### 可选：`configureWasm`
 
@@ -44,10 +44,12 @@ configureWasm({
 支持资产导入的打包器也可以显式接线（完全受支持，2.0 之前的推荐接法）：
 
 ```ts
-import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
+import wasmUrl from "@marcusok/xlsx-core/dist/modern-xlsx.wasm?url";
 import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
 configureWasm({ wasmUrl, workerUrl });
 ```
+
+> `@marcusok/excel-exporter/dist/modern-xlsx.wasm` 路径仍可解析（同一二进制为兼容性保留转发），但已弃用——请改用上面的 `@marcusok/xlsx-core` 路径。
 
 | 参数              | 类型            | 默认值             | 说明                                             |
 | ----------------- | --------------- | ------------------ | ------------------------------------------------ |
@@ -81,4 +83,4 @@ export default defineConfig({
 
 ## Node / SSR
 
-Node 环境无需部署浏览器静态资源，也**无需任何初始化样板**：未配置 `wasmUrl` 时，引擎会在首次使用时自动定位安装目录旁的 `dist/modern-xlsx.wasm`（pnpm 符号链接安全）并同步初始化。`auto` 模式下 Node 不会走 Worker，而是主线程执行；≥ 5 万行自动切换流式路径（流式路径不依赖 WASM）。初始化时机控制与打包器注意事项见 [Node/SSR](/zh/packages/excel-exporter/guide/09-node-ssr)。
+Node 环境无需部署浏览器静态资源，也**无需任何初始化样板**：未配置 `wasmUrl` 时，引擎会在首次使用时自动定位随包发布的 `modern-xlsx.wasm`（位于 `@marcusok/xlsx-core` 的 `dist/`，pnpm 符号链接安全）并同步初始化。`auto` 模式下 Node 不会走 Worker，而是主线程执行；≥ 5 万行自动切换流式路径（流式路径不依赖 WASM）。初始化时机控制与打包器注意事项见 [Node/SSR](/zh/packages/excel-exporter/guide/09-node-ssr)。

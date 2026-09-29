@@ -1,4 +1,6 @@
-import { initWasm } from "modern-xlsx";
+// 经共享底层包拿 initWasm：worker 构建时 core（含 modern-xlsx）整体打包进
+// 单文件产物（noExternal 见 tsup.config.ts），此处的 import 不会被带出去。
+import { initWasm } from "@marcusok/xlsx-core";
 import type { ExportOptions } from "../types";
 import { WorkbookBuilder } from "../workbook-builder";
 import { exportAsStream } from "../streaming-builder";

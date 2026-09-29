@@ -1,4 +1,5 @@
 import excelExporterPkg from "@marcusok/excel-exporter/package.json" with { type: "json" };
+import excelPreviewPkg from "@marcusok/excel-preview/package.json" with { type: "json" };
 
 export interface LocalizedText {
   zh: string;
@@ -313,5 +314,63 @@ export const packages: PackageEntry[] = [
       },
     ],
     demo: "ExportDemo",
+  },
+  {
+    dir: "excel-preview",
+    npmName: "@marcusok/excel-preview",
+    category: "preview",
+    version: excelPreviewPkg.version,
+    status: "beta",
+    zh: true,
+    tagline: {
+      zh: "xlsx 只读预览（Worker 解析 + 虚拟滚动，样式/合并/冻结/数字格式还原）",
+      en: "Read-only xlsx preview (worker parsing + virtual scrolling, styles/merges/freeze/number formats restored)",
+    },
+    keywords: ["excel", "xlsx", "preview", "viewer", "virtual-scroll"],
+    homeStats: [
+      {
+        key: "preview-rows",
+        value: 100,
+        decimals: 0,
+        zh: "预览行数上限量级",
+        en: "Preview scale (rows)",
+        suffix: "k",
+      },
+    ],
+    highlights: [
+      {
+        icon: "zap",
+        title: { zh: "大文件不卡", en: "Large files stay smooth" },
+        details: {
+          zh: "解析在 Web Worker 内完成（实测 10 万行 × 10 列约 1.5s，全程不冻结 UI）；渲染层 DOM 虚拟滚动只渲染视口内格子。",
+          en: "Parsing runs in a Web Worker (measured ~1.5s for 100k rows × 10 cols, UI never freezes); the DOM renderer virtualizes to viewport-only cells.",
+        },
+      },
+      {
+        icon: "pen",
+        title: { zh: "样式还原", en: "Style fidelity" },
+        details: {
+          zh: "字体/填充/边框/对齐/数字格式/合并/冻结/隐藏行列；主题色（theme+tint）与 indexed 色经自研覆盖层找回（解析引擎读取侧会丢弃它们）。",
+          en: "Fonts, fills, borders, alignment, number formats, merges, frozen panes, hidden rows/columns; theme and indexed colors are recovered by a dedicated overlay layer (the engine drops them on read).",
+        },
+      },
+      {
+        icon: "shield",
+        title: { zh: "数字格式忠实", en: "Number-format fidelity" },
+        details: {
+          zh: "内置 id 用 Excel 实际行为表（非 ECMA 标准串）；负号/会计括号/货币字面量/累计时长/分钟邻接等引擎缺陷全部在补偿层修复。",
+          en: "Built-in format ids use Excel's actual behavior table (not the ECMA strings); engine defects — negative signs, accounting parens, currency literals, elapsed durations, minute adjacency — are compensated in a dedicated layer.",
+        },
+      },
+      {
+        icon: "route",
+        title: { zh: "框架无关", en: "Framework-agnostic" },
+        details: {
+          zh: "纯 TS 核心 + createPreview 一行接入；低层 parseWorkbookBytes 出纯数据模型，供 React/Vue 薄封装或 SSR 消费。",
+          en: "Pure TypeScript core with a one-line createPreview; the low-level parseWorkbookBytes emits a plain data model for React/Vue wrappers or SSR.",
+        },
+      },
+    ],
+    demo: "PreviewDemo",
   },
 ];

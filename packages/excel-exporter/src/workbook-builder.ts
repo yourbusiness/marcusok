@@ -3,12 +3,12 @@ import {
   sheetAddAoa,
   encodeCellRef,
   type Worksheet,
-} from "modern-xlsx";
+  getWasmLoader,
+} from "@marcusok/xlsx-core";
 import type { CellStyle, SheetConfig, ColumnConfig } from "./types";
 import { buildStyleIndex, mergeStyles, BaseCellStyle } from "./style-utils";
 import { INDEX_PROP, indexColumnStart } from "./sheet-normalize";
 import { flattenColumnTree, columnProp, type HeaderCell } from "./column-tree";
-import { getWasmLoader } from "./wasm-loader";
 import {
   resolveCellFormat,
   numFormatForSpec,

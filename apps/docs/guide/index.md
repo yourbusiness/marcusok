@@ -4,9 +4,11 @@
 
 ## Current packages
 
-| Package                                                 | Category | Status | Description                                                                                                  |
-| ------------------------------------------------------- | -------- | ------ | ------------------------------------------------------------------------------------------------------------ |
-| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback |
+| Package                                                                    | Category | Status | Description                                                                                                  |
+| -------------------------------------------------------------------------- | -------- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| [`@marcusok/excel-exporter`](/packages/excel-exporter/)                    | Export   | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback |
+| [`@marcusok/excel-preview`](/packages/excel-preview/)                      | Preview  | beta   | Read-only xlsx preview: worker parsing + virtual scrolling, styles/merges/freeze/number formats restored     |
+| [`@marcusok/xlsx-core`](https://www.npmjs.com/package/@marcusok/xlsx-core) | Shared   | stable | The repo's single modern-xlsx engine layer: WASM loading, asset distribution, stable re-export surface       |
 
 ## Engineering conventions
 
@@ -23,6 +25,6 @@
 The ecosystem grows on demand and is organized around two package categories:
 
 - **Export** — turn application data into downloadable documents. Excel export ([`@marcusok/excel-exporter`](/packages/excel-exporter/)) is available today; other document formats (e.g. PDF) may follow.
-- **Document preview** — preview documents in the browser. Nothing shipped in this category yet.
+- **Document preview** — preview documents in the browser. A read-only xlsx preview ([`@marcusok/excel-preview`](/packages/excel-preview/)) is available today; other document formats may follow.
 
 When a new package ships, register it in `apps/docs/.vitepress/registry.ts` with its category and add its docs; it automatically appears in the navigation, sidebar and home cards.

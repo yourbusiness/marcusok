@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { exportInWorker, terminateWorker } from "../worker-exporter";
-import { configureWasm } from "../wasm-loader";
+import { configureWasm } from "@marcusok/xlsx-core";
 import type { ExportOptions } from "../types";
 
 // A fake Worker whose postMessage never produces a response, driving every

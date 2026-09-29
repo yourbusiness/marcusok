@@ -79,9 +79,10 @@ describe("demo registration completeness", () => {
     }
   });
 
-  it("the preview placeholder keeps the doc-preview menu section visible", () => {
-    // "文档预览"分区依赖一个 preview 类的占位 demo（空分类不渲染）；
-    // 占位被删时菜单与首页的该分区会一并消失，此断言用于拦截误删。
+  it("at least one preview demo keeps the doc-preview menu section visible", () => {
+    // "文档预览"分区依赖至少一个 preview 类 demo（空分类不渲染）；
+    // 该分类的包 demo（excel-preview）被误删或改错分类时，菜单与首页的
+    // 分区会一并消失，此断言用于拦截。
     const sections = demosByCategory(getDemos());
     expect(
       sections.map((s) => s.category),

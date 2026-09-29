@@ -17,6 +17,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
     "@marcusok/excel-exporter": "workspace:*",
+    "@marcusok/excel-preview": "workspace:*",
     "antd": "^6.5.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

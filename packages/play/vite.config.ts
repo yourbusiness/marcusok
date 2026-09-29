@@ -127,6 +127,16 @@ const srcAssetOverrides: { dir: string; files: string[] }[] = [
     dir: resolve(packagesDir, "excel-exporter"),
     files: ["modern-xlsx.wasm", "export.worker.js"],
   },
+  // wasm 字面量随 WasmLoader 迁入 core（excel-preview 与 exporter 共用）；
+  // 预览包另有自包含 parse worker。
+  {
+    dir: resolve(packagesDir, "xlsx-core"),
+    files: ["modern-xlsx.wasm"],
+  },
+  {
+    dir: resolve(packagesDir, "excel-preview"),
+    files: ["parse.worker.js"],
+  },
 ];
 
 const srcAssetOverridePlugin: Plugin = {

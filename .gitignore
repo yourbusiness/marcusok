@@ -13,8 +13,10 @@ apps/docs/.vitepress/config.ts.timestamp-*.mjs
 CLAUDE.md
 AGENTS.md
 
-# 内部设计文档不入库（本机私有；换机需自行从原环境拷贝）
-docs/
+# 内部设计文档不入库（本机私有；换机需自行从原环境拷贝）。
+# 必须锚定根目录：不带斜杠前缀的 docs/ 会匹配任意深度的同名目录，
+# 把 apps/docs 站点的新增文件（文档页、演示组件）一并吞掉，无法 git add。
+/docs/
 
 .claude
 .codex

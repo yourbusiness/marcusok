@@ -8,7 +8,7 @@ Run your first Excel export in minutes. Requirement: Node `>= 22`. Example comma
 pnpm add @marcusok/excel-exporter
 ```
 
-That is the entire setup — one package, zero runtime dependencies. The export engine (modern-xlsx JS glue + fflate) is bundled in at build time, and the WASM binary ships under this package's own `exports` map, so there is no engine package to install and no `engines` conflict from upstream ranges.
+That is the entire setup — one same-scope runtime dependency (`@marcusok/xlsx-core`, the shared engine layer). The export engine (modern-xlsx JS glue + fflate) is bundled in at build time inside the core layer, and the WASM binary ships under the core package's `exports` map, so there is no engine package to wire in and no `engines` conflict from upstream ranges.
 
 ## 2. First export
 
@@ -57,7 +57,7 @@ await exportExcel({
 
 In the browser this triggers a download; `.xlsx` is appended when missing. Use `download: false` to receive the Blob only.
 
-No `main.ts` wiring, no bundler plugins: the two shipped assets (`modern-xlsx.wasm`, `export.worker.js`) are located automatically — bundlers emit them as hashed assets via the standard `new URL(asset, import.meta.url)` pattern, and Node reads the wasm from disk. Node / SSR environments need no browser assets and no initialization boilerplate (see [Node/SSR](/packages/excel-exporter/guide/09-node-ssr)). Self-hosted or CDN-hosted copies are the one case that needs [`configureWasm`](/packages/excel-exporter/guide/02-installation).
+No `main.ts` wiring, no bundler plugins: the shipped assets (`modern-xlsx.wasm` via the shared `@marcusok/xlsx-core`, plus this package's `export.worker.js`) are located automatically — bundlers emit them as hashed assets via the standard `new URL(asset, import.meta.url)` pattern, and Node reads the wasm from disk. Node / SSR environments need no browser assets and no initialization boilerplate (see [Node/SSR](/packages/excel-exporter/guide/09-node-ssr)). Self-hosted or CDN-hosted copies are the one case that needs [`configureWasm`](/packages/excel-exporter/guide/02-installation).
 
 ## 3. Next steps
 

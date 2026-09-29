@@ -1,0 +1,69 @@
+{
+  "name": "@marcusok/excel-preview",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Read-only xlsx preview in the browser: WASM parsing in a Web Worker, Excel-faithful number/date formatting, and DOM virtual scrolling with merged-cell and frozen-pane support.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourbusiness/marcusok.git",
+    "directory": "packages/excel-preview"
+  },
+  "bugs": {
+    "url": "https://github.com/yourbusiness/marcusok/issues"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dist/parse.worker.js": {
+      "import": "./dist/parse.worker.js",
+      "default": "./dist/parse.worker.js"
+    },
+    "./dist/modern-xlsx.wasm": "./dist/modern-xlsx.wasm",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "excel",
+    "xlsx",
+    "preview",
+    "viewer",
+    "wasm",
+    "virtual-scroll"
+  ],
+  "dependencies": {
+    "@marcusok/xlsx-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "eslint": "^9.16.0",
+    "fflate": "^0.8.3",
+    "happy-dom": "^20.14.5",
+    "modern-xlsx": "^1.2.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

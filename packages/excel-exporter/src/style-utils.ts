@@ -1,4 +1,4 @@
-import type { Workbook } from "modern-xlsx";
+import type { Workbook } from "@marcusok/xlsx-core";
 import type { CellStyle } from "./types";
 
 /**

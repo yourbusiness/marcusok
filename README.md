@@ -1,12 +1,14 @@
 # marcusok
 
-A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Packages are organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser, planned).
+A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Packages are organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — a read-only xlsx preview is available today). Both categories share one engine through [`@marcusok/xlsx-core`](./packages/xlsx-core).
 
 ## Packages
 
-| Package                                                 | Category | Description                                                                                                      |
-| ------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](./packages/excel-exporter) | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters) |
+| Package                                                 | Category | Description                                                                                                         |
+| ------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](./packages/excel-exporter) | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)    |
+| [`@marcusok/excel-preview`](./packages/excel-preview)   | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery) |
+| [`@marcusok/xlsx-core`](./packages/xlsx-core)           | Shared   | The repo's single modern-xlsx engine layer: WASM loading, asset distribution, stable re-export surface              |
 
 ## Quick Start
 
@@ -18,7 +20,7 @@ pnpm lint        # ESLint
 pnpm typecheck   # TypeScript type checking
 ```
 
-Environment: Node >= 22.12 (the floor Vite 8 requires; the published `@marcusok/excel-exporter` package itself only needs Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 devDependency (bundled into the published package at build time) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected — the published package has zero runtime dependencies.
+Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages themselves only need Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 devDependency (bundled into the published packages at build time via `@marcusok/xlsx-core`) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected — published packages have exactly one same-scope runtime dependency (`@marcusok/xlsx-core`, the shared engine layer).
 
 ## Tooling
 

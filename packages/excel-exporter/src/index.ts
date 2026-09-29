@@ -9,7 +9,7 @@ import { WorkbookBuilder } from "./workbook-builder";
 import { exportAsStream } from "./streaming-builder";
 import { exportInWorker } from "./worker-exporter";
 import { triggerDownload, toBlobPart } from "./download";
-import { getWasmLoader } from "./wasm-loader";
+import { getWasmLoader } from "@marcusok/xlsx-core";
 import { tableExportToOptions, type TableExportOptions } from "./table-export";
 import {
   echartsExportToOptions,
@@ -24,8 +24,10 @@ export * from "./style-presets";
 export * from "./format-utils";
 export * from "./table-export";
 export * from "./echarts-export";
-export { configureWasm, getWasmLoader } from "./wasm-loader";
-export type { LoaderOptions, LoadState } from "./wasm-loader";
+// WASM 加载与公共引擎面统一由共享底层包提供（对消费方 API 面不变：同名
+// re-export，签名与行为一致，来源从本包 internals 换成 @marcusok/xlsx-core）。
+export { configureWasm, getWasmLoader } from "@marcusok/xlsx-core";
+export type { LoaderOptions, LoadState } from "@marcusok/xlsx-core";
 export { WorkbookBuilder } from "./workbook-builder";
 export { exportAsStream } from "./streaming-builder";
 // 序号列的展开工具（exportExcel 入口已自动调用一次）。底层入口

@@ -21,7 +21,7 @@ An Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/moder
 pnpm add @marcusok/excel-exporter
 ```
 
-One package, zero runtime dependencies: the export engine is bundled in at build time, and the WASM / worker assets resolve automatically in bundlers and in Node — `configureWasm` is only needed for self-hosted copies. See [Getting Started](/guide/01-getting-started).
+One same-scope dependency (`@marcusok/xlsx-core`, the shared engine layer; the export engine itself is bundled there at build time): the WASM / worker assets resolve automatically in bundlers and in Node — `configureWasm` is only needed for self-hosted copies. See [Getting Started](/guide/01-getting-started).
 
 ## Quick example
 
@@ -59,7 +59,7 @@ await exportExcel({
 ## Version & dependencies
 
 - Version: read from the workspace `package.json` at build time (single source of truth; this site never queries the npm registry)
-- Runtime dependencies: none — the modern-xlsx engine (JS glue) and fflate are bundled at build time, and the WASM binary ships under this package's own `exports` map
+- Runtime dependencies: `@marcusok/xlsx-core` only (the shared engine layer) — the modern-xlsx engine (JS glue) and fflate are bundled at build time inside the core layer, and the WASM binary ships under the core package's `exports` map
 - Environment: Node >= 22; browsers need WebAssembly support
 
 > Performance numbers are local measurements (real Chrome, 6 mixed-type columns). See [Performance](/packages/excel-exporter/guide/07-performance).

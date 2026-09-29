@@ -12,19 +12,31 @@ export interface LoaderOptions {
    */
   wasmUrl?: string | URL;
   /**
-   * export.worker.js URL, required for worker mode. Defaults to the
-   * self-contained worker shipped next to this package's entry — the same
-   * bundler rewrite applies. Override for self-hosted copies.
+   * Worker script URL for @marcusok/excel-exporter's export worker. Defaults
+   * to the self-contained worker shipped next to that package's entry — the
+   * same bundler rewrite applies. Override for self-hosted copies.
+   *
+   * Consumed by the exporter only. The shared loader serves several @marcusok
+   * packages on one page, and each package's worker is a different script — a
+   * single field would cross-wire them (the preview would spawn the export
+   * worker). @marcusok/excel-preview reads `parseWorkerUrl` instead.
    */
   workerUrl?: string | URL;
+  /**
+   * Worker script URL for @marcusok/excel-preview's parse worker. Same
+   * resolution and bundler-rewrite semantics as `workerUrl`; a separate field
+   * so a page using both packages can self-host both workers without
+   * cross-wiring (see `workerUrl`).
+   */
+  parseWorkerUrl?: string | URL;
   /** Per-attempt load timeout, default 10s. */
   timeoutMs?: number;
   /** Max load attempts (total, including the first), default 3. */
   maxRetries?: number;
   /**
-   * Worker export timeout, default 120s. A timed-out export terminates the
-   * shared worker and rejects its sibling requests, so raise this only for
-   * legitimately huge exports (and prefer splitting into multiple sheets).
+   * Worker operation timeout, default 120s. A timed-out operation terminates
+   * the shared worker and rejects its sibling requests, so raise this only
+   * for legitimately huge workloads (and prefer splitting the input).
    */
   workerTimeoutMs?: number;
 }
@@ -82,14 +94,15 @@ export class WasmLoader {
    * only picked up after the in-flight fetch rejects (modern-xlsx clears its
    * promise on rejection), and never if it eventually succeeds. The new URL
    * genuinely takes effect only in a fresh JS realm (a page reload, or a
-   * worker created after terminateWorker() — exported from the
-   * `@marcusok/excel-exporter/worker-utils` subpath, not the main entry).
-   * updateOptions warns when any part of this caveat applies.
+   * worker created after the consuming package's terminateWorker-style
+   * escape hatch — e.g. `terminateWorker()` from
+   * `@marcusok/excel-exporter/worker-utils`). updateOptions warns when any
+   * part of this caveat applies.
    */
   updateOptions(opts: LoaderOptions): void {
     // 按 String 归一化比较：URL 对象经结构化克隆/重复构造后是全新引用，
     // `!==` 会把同一地址误判为"变更"（反复 reset 已加载状态并刷警告）。
-    // 与 export.worker.ts 的 loadedWasmKey 归一化保持一致。
+    // 与各业务包 worker 的 loadedWasmKey 归一化保持一致。
     // 注意 `opts.wasmUrl === undefined` 不算变更：无法把已设置的 URL 改回
     // 默认（改回默认需整表替换 opts，此处按增量合并的语义有意不支持）。
     const urlChanged =
@@ -99,22 +112,22 @@ export class WasmLoader {
         : String(opts.wasmUrl) !== String(this.opts.wasmUrl));
     if (urlChanged && (this.state === "ready" || this.state === "loading")) {
       console.warn(
-        "[excel-exporter] wasmUrl changed while WASM is " +
+        "[xlsx-core] wasmUrl changed while WASM is " +
           (this.state === "ready" ? "already initialized" : "still loading") +
           " on this thread. modern-xlsx's initWasm is idempotent and keeps a single " +
           "module-level in-flight promise: the already-loaded module stays in effect, " +
           "and a still-pending initial fetch cannot be aborted or redirected — the new " +
           "URL is picked up only by the next fresh initWasm call after the in-flight " +
           "one settles (or never, if it already succeeded). The new URL genuinely takes " +
-          "effect only in a fresh JS realm (reload the page, or terminateWorker() before " +
-          "the next export so a new worker is created — import it from " +
+          "effect only in a fresh JS realm (reload the page, or terminate the shared " +
+          "worker before the next operation — e.g. terminateWorker() from " +
           "@marcusok/excel-exporter/worker-utils).",
       );
     }
-    // workerUrl 与 wasmUrl 同类限制但形态不同：共享 Worker 实例在首次创建时
-    // 读取一次 workerUrl（worker-exporter.ts getOrCreateWorker），之后不再重读。
-    // 这里无法判断 Worker 是否已创建（反向引用 worker-exporter 会造成循环依赖），
-    // 因此只要值变更就警告；若尚无 Worker 存活，terminateWorker() 是无害空操作。
+    // workerUrl 与 wasmUrl 同类限制但形态不同：导出包的共享 Worker 实例在
+    // 首次创建时读取一次 workerUrl（worker-exporter.ts getOrCreateWorker），
+    // 之后不再重读。这里无法判断 Worker 是否已创建（反向引用会造成循环依赖），
+    // 因此只要值变更就警告；若尚无 Worker 存活，terminate 是无害空操作。
     const workerUrlChanged =
       opts.workerUrl !== undefined &&
       (this.opts.workerUrl === undefined
@@ -122,10 +135,26 @@ export class WasmLoader {
         : String(opts.workerUrl) !== String(this.opts.workerUrl));
     if (workerUrlChanged) {
       console.warn(
-        "[excel-exporter] workerUrl changed. The shared Worker reads its script URL " +
+        "[xlsx-core] workerUrl changed. The shared Worker reads its script URL " +
           "once at creation and is reused afterwards, so an already-created worker keeps " +
-          "the old URL. Call terminateWorker() (from @marcusok/excel-exporter/worker-utils) " +
-          "before the next export for the new URL to take effect.",
+          "the old URL. Terminate it (e.g. terminateWorker() from " +
+          "@marcusok/excel-exporter/worker-utils) before the next operation for the new " +
+          "URL to take effect.",
+      );
+    }
+    // parseWorkerUrl 与 workerUrl 同机制（excel-preview 的共享 parse worker
+    // 也在首次创建时读取一次，之后不再重读），镜像同一警告。
+    const parseWorkerUrlChanged =
+      opts.parseWorkerUrl !== undefined &&
+      (this.opts.parseWorkerUrl === undefined
+        ? true
+        : String(opts.parseWorkerUrl) !== String(this.opts.parseWorkerUrl));
+    if (parseWorkerUrlChanged) {
+      console.warn(
+        "[xlsx-core] parseWorkerUrl changed. The shared parse Worker reads its script URL " +
+          "once at creation and is reused afterwards, so an already-created worker keeps " +
+          "the old URL. Reload the page (or recreate the preview) before the next parse " +
+          "for the new URL to take effect.",
       );
     }
     this.opts = { ...this.opts, ...opts };
@@ -139,7 +168,7 @@ export class WasmLoader {
     if (this.state === "ready") return;
     if (this.state === "error") {
       throw new Error(
-        "[excel-exporter] WASM load previously failed; call configureWasm() to retry with new settings",
+        "[xlsx-core] WASM load previously failed; call configureWasm() to retry with new settings",
       );
     }
     if (this.promise) return this.promise;
@@ -188,8 +217,8 @@ export class WasmLoader {
       // missing initWasmSync must skip auto-init, not throw a TypeError.
       if (typeof initWasmSync !== "function") return false;
       // esbuild（platform:"browser"，见 tsup.config.ts）会把字面量 "node:fs"
-      // 重写成裸 "fs"——恰是 tsup 配置为 modern-xlsx 消除的那类消费方浏览器
-      // 构建警告源（tsup.config.ts:50-52 注释明确要求本处 import 保留）。
+      // 重写成裸 "fs"——恰是 tsup 插件为 modern-xlsx 消除的那类消费方浏览器
+      // 构建警告源（tsup-plugins.ts 注释明确要求本处 import 保留）。
       // 计算式说明符不参与静态分析，前缀原样进入产物；运行时 join 出来的
       // 就是同一个 Node 内置模块。@vite-ignore 同理抑制 Vite 的动态导入
       // 分析警告。
@@ -218,7 +247,7 @@ export class WasmLoader {
   private async loadWithRetry(): Promise<void> {
     if (!this.supported) {
       throw new Error(
-        "[excel-exporter] WebAssembly not supported in this environment",
+        "[xlsx-core] WebAssembly not supported in this environment",
       );
     }
     // Node without a configured URL: locate and init the wasm synchronously
@@ -242,7 +271,7 @@ export class WasmLoader {
         const initPromise = initWasm(wasmUrl);
         // 自愈挂钩：initWasm 持有模块级单一 in-flight promise，所有重试都
         // 超时放弃之后，底层加载仍可能随后成功（慢网络）。那时引擎实际已
-        // 就绪，若放任 state 停在 "error"，后续导出会以 "previously failed"
+        // 就绪，若放任 state 停在 "error"，后续操作会以 "previously failed"
         // 永久拒载，与引擎真实状态矛盾，只能靠 configureWasm 手动解锁。
         // 迟到的成功在此把 error 拨回 ready；失败分支为 no-op（rejection
         // 已被下方的 race 处理，这里仅防止重复触发未处理拒绝告警）。
@@ -271,7 +300,7 @@ export class WasmLoader {
     throw new Error(
       // 非 Error 的 rejection（如字符串）没有 message 字段，强转会得到
       // "...: undefined"，降级为 String() 保留原始信息。
-      `[excel-exporter] WASM load failed after ${maxRetries} attempts: ${
+      `[xlsx-core] WASM load failed after ${maxRetries} attempts: ${
         lastErr instanceof Error ? lastErr.message : String(lastErr)
       }`,
     );
@@ -292,16 +321,15 @@ export function getWasmLoader(): WasmLoader {
  * Merges into the existing loader rather than replacing it, so an
  * already-loaded WASM module is kept unless the WASM URL actually changes. A
  * previous load error is always cleared, so calling this after a failure
- * makes the next export retry with the new settings.
+ * makes the next operation retry with the new settings.
  *
  * Note: changing `wasmUrl` after a *successful* load does not reload WASM on
  * a thread that already initialized it, and changing it while the initial
  * fetch is still in flight cannot redirect that fetch — modern-xlsx's
  * `initWasm` is idempotent and keeps the first successfully loaded module
  * (see WasmLoader.updateOptions). The new URL takes effect in a fresh JS
- * realm only (page reload / a worker created after `terminateWorker()`,
- * exported from the `@marcusok/excel-exporter/worker-utils` subpath), and
- * updateOptions prints a warning when the caveat applies.
+ * realm only (page reload / a worker created after the shared worker was
+ * terminated), and updateOptions prints a warning when the caveat applies.
  */
 export function configureWasm(opts: LoaderOptions): void {
   defaultLoader.updateOptions(opts);

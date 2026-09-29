@@ -1,6 +1,6 @@
 import type { ColumnConfig, ExportOptions, ExportResult } from "./types";
 import { columnLabel } from "./column-tree";
-import { defaultWasmUrl, getWasmLoader } from "./wasm-loader";
+import { defaultWasmUrl, getWasmLoader } from "@marcusok/xlsx-core";
 import { toBlobPart } from "./download";
 
 const XLSX_MIME =
@@ -134,7 +134,12 @@ export async function exportInWorker(
   // Always forward a resolved URL: with the default (no configureWasm call)
   // the worker cannot locate the wasm next to its own bundled location —
   // the main thread's default points at the asset this bundle actually ships.
-  const wasmUrl = getWasmLoader().getOptions().wasmUrl ?? defaultWasmUrl();
+  // String() is mandatory: a URL object is not structured-cloneable, so
+  // postMessage would throw DataCloneError and silently degrade every
+  // default-configured browser export to the main thread.
+  const wasmUrl = String(
+    getWasmLoader().getOptions().wasmUrl ?? defaultWasmUrl(),
+  );
   const id = ++requestIdSeq;
 
   try {

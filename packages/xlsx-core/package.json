@@ -1,0 +1,65 @@
+{
+  "name": "@marcusok/xlsx-core",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Shared modern-xlsx engine layer for the @marcusok spreadsheet packages: WASM loading, asset distribution and a stable re-export surface.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourbusiness/marcusok.git",
+    "directory": "packages/xlsx-core"
+  },
+  "bugs": {
+    "url": "https://github.com/yourbusiness/marcusok/issues"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./tsup": {
+      "types": "./dist/tsup.d.ts",
+      "import": "./dist/tsup.js",
+      "default": "./dist/tsup.js"
+    },
+    "./dist/modern-xlsx.wasm": "./dist/modern-xlsx.wasm",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "modern-xlsx": "1.2.0"
+  },
+  "keywords": [
+    "xlsx",
+    "wasm",
+    "modern-xlsx",
+    "shared"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "eslint": "^9.16.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

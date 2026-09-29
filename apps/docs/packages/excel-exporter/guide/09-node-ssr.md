@@ -1,6 +1,6 @@
 # Node / SSR Usage
 
-In Node servers (including SSR) you don't need browser assets and there is **no initialization boilerplate**: the engine locates this package's `dist/modern-xlsx.wasm` on disk (pnpm-symlink-safe) and initializes it synchronously on first use. The explicit `initWasmSync` bootstrap from earlier versions is no longer required — keep it only if you want the one-off read+compile at startup instead of the first request.
+In Node servers (including SSR) you don't need browser assets and there is **no initialization boilerplate**: the engine locates the shipped `modern-xlsx.wasm` on disk (in `@marcusok/xlsx-core`'s `dist/`, pnpm-symlink-safe) and initializes it synchronously on first use. The explicit `initWasmSync` bootstrap from earlier versions is no longer required — keep it only if you want the one-off read+compile at startup instead of the first request.
 
 > Auto-initialization does a one-off synchronous file read plus WASM compile (measured ~20ms on this repo's dev machine, Node 22: ~4ms to read the 1.9MB binary, ~15ms to compile), charged to the first export. To move that cost to process startup instead, use the explicit init below.
 
@@ -67,7 +67,7 @@ import { getWasmLoader } from "@marcusok/excel-exporter";
 await getWasmLoader().ensureLoaded(); // reads + compiles the shipped wasm once
 ```
 
-> Do not use `initWasmSync` from a separately installed `modern-xlsx` for this: the engine is bundled into `@marcusok/excel-exporter`, so an external copy initializes a different module instance and does not pre-warm the bundled one.
+> Do not use `initWasmSync` from a separately installed `modern-xlsx` for this: the engine is bundled into the shared `@marcusok/xlsx-core` layer this package depends on, so an external copy initializes a different module instance and does not pre-warm the bundled one.
 
 > Bundler caveat: if your server build bundles this package and the WASM asset is not emitted alongside the bundle, the automatic disk lookup fails and WASM-dependent routes degrade to the style-less stream (headers/merges preserved). Either keep the package external (the default for Node server builds), pass `configureWasm({ wasmUrl })` with an HTTP URL, or copy the asset where the bundle can read it.
 
