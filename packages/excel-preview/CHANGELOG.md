@@ -1,0 +1,12 @@
+# @marcusok/excel-preview
+
+## 1.0.0
+
+### Major Changes
+
+- be12efc: Initial release: read-only xlsx preview in the browser. Worker-based parsing (shared worker, main-thread fallback in Node/SSR), framework-agnostic DOM rendering with four-quadrant frozen panes and virtual scrolling (viewport-only cells, whole-merge recall), and an Excel-fidelity layer: builtin number formats through Excel's actual behavior table, negative-sign/accounting-parens/currency-literal compensation, self-implemented dates/times (minute adjacency, weekday names, elapsed `[h]:mm:ss`, time-of-day `mm:ss` distinct from bracketed `[m]:ss`, fractional seconds, date1904 shift), General at 15 significant digits, and a theme/indexed color overlay that recovers colors the engine's read path drops (the overlay also rebuilds the fonts/fills/borders collections from styles.xml in document order — the engine's parser skips self-closed elements like the default `<border/>`, shifting every cellXfs id reference on real-Excel files). Supports encrypted workbooks (`password`), CSV (UTF-8/GB18030, delimiter sniffing), and friendly code-carrying errors (`PASSWORD_PROTECTED`, `LEGACY_FORMAT` for legacy .xls, …). Public API: `createPreview`, `parseWorkbookBytes`, `formatCellValue`.
+
+### Patch Changes
+
+- Updated dependencies [be12efc]
+  - @marcusok/xlsx-core@1.0.0
