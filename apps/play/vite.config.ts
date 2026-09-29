@@ -40,8 +40,8 @@ function sourceEntry(dir: string): string {
  * HMR-friendly aliases; everything else is handled by normal node/vite
  * resolution against the workspace symlink (i.e. built dist).
  */
+// （play 自身在 apps/ 下，不在 packagesDir 扫描范围内，无需排除。）
 const sourcePackages: SourcePackage[] = readdirSync(packagesDir)
-  .filter((name) => name !== "play")
   .filter(
     (name) =>
       isFile(resolve(packagesDir, name, "src/index.ts")) ||
