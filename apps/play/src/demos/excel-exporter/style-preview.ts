@@ -22,7 +22,7 @@ import type {
 import {
   mergeStyles,
   BaseCellStyle,
-} from "../../../../excel-exporter/src/style-utils.js";
+} from "../../../../../packages/excel-exporter/src/style-utils.js";
 
 /** 复刻库内 sheet-normalize.INDEX_PROP（未从公共入口导出）。 */
 const PREVIEW_INDEX_PROP = "__index__";

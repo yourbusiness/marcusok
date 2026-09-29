@@ -31,7 +31,8 @@ describe("demo registration completeness", () => {
 
   it("every @marcusok/* dependency follows the src/index.ts layout convention", () => {
     for (const dep of deps) {
-      const pkgDir = resolve(packageRoot, "..", dep);
+      // play 位于 apps/ 下，@marcusok 依赖统一在仓库根 packages/ 中
+      const pkgDir = resolve(packageRoot, "..", "..", "packages", dep);
       const hasEntry =
         existsSync(resolve(pkgDir, "src/index.ts")) ||
         existsSync(resolve(pkgDir, "src/index.tsx"));

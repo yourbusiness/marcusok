@@ -19,7 +19,8 @@ import {
 } from "../vite/workspace-resolver";
 
 const playDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const exporterDir = resolve(playDir, "..", "excel-exporter");
+// play 位于 apps/ 下，业务包在仓库根 packages/ 中
+const exporterDir = resolve(playDir, "..", "..", "packages", "excel-exporter");
 
 describe("pickExportTarget", () => {
   it("passes through a plain string target", () => {

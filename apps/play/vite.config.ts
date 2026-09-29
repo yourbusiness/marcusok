@@ -12,7 +12,9 @@ import {
 } from "./src/vite/workspace-resolver.ts";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
-const packagesDir = resolve(rootDir, "..");
+// play 是应用，位于 apps/ 下；workspace 业务包统一在仓库根的 packages/
+// （上两级到仓库根再进 packages）。
+const packagesDir = resolve(rootDir, "..", "..", "packages");
 
 /**
  * Escape regex metacharacters in a package name before splicing it into a

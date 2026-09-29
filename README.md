@@ -41,12 +41,12 @@ Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages th
 ```
 marcusok/
 ├── apps/                       # Applications (scales horizontally)
-│   └── docs/                   # VitePress public docs site (English default + Chinese, GitHub Pages)
+│   ├── docs/                   # VitePress public docs site (English default + Chinese, GitHub Pages)
+│   └── play/                   # Local integration sandbox (React 19 + antd 6, private app)
 ├── packages/                   # Shared packages (scales horizontally)
-│   ├── excel-exporter/         # Export category: Excel export
-│   │   ├── src/                # Source (incl. workers/ entry) and __tests__/
-│   │   └── dist/               # tsup build output
-│   └── play/                   # Local integration sandbox (React 19 + antd 6, private package)
+│   └── excel-exporter/         # Export category: Excel export
+│       ├── src/                # Source (incl. workers/ entry) and __tests__/
+│       └── dist/               # tsup build output
 ├── docs/                       # Design documents (Chinese)
 │   ├── excel-export-design.md  # Excel export core design doc (~230k chars, the main one)
 │   └── release-*.md / ci-*.md  # Release & CI walkthroughs, debug notes, docs-site plan

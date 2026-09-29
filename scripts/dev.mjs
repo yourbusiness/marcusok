@@ -31,7 +31,7 @@ const TASKS = {
     color: "\x1b[36m", // cyan
   },
   play: {
-    cwd: "packages/play",
+    cwd: "apps/play",
     binPkg: "vite",
     binName: "vite",
     args: [],
