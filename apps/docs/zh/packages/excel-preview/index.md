@@ -34,6 +34,7 @@ const preview = createPreview(el, {
   onError: (e) => console.error(e.code, e.message),
 });
 
+// 这两个方法要等解析完成后才生效（在此之前是空操作）
 preview.setSheet("Sheet2"); // 名称或索引
 preview.destroy(); // 卸载并释放资源
 ```

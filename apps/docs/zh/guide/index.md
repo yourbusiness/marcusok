@@ -4,12 +4,12 @@
 
 ## 当前包
 
-| 包                                                                         | 分类 | 状态   | 说明                                                                                         |
-| -------------------------------------------------------------------------- | ---- | ------ | -------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](/zh/packages/excel-exporter/)                 | 导出 | stable | Excel 导出核心库：modern-xlsx + Fast stream、完整样式、Worker 多线程、快速写入、流式降级兜底 |
-| [`@marcusok/excel-preview`](/zh/packages/excel-preview/)                   | 预览 | stable | xlsx 只读预览：Worker 解析 + 虚拟滚动，样式/合并/冻结/数字格式还原                           |
-| [`@marcusok/xlsx-core`](https://www.npmjs.com/package/@marcusok/xlsx-core) | 共享 | stable | 全仓唯一的 modern-xlsx 引擎层：WASM 加载、资产分发、稳定再导出                               |
-| [`@marcusok/progress-overlay`](/zh/packages/progress-overlay/)             | 共享 | stable | 共享进度遮罩 UI（旋转圆环 / 百分比条、毛玻璃面板、双主题），导出包 `overlay` 选项的底层      |
+| 包                                                             | 分类 | 状态   | 说明                                                                                         |
+| -------------------------------------------------------------- | ---- | ------ | -------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](/zh/packages/excel-exporter/)     | 导出 | stable | Excel 导出核心库：modern-xlsx + Fast stream、完整样式、Worker 多线程、快速写入、流式降级兜底 |
+| [`@marcusok/excel-preview`](/zh/packages/excel-preview/)       | 预览 | stable | xlsx 只读预览：Worker 解析 + 虚拟滚动，样式/合并/冻结/数字格式还原                           |
+| [`@marcusok/xlsx-core`](/zh/packages/xlsx-core/)               | 共享 | stable | 全仓唯一的 modern-xlsx 引擎层：WASM 加载、资产分发、稳定再导出                               |
+| [`@marcusok/progress-overlay`](/zh/packages/progress-overlay/) | 共享 | stable | 共享进度遮罩 UI（旋转圆环 / 百分比条、毛玻璃面板、双主题），导出包 `overlay` 选项的底层      |
 
 ## 工程约定
 
@@ -27,6 +27,8 @@
 
 - **导出** —— 把业务数据导出为可下载的文档。Excel 导出（[`@marcusok/excel-exporter`](/zh/packages/excel-exporter/)）已交付，后续可能补充其他文档类型（如 PDF）。
 - **文档预览** —— 在浏览器内预览文档。只读 xlsx 预览（[`@marcusok/excel-preview`](/zh/packages/excel-preview/)）已交付，其他文档格式以后按需跟进。
-- **公共组件** —— 上面两类共同依赖的能力层：[`@marcusok/xlsx-core`](https://www.npmjs.com/package/@marcusok/xlsx-core)（共享引擎）与 [`@marcusok/progress-overlay`](/zh/packages/progress-overlay/)（共享遮罩 UI）。两者均已发布，也可独立使用。
+- **公共组件** —— 上面两类共同依赖的能力层：[`@marcusok/xlsx-core`](/zh/packages/xlsx-core/)（共享引擎）与 [`@marcusok/progress-overlay`](/zh/packages/progress-overlay/)（共享遮罩 UI）。两者均已发布，也可独立使用。
+
+四个已发布包都已收录到本站，因此[首页统计的包数量](/zh/guide/#当前包)与上表一致。至于某个任务该用哪个包、它们在底层共享了什么，见[包关系与选型](/zh/guide/03-package-relationships)。
 
 新包发布后，只需在文档站 `apps/docs/.vitepress/registry.ts` 登记一条记录（含所属分类：`export` / `preview` / `shared`）并补充对应文档，即可自动出现在本站在线文档中。

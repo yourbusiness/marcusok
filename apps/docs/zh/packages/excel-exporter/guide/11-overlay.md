@@ -13,7 +13,9 @@ const result = await exportExcel({
 });
 ```
 
-遮罩在短暂延迟后出现、阻断页面交互，并在导出结束时移除——**成功与失败都会移除**。Node/SSR 下是空操作（没有 `document`）。`exportTable` 与 `exportEcharts` 接受同一选项——它们都委托 `exportExcel`。
+遮罩在短暂延迟后出现、阻断页面交互，并在导出结束时移除——**成功与失败都会移除**。Node/SSR 下是空操作（没有 `document`）。
+
+`exportTable` 与 `exportEcharts` 虽然委托 `exportExcel`，但它们各自的选项类型（`TableExportOptions` / `EChartsExportOptions`）**不含** `overlay` 字段，其转换函数也不会透传该字段——在这里传 `overlay` 会 TypeScript 报错，运行时则被静默忽略，默认遮罩照常弹出。若想在这两种数据形态下控制遮罩，先用 `tableToSheet` / `echartsToSheet` 转换后再自行调用 `exportExcel`（见[表格与 ECharts 入口](/zh/packages/excel-exporter/api/05-table-and-echarts)）。
 
 ## 取值
 
@@ -82,9 +84,8 @@ const overlay = showProgressOverlay({
   text: { title: "正在导出 Excel", phases: { building: "正在构建工作簿…" } },
 });
 try {
-  return await exportAsStream(sheets, {
-    onProgress: (p) => overlay.setProgress(p),
-  });
+  // exportAsStream 的第二个参数是回调函数本身，不是选项对象
+  return await exportAsStream(sheets, (p) => overlay.setProgress(p));
 } finally {
   overlay.close(); // 幂等
 }

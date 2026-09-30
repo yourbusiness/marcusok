@@ -47,6 +47,8 @@ preview.getSheetNames(); // all sheets, file order (hidden ones included)
 
 The tab bar (rendered by default) does the same thing visually; sheets marked `hidden` / `veryHidden` in the file never appear as tabs.
 
+Timing matters: these methods only take effect **after the parse resolves**. `createPreview` boots asynchronously, so calling `setSheet()` on the line right after it returns is a silent no-op — no return value, no `onError` — and `getSheetNames()` returns `[]` until then. Call them from `onParsed`, from your own UI, or let the tab bar drive them. After `destroy()` both are no-ops again; note that `destroy()` does **not** cancel an in-flight parse, it only suppresses the `onParsed` / `onError` callbacks that parse would have fired.
+
 ## The low-level parse API
 
 When you don't want the renderer at all — custom UI, SSR, or a framework wrapper:

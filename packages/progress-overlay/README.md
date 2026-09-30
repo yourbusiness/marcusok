@@ -37,19 +37,19 @@ Progress granularity is the caller's: only callers that emit intermediate values
 
 Returns a handle whose every method is exception-safe: the overlay is an enhancement and must never break the task it decorates. In Node/SSR (no `document`) the handle is a no-op — the same call site works everywhere, no branching.
 
-| Option             | Default         | Description                                                                                 |
-| ------------------ | --------------- | ------------------------------------------------------------------------------------------- |
-| `delayMs`          | `200`           | Delay before mounting. A task that finishes sooner never shows the overlay at all.          |
-| `minVisibleMs`     | `300`           | Once shown, stay at least this long — removed on a delay instead of flashing.               |
-| `fadeOutMs`        | `150`           | Fade-out duration before the node is detached.                                              |
-| `zIndex`           | `2147483000`    | Overlay stacking level.                                                                     |
-| `container`        | `document.body` | Mount target.                                                                               |
-| `blockInteraction` | `true`          | Blocks pointer and scroll events on the overlay. `false` leaves the page usable underneath. |
-| `theme`            | `"auto"`        | `"auto"` resolves via `prefers-color-scheme` at mount time.                                 |
-| `text.title`       | `"请稍候"`      | Panel title.                                                                                |
-| `text.initial`     | `"正在处理…"`   | Label before the first `setPhase`.                                                          |
-| `text.phases`      | `{}`            | `key → label` map; `setPhase(key)` looks the label up here. An uncovered key renders as-is. |
-| `text.hint`        | (see above)     | Extra line under the label, indeterminate mode only.                                        |
+| Option             | Default                                | Description                                                                                 |
+| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `delayMs`          | `200`                                  | Delay before mounting. A task that finishes sooner never shows the overlay at all.          |
+| `minVisibleMs`     | `300`                                  | Once shown, stay at least this long — removed on a delay instead of flashing.               |
+| `fadeOutMs`        | `150`                                  | Fade-out duration before the node is detached.                                              |
+| `zIndex`           | `2147483000`                           | Overlay stacking level.                                                                     |
+| `container`        | `document.body`                        | Mount target.                                                                               |
+| `blockInteraction` | `true`                                 | Blocks pointer and scroll events on the overlay. `false` leaves the page usable underneath. |
+| `theme`            | `"auto"`                               | `"auto"` resolves via `prefers-color-scheme` at mount time.                                 |
+| `text.title`       | `"请稍候"`                             | Panel title.                                                                                |
+| `text.initial`     | `"正在处理…"`                          | Label before the first `setPhase`.                                                          |
+| `text.phases`      | `{}`                                   | `key → label` map; `setPhase(key)` looks the label up here. An uncovered key renders as-is. |
+| `text.hint`        | `"任务可能需要一些时间，请勿关闭页面"` | Extra line under the label, indeterminate mode only.                                        |
 
 ### Handle
 

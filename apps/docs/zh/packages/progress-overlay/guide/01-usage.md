@@ -2,27 +2,13 @@
 
 ## 句柄
 
-`showProgressOverlay(options)` 返回只有三个方法的句柄，全部异常安全、`close()` 之后调用也无害：
-
-- `setProgress(p)` — 喂进度值。`(0, 1)` 区间任何一个值都会把遮罩切到确定态进度条。入口的 `0` 被忽略；收尾的 `1` 只会把已存在的确定态推满——全程没有中间进度的任务会一直停在圆环上（这是数据源粒度，不是渲染问题）。
-- `setPhase(key)` — 按 `text.phases` 表切换文案。
-- `close()` — 幂等。挂在 `finally` 里；绝不能由 `setProgress(1)` 触发关闭——失败路径同样会发收尾的 1。
+`showProgressOverlay(options)` 返回只有三个方法的句柄——`setProgress(p)`、`setPhase(key)` 与 `close()`。三者都异常安全，`close()` 之后调用也无害。每个方法的契约见 [API 参考](/zh/packages/progress-overlay/api/01-overlay-api#progressoverlayhandle)：入口的 `0` 与收尾的 `1` 各自做什么、重复的阶段 key 为何被忽略、句柄何时会失效。
 
 ## 配置项
 
-| 配置项             | 默认值          | 说明                                                                                           |
-| ------------------ | --------------- | ---------------------------------------------------------------------------------------------- |
-| `delayMs`          | `200`           | 挂载遮罩前的延迟。比它更快的任务根本不会显示遮罩。                                             |
-| `minVisibleMs`     | `300`           | 一旦显示就至少停留这么久——移除走延时，而不是一闪而过。                                         |
-| `fadeOutMs`        | `150`           | 节点移除前的淡出时长。                                                                         |
-| `zIndex`           | `2147483000`    | 遮罩层级。                                                                                     |
-| `container`        | `document.body` | 挂载容器。                                                                                     |
-| `blockInteraction` | `true`          | 在遮罩自身上拦截指针与滚动事件（绝不改宿主页面的 `overflow`）。置 `false` 时下层页面仍可操作。 |
-| `theme`            | `"auto"`        | `"auto"` 在挂载时按 `prefers-color-scheme` 解析。                                              |
-| `text.title`       | `"请稍候"`      | 面板标题。                                                                                     |
-| `text.initial`     | `"正在处理…"`   | 收到首个 `setPhase` 前的文案。                                                                 |
-| `text.phases`      | `{}`            | `key → 文案` 表；`setPhase(key)` 时查表。未覆盖的 key 原样显示。                               |
-| `text.hint`        | （见上）        | 文案下方的补充行，仅不确定态显示。                                                             |
+每个配置项的类型、默认值与生效范围都在 [API 参考](/zh/packages/progress-overlay/api/01-overlay-api#progressoverlayoptions) 中列表给出。与时序相关的默认值是 `delayMs: 200`、`minVisibleMs: 300` 与 `fadeOutMs: 150`。
+
+该页还包含[外观定制](/zh/packages/progress-overlay/api/01-overlay-api#外观定制)（CSS 变量与类名），其中 `data-mxe-mode` 属性正是下文两态行为的实现机制。
 
 ## 主线程阻塞
 

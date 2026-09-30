@@ -13,16 +13,16 @@ function createPreview(
 
 ## PreviewOptions
 
-| Option          | Type                                        | Default            | Description                                                                                                                                                                                                                   |
-| --------------- | ------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | — (required)       | The file bytes                                                                                                                                                                                                                |
-| `password`      | `string`                                    | —                  | Password for encrypted workbooks (Agile AES-256)                                                                                                                                                                              |
-| `sheet`         | `string \| number`                          | file's `activeTab` | Initial sheet (name or 0-based index). A missing name or an out-of-range index silently falls back to the file's `activeTab` — unlike the instance method `setSheet()`, which surfaces the invalid argument through `onError` |
-| `showHeaders`   | `boolean`                                   | `true`             | Row/column headers (A/B/C + 1/2/3)                                                                                                                                                                                            |
-| `showGridLines` | `boolean`                                   | from the file      | Grid lines                                                                                                                                                                                                                    |
-| `showTabs`      | `boolean`                                   | `true`             | Sheet tab bar (hidden sheets never appear)                                                                                                                                                                                    |
-| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                  | Render-ready callback: fires after the first parse+render **and again after every sheet switch** (`duration.parse` reuses the first parse's timing). Reports sheet list, dimensions and timings                               |
-| `onError`       | `(error: PreviewError) => void`             | —                  | Failure callback (see codes below)                                                                                                                                                                                            |
+| Option          | Type                                        | Default            | Description                                                                                                                                                                                                                                                                                            |
+| --------------- | ------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | — (required)       | The file bytes                                                                                                                                                                                                                                                                                         |
+| `password`      | `string`                                    | —                  | Password for encrypted workbooks (Agile AES-256)                                                                                                                                                                                                                                                       |
+| `sheet`         | `string \| number`                          | file's `activeTab` | Initial sheet (name or 0-based index). A missing name or an out-of-range index silently falls back to the file's `activeTab` — unlike the instance method `setSheet()`, which surfaces the invalid argument through `onError`                                                                          |
+| `showHeaders`   | `boolean`                                   | `true`             | Row/column headers (A/B/C + 1/2/3)                                                                                                                                                                                                                                                                     |
+| `showGridLines` | `boolean`                                   | from the file      | Grid lines                                                                                                                                                                                                                                                                                             |
+| `showTabs`      | `boolean`                                   | `true`             | Sheet tab bar (hidden sheets never appear)                                                                                                                                                                                                                                                             |
+| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                  | Render-ready callback: fires after the first parse+render **and again after every sheet switch** (`duration.parse` reuses the first parse's timing, `duration.total` keeps counting from the initial load — for a switch's own cost use `duration.render`). Reports sheet list, dimensions and timings |
+| `onError`       | `(error: PreviewError) => void`             | —                  | Failure callback (see codes below)                                                                                                                                                                                                                                                                     |
 
 `PreviewParsedInfo`:
 
@@ -32,7 +32,11 @@ interface PreviewParsedInfo {
   sheetCount: number;
   rowCount: number; // active sheet
   colCount: number;
-  duration: { parse: number; render: number; total: number }; // ms
+  duration: {
+    parse: number; // ms; the first parse only — reused on later sheet switches
+    render: number; // ms; this render
+    total: number; // ms; elapsed since createPreview booted — cumulative, not per-switch
+  };
 }
 ```
 
@@ -73,10 +77,10 @@ Throws an `Error` with a `.code` property (same codes as above) on failure. See 
 
 ## Other exports
 
-| Export            | What it is                                                                                            |
-| ----------------- | ----------------------------------------------------------------------------------------------------- |
-| `formatCellValue` | The cell formatter the renderer itself uses (see [model types](/packages/excel-preview/api/02-model)) |
-| `configureWasm`   | Asset self-hosting config (see [assets](/packages/excel-preview/guide/02-assets))                     |
-| `getWasmLoader`   | The shared loader singleton — current options/state (same object as `@marcusok/xlsx-core`'s)          |
+| Export            | What it is                                                                                                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `formatCellValue` | The cell formatter the renderer itself uses (see [model types](/packages/excel-preview/api/02-model))                                                                                           |
+| `configureWasm`   | Asset self-hosting config (see [assets](/packages/excel-preview/guide/02-assets))                                                                                                               |
+| `getWasmLoader`   | The shared `WasmLoader` singleton — the same object `@marcusok/xlsx-core` exports. Read readiness via `isReady` / `supported`, options via `getOptions()` (the state machine itself is private) |
 
 `configureWasm` / `getWasmLoader` are re-exports of `@marcusok/xlsx-core`: importing them from either package configures the same shared loader.

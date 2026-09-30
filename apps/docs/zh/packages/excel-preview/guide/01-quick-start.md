@@ -47,6 +47,8 @@ preview.getSheetNames(); // 全部 sheet（含隐藏，按文件顺序）
 
 默认渲染的页签栏在视觉上做同一件事；文件中标记 `hidden` / `veryHidden` 的表永远不会出现在页签里。
 
+时机很重要：这两个方法只在**解析完成后**才生效。`createPreview` 是异步启动的，在它返回后的下一行就调用 `setSheet()` 属于静默空操作——没有返回值、也不触发 `onError`；在此期间 `getSheetNames()` 返回 `[]`。请在 `onParsed` 里、或由你自己的 UI、或交给页签栏来调用。`destroy()` 之后两者同样变回空操作；注意 `destroy()` **不会**中止在途解析，它只是抑制该次解析本应触发的 `onParsed` / `onError` 回调。
+
 ## 低层解析 API
 
 不想用内置渲染器——自研 UI、SSR 或框架封装时：

@@ -1,6 +1,7 @@
 import excelExporterPkg from "@marcusok/excel-exporter/package.json" with { type: "json" };
 import excelPreviewPkg from "@marcusok/excel-preview/package.json" with { type: "json" };
 import progressOverlayPkg from "@marcusok/progress-overlay/package.json" with { type: "json" };
+import xlsxCorePkg from "@marcusok/xlsx-core/package.json" with { type: "json" };
 
 export interface LocalizedText {
   zh: string;
@@ -197,9 +198,9 @@ export function getAllHomeStats(
       key: "packages",
       value: pkgs.length,
       decimals: 0,
-      // 口径是"文档站收录的包"而非"npm 已发布"：@marcusok/xlsx-core 已发
-      // npm 但有意不在本注册表（共享引擎层，其用法随两个业务包的文档讲），
-      // 按发布数会虚报（对照 guide/index.md 的仓库结构表则含它）
+      // 口径是"文档站收录的包"，即全部四个已发布包——含共享引擎层
+      // @marcusok/xlsx-core（此前有意未收录，现已有独立页面）。
+      // 与 guide/index.md 的仓库结构表一致。
       zh: "文档站收录库包",
       en: "Documented packages",
       href:
@@ -379,6 +380,45 @@ export const packages: PackageEntry[] = [
       },
     ],
     demo: "PreviewDemo",
+  },
+  {
+    dir: "xlsx-core",
+    npmName: "@marcusok/xlsx-core",
+    category: "shared",
+    version: xlsxCorePkg.version,
+    status: "stable",
+    zh: true,
+    tagline: {
+      zh: "共享引擎层（modern-xlsx 与 WASM 加载器；导出与预览共用一份引擎与二进制）",
+      en: "Shared engine layer (modern-xlsx + WASM loader; one engine and one binary for export and preview)",
+    },
+    keywords: ["xlsx", "wasm", "modern-xlsx", "engine", "loader"],
+    highlights: [
+      {
+        icon: "route",
+        title: { zh: "单一引擎", en: "One engine" },
+        details: {
+          zh: "导出与预览共用同一份 modern-xlsx 实例与 WASM 二进制——同一页面同时用两个包也只加载一次。",
+          en: "Export and preview share one modern-xlsx instance and one WASM binary — a page using both loads each only once.",
+        },
+      },
+      {
+        icon: "zap",
+        title: { zh: "双路径加载", en: "Dual-path loading" },
+        details: {
+          zh: "浏览器走 fetch、Node 走同步初始化；超时、重试与加载状态机内建，资产可覆盖为自托管或 CDN 副本。",
+          en: "Fetch in the browser, synchronous init in Node; timeouts, retries and a load state machine are built in, and assets can be pointed at a self-hosted or CDN copy.",
+        },
+      },
+      {
+        icon: "shield",
+        title: { zh: "版本单一来源", en: "Single source of versions" },
+        details: {
+          zh: "业务包不再各自依赖 modern-xlsx：引擎升级只改这一处，两包的重导出面保持一致。",
+          en: "Business packages no longer depend on modern-xlsx individually: an engine upgrade happens in one place, and both re-export surfaces stay in step.",
+        },
+      },
+    ],
   },
   {
     dir: "progress-overlay",

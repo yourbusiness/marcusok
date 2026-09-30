@@ -20,6 +20,7 @@
     "@marcusok/excel-exporter": "workspace:*",
     "@marcusok/excel-preview": "workspace:*",
     "@marcusok/progress-overlay": "workspace:*",
+    "@marcusok/xlsx-core": "workspace:*",
     "vue": "^3.5.13"
   },
   "devDependencies": {

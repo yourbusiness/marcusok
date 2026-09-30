@@ -34,6 +34,7 @@ const preview = createPreview(el, {
   onError: (e) => console.error(e.code, e.message),
 });
 
+// these two only take effect once the parse resolves (they are no-ops before that)
 preview.setSheet("Sheet2"); // by name or index
 preview.destroy(); // unmount + free resources
 ```

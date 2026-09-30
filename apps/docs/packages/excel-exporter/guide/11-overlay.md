@@ -13,7 +13,9 @@ const result = await exportExcel({
 });
 ```
 
-The overlay appears after a short delay, blocks page interaction, and is removed when the export settles — on success **and** on failure. In Node/SSR it is a no-op (there is no `document`). `exportTable` and `exportEcharts` accept the same option — they delegate to `exportExcel`.
+The overlay appears after a short delay, blocks page interaction, and is removed when the export settles — on success **and** on failure. In Node/SSR it is a no-op (there is no `document`).
+
+`exportTable` and `exportEcharts` delegate to `exportExcel`, but their own option types (`TableExportOptions` / `EChartsExportOptions`) do **not** carry `overlay` and their converters drop the field — passing it there is a TypeScript error and is silently ignored at runtime, so the default overlay still shows. To control the overlay while starting from those data shapes, convert first with `tableToSheet` / `echartsToSheet` and call `exportExcel` yourself (see [Table and ECharts entries](/packages/excel-exporter/api/05-table-and-echarts)).
 
 ## Option values
 
@@ -82,9 +84,8 @@ const overlay = showProgressOverlay({
   text: { title: "正在导出 Excel", phases: { building: "正在构建工作簿…" } },
 });
 try {
-  return await exportAsStream(sheets, {
-    onProgress: (p) => overlay.setProgress(p),
-  });
+  // exportAsStream's second argument is the callback itself, not an options object
+  return await exportAsStream(sheets, (p) => overlay.setProgress(p));
 } finally {
   overlay.close(); // idempotent
 }

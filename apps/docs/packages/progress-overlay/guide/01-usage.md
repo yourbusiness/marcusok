@@ -2,27 +2,13 @@
 
 ## The handle
 
-`showProgressOverlay(options)` returns a handle with exactly three methods, all exception-safe and safe to call after `close()`:
-
-- `setProgress(p)` — feed progress values. Any value in `(0, 1)` switches the overlay to the determinate bar. The leading `0` is ignored; the trailing `1` only completes an existing determinate bar — a task that never reported intermediate progress stays on the spinner (that is the data source's granularity, not a rendering problem).
-- `setPhase(key)` — switch the label via the `text.phases` map.
-- `close()` — idempotent. Call it in a `finally`; never key it off `setProgress(1)`, which also fires on failed runs.
+`showProgressOverlay(options)` returns a handle with exactly three methods — `setProgress(p)`, `setPhase(key)` and `close()`. All three are exception-safe and still callable after `close()`. The [API reference](../api/01-overlay-api#progressoverlayhandle) specifies each one's contract: what the leading `0` and the trailing `1` do, why a repeated phase key is ignored, and when a handle goes stale.
 
 ## Options
 
-| Option             | Default         | Description                                                                                                                                      |
-| ------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `delayMs`          | `200`           | Delay before mounting. A task that finishes sooner never shows the overlay at all.                                                               |
-| `minVisibleMs`     | `300`           | Once shown, stay at least this long — removed on a delay rather than flashing.                                                                   |
-| `fadeOutMs`        | `150`           | Fade-out duration before the node is detached.                                                                                                   |
-| `zIndex`           | `2147483000`    | Overlay stacking level.                                                                                                                          |
-| `container`        | `document.body` | Mount target.                                                                                                                                    |
-| `blockInteraction` | `true`          | Blocks pointer and scroll events on the overlay itself (the host page's `overflow` is never touched). `false` leaves the page usable underneath. |
-| `theme`            | `"auto"`        | `"auto"` resolves via `prefers-color-scheme` at mount time.                                                                                      |
-| `text.title`       | `"请稍候"`      | Panel title.                                                                                                                                     |
-| `text.initial`     | `"正在处理…"`   | Label before the first `setPhase`.                                                                                                               |
-| `text.phases`      | `{}`            | `key → label` map; `setPhase(key)` looks the label up here. An uncovered key renders as-is.                                                      |
-| `text.hint`        | (see above)     | Extra line under the label, indeterminate mode only.                                                                                             |
+Every option, with its type, default and scope, is tabulated in the [API reference](../api/01-overlay-api#progressoverlayoptions). The timing defaults are `delayMs: 200`, `minVisibleMs: 300` and `fadeOutMs: 150`.
+
+That page also covers [customizing the look](../api/01-overlay-api#customizing-the-look) through CSS variables and class names — including the `data-mxe-mode` attribute that drives the two-state behaviour described below.
 
 ## Blocking the main thread
 

@@ -15,6 +15,7 @@ const preview = createPreview(el, {
   onError: (e) => console.error(e.code, e.message),
 });
 
+// setSheet() / getSheetNames() only take effect once the parse resolves
 preview.setSheet("Sheet2"); // by name or index
 preview.destroy();
 ```
@@ -22,7 +23,8 @@ preview.destroy();
 That is the entire setup. Node/SSR (no Worker global) runs the same pipeline on
 the main thread with no code change. `onParsed` fires after the first render
 and again after every `setSheet`/tab switch (`duration.parse` reuses the first
-parse's timing).
+parse's timing; `duration.total`, by contrast, keeps counting from the initial
+load, so use `duration.render` for a switch's own cost).
 
 ## What it restores
 

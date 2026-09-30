@@ -55,4 +55,4 @@ configureWasm({ wasmUrl, parseWorkerUrl });
 
 ## Vite dev server 注意事项
 
-与导出包相同：若 WASM 请求返回 HTML（`content-type: text/html`，编译错误含 `expected magic word`），把包加进 `optimizeDeps.exclude`，阻止依赖预打包拦截资产。完整排查思路见[导出包安装文档](/zh/packages/excel-exporter/guide/02-installation#vite-dev-server-pre-bundling-caveat)。
+与导出包相同：若 WASM 请求返回 HTML（`content-type: text/html`，编译错误含 `expected magic word`），把包加进 `optimizeDeps.exclude`，阻止依赖预打包拦截资产。完整排查思路见[导出包安装文档](/zh/packages/excel-exporter/guide/02-installation#vite-开发服务器-预构建注意事项)。
