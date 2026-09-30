@@ -22,12 +22,6 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE"
-  ],
   "sideEffects": false,
   "engines": {
     "node": ">=22.0.0"
