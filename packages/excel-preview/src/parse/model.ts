@@ -154,12 +154,18 @@ function borderFromOverlay(
           color: resolveColorSpec(s.color, palette),
         }
       : null;
+  // 对角线显示需 <border> 带 diagonalUp/Down 标志（Excel 语义，见
+  // OverlayBorder.diagonalUp）：全缺时不渲染，预览不能画出 Excel 不画的线。
+  // 两标志同置（X 型）CSS 单渐变表达不了，取更常见的 down。方向经
+  // diagonalUp 布尔下传给 css 编译层（true = "/"）。
+  const showDiagonal = b.diagonalUp || b.diagonalDown;
   return {
     left: side(b.left),
     right: side(b.right),
     top: side(b.top),
     bottom: side(b.bottom),
-    diagonal: side(b.diagonal),
+    diagonal: showDiagonal ? side(b.diagonal) : null,
+    diagonalUp: showDiagonal && !b.diagonalDown,
   };
 }
 
@@ -227,7 +233,10 @@ function stylesFromEngine(
       right: side("right"),
       top: side("top"),
       bottom: side("bottom"),
+      // 引擎数组不携带 diagonalUp/Down 标志，方向无从判定：按 Excel 常见的
+      // down（"\"）渲染——降级路径本就是无据近似（此前固定 "/" 同样是猜测）
       diagonal: side("diagonal"),
+      diagonalUp: false,
     };
   });
 

@@ -25,7 +25,8 @@ export interface PreviewSheet {
   /** 文件声明的视图开关（缺省 true）。 */
   showGridLines: boolean;
   rightToLeft: boolean;
-  /** 数据边界（1-based，含样式但不合并计数由渲染层另行处理）。 */
+  /** 数据边界（1-based，含样式格；合并区末行/列已并入——纯合并不写覆盖格，
+   * 只按内容归约会把合并区截小，见 parse/model.ts）。 */
   rowCount: number;
   colCount: number;
   /** 稀疏行（按 index 升序，无内容行缺席）。 */
@@ -123,6 +124,12 @@ export interface PreviewBorder {
   top: PreviewBorderSide | null;
   bottom: PreviewBorderSide | null;
   diagonal: PreviewBorderSide | null;
+  /**
+   * 对角线方向：true = "/"（diagonalUp）；缺省/false = "\"（diagonalDown，
+   * Excel 常见形态）。仅有 diagonal 样式而 Up/Down 标志全缺的文件不显示
+   * 对角线（Excel 语义，解析层已置 diagonal 为 null）。
+   */
+  diagonalUp?: boolean;
 }
 
 export interface PreviewXf {
@@ -148,15 +155,19 @@ export interface PreviewOptions {
   source: PreviewSource;
   /** 加密文件的密码（modern-xlsx Agile AES-256）。 */
   password?: string;
-  /** 初始 sheet（名称或 0-based 索引）；缺省 = 文件的 activeTab。 */
+  /** 初始 sheet（名称或 0-based 索引）；缺省 = 文件的 activeTab。名称不存在
+   * 或索引越界时静默回退 activeTab（不触发 onError——对照实例方法 setSheet
+   * 对无效入参会回调报错：初始选项容错、运行期切换严格，两者语义有意不同）。 */
   sheet?: string | number;
-  /** 覆盖文件声明的表头（行号列/列标头）开关；缺省遵循文件（默认显示）。 */
+  /** 表头（行号列/列标头）显示开关；缺省 true。表头是预览自身 UI，无文件级
+   * 声明可遵循（对照：showGridLines 确实读取文件的视图开关）。 */
   showHeaders?: boolean;
   /** 覆盖文件声明的网格线开关；缺省遵循文件（默认显示）。 */
   showGridLines?: boolean;
   /** 是否渲染 sheet 页签栏；默认 true。 */
   showTabs?: boolean;
-  /** 解析完成回调（成功）。 */
+  /** 渲染就绪回调：首次解析渲染完成后与每次 sheet 切换完成后都会触发
+   * （不是仅触发一次；duration.parse 复用首次解析耗时）。 */
   onParsed?: (info: PreviewParsedInfo) => void;
   /** 错误回调（解析/渲染致命错误）。 */
   onError?: (error: PreviewError) => void;

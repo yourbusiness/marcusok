@@ -78,6 +78,43 @@ describe("样式编译", () => {
     expect(css).toContain("font-weight:700"); // 加粗
   });
 
+  it("下划线+删除线合成一条 text-decoration，且不冲掉粗体/斜体", () => {
+    // 回归守卫：此前合并两条 text-decoration 时用了整串赋值，把已累加的
+    // font-weight/font-style 一并冲掉（bold+下划线+删除线丢失粗体）
+    const styles: PreviewStyles = {
+      fonts: [
+        {
+          name: null,
+          size: null,
+          bold: true,
+          italic: true,
+          underline: true,
+          strike: true,
+          color: null,
+        },
+      ],
+      fills: [],
+      borders: [],
+      xfs: [
+        {
+          fontId: 0,
+          fillId: 0,
+          borderId: 0,
+          numFmtCode: "General",
+          alignment: null,
+        },
+      ],
+    };
+    const css = compileStylesheet(styles);
+    expect(css).toContain("font-weight:700");
+    expect(css).toContain("font-style:italic");
+    expect(css).toContain("text-decoration:underline line-through");
+    // 不再出现会按源序互相覆盖的两条独立声明（分号结尾才算是完整声明，
+    // 合成形态 "underline line-through;" 不匹配这两个断言）
+    expect(css).not.toContain("text-decoration:underline;");
+    expect(css).not.toContain("text-decoration:line-through;");
+  });
+
   it("渐变填充角度：xlsx degree 0（左→右）→ CSS 90deg", () => {
     const gradient: PreviewStyles = {
       fonts: [],
@@ -111,6 +148,70 @@ describe("样式编译", () => {
       stops: first.kind === "gradient" ? first.stops : [],
     };
     expect(compileStylesheet(gradient)).toContain("linear-gradient(180deg");
+  });
+
+  it("对角线边框：方向随 diagonalUp，且与渐变填充分层不互相覆盖", () => {
+    // 回归守卫 1：方向——diagonalUp = "/"（to top right），缺省/Down = "\"
+    //（to bottom right）；回归守卫 2：渐变填充与对角线同落 background-image，
+    // 此前分别写 background 简写与独立 background-image，后者按源序冲掉前者
+    const styles: PreviewStyles = {
+      fonts: [],
+      fills: [
+        {
+          kind: "gradient",
+          degree: 0,
+          stops: [
+            { position: 0, color: "#ffffff" },
+            { position: 1, color: "#000000" },
+          ],
+        },
+        { kind: "none" },
+      ],
+      borders: [
+        {
+          left: null,
+          right: null,
+          top: null,
+          bottom: null,
+          diagonal: { style: "thin", color: "#ff0000" },
+          diagonalUp: true,
+        },
+        {
+          left: null,
+          right: null,
+          top: null,
+          bottom: null,
+          // 无 diagonalUp 字段 = down（"\"，Excel 常见形态）
+          diagonal: { style: "medium", color: "#000000" },
+        },
+      ],
+      xfs: [
+        {
+          fontId: 0,
+          fillId: 0,
+          borderId: 0,
+          numFmtCode: "General",
+          alignment: null,
+        },
+        {
+          fontId: 0,
+          fillId: 1,
+          borderId: 1,
+          numFmtCode: "General",
+          alignment: null,
+        },
+      ],
+    };
+    const css = compileStylesheet(styles);
+    // xf0（渐变 + diagonalUp 对角线）：一条多层 background-image，对角线
+    // 在上层、渐变（90deg）保留下层——两层共存于同一声明
+    expect(css).toMatch(
+      /\.xpv-xf-0\{[^}]*background-image:linear-gradient\(to top right[^;]*,\s*linear-gradient\(90deg/,
+    );
+    // xf1（无渐变、无 diagonalUp）：down 方向的独立声明
+    expect(css).toMatch(
+      /\.xpv-xf-1\{[^}]*background-image:linear-gradient\(to bottom right/,
+    );
   });
 });
 

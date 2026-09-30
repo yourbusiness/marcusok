@@ -94,6 +94,8 @@ configureWasm({
 });
 ```
 
+> Worker scripts are same-origin only: a browser rejects a cross-origin worker script at `Worker` construction, so a raw CDN URL for `workerUrl` never loads and exports fall back to the main-thread/stream routes with console warnings. Serve the worker from your own origin (local copy or reverse proxy); only the WASM binary can come from a plain CDN.
+
 Bundlers with asset imports can also wire the files explicitly (the pre-2.0 recommended setup — still fully supported):
 
 ```ts

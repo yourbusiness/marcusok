@@ -62,6 +62,14 @@ export interface OverlayBorder {
   top: OverlayBorderSide | null;
   bottom: OverlayBorderSide | null;
   diagonal: OverlayBorderSide | null;
+  /**
+   * <border diagonalUp="1">（元素自身属性，非子元素）：对角线方向 "/"。
+   * ECMA-376 语义：有 <diagonal style> 但 Up/Down 标志全缺时 Excel 不显示
+   * 对角线——标志必须随样式一起解析，否则预览会画出 Excel 不画的线。
+   */
+  diagonalUp: boolean;
+  /** <border diagonalDown="1">：对角线方向 "\"（Excel 常见形态）；可与 Up 同置（X 型）。 */
+  diagonalDown: boolean;
 }
 
 /** fill 元素的完整解析（pattern 与 gradient 二选一；均无 = kind none）。 */
@@ -164,15 +172,24 @@ export function parseThemePalette(themeXml: string): ThemePalette {
   return palette;
 }
 
-function splitElements(xml: string, tag: string): string[] {
+/** splitElements 的产出：元素自身属性文本 + 配对形态的元素内容。 */
+interface XMLElem {
+  attrs: string;
+  content: string;
+}
+
+function splitElements(xml: string, tag: string): XMLElem[] {
   // 两种形态都必须产出列表项：配对 <tag …>…</tag> 与自闭合 <tag …/>（真实
   // Excel 产物的常态，如默认无边框 <border/>）。自闭合产出空内容项——输出
   // 下标因此与 styles.xml 文档序严格 1:1，cellXfs 的 id 引用才有对齐基准
   // （引擎解析会跳过自闭合元素导致其数组错位，见文件头注释第 2 点）。
+  // attrs 单独保留：<border> 的 diagonalUp/diagonalDown 是元素自身属性，
+  // 内容扫描看不到它们。
   const re = new RegExp(`<${tag}\\b([^>]*?)(?:/>|>([\\s\\S]*?)</${tag}>)`, "g");
-  const out: string[] = [];
+  const out: XMLElem[] = [];
   let m: RegExpExecArray | null;
-  while ((m = re.exec(xml)) !== null) out.push(m[2] ?? "");
+  while ((m = re.exec(xml)) !== null)
+    out.push({ attrs: m[1] ?? "", content: m[2] ?? "" });
   return out;
 }
 
@@ -183,6 +200,18 @@ function flagElem(content: string, tag: string): boolean {
   if (!m) return false;
   const val = parseAttrs(m[1]).val;
   return val === undefined || val === "1" || val === "true";
+}
+
+/**
+ * <u> 的 val 是 ST_UnderlineValues 枚举而非布尔（缺省值即 "single"）：任何
+ * 非 "none" 值都表示有下划线。不能走 flagElem 的布尔口径——显式写
+ * val="single"（与 <u/> 完全等价，LibreOffice 等第三方导出器的常见形态）
+ * 会被误判为 false，下划线整体丢失。
+ */
+function underlineElem(content: string): boolean {
+  const m = /<u\b([^>]*?)(?:\/>|>)/.exec(content);
+  if (!m) return false;
+  return parseAttrs(m[1]).val !== "none";
 }
 
 function parseFontElem(content: string): OverlayFont {
@@ -198,13 +227,17 @@ function parseFontElem(content: string): OverlayFont {
     size: numVal("sz"),
     bold: flagElem(content, "b"),
     italic: flagElem(content, "i"),
-    underline: flagElem(content, "u"),
+    underline: underlineElem(content),
     strike: flagElem(content, "strike"),
     color: parseColorSpec(content),
   };
 }
 
-function parseBorderElem(content: string): OverlayBorder {
+function parseBorderElem(attrs: string, content: string): OverlayBorder {
+  // diagonalUp/diagonalDown 是 <border> 元素自身的属性（ECMA-376），只在
+  // 标志置位时 <diagonal style> 才显示（见 OverlayBorder.diagonalUp 注释）
+  const borderAttrs = parseAttrs(attrs);
+  const flag = (v: string | undefined) => v === "1" || v === "true";
   const side = (tag: string): OverlayBorderSide | null => {
     // <left/>（style 缺省）= 该边无边框，返回 null 与引擎形态一致
     const m = new RegExp(
@@ -224,6 +257,8 @@ function parseBorderElem(content: string): OverlayBorder {
     top: side("top"),
     bottom: side("bottom"),
     diagonal: side("diagonal"),
+    diagonalUp: flag(borderAttrs.diagonalUp),
+    diagonalDown: flag(borderAttrs.diagonalDown),
   };
 }
 
@@ -282,9 +317,11 @@ export function buildStylesOverlay(bytes: Uint8Array): {
     /<borders\b[^>]*>([\s\S]*?)<\/borders>/.exec(xml)?.[1] ?? "";
 
   const overlay: StylesOverlay = {
-    fonts: splitElements(fontsSec, "font").map(parseFontElem),
-    fills: splitElements(fillsSec, "fill").map(parseFillElem),
-    borders: splitElements(bordersSec, "border").map(parseBorderElem),
+    fonts: splitElements(fontsSec, "font").map((e) => parseFontElem(e.content)),
+    fills: splitElements(fillsSec, "fill").map((e) => parseFillElem(e.content)),
+    borders: splitElements(bordersSec, "border").map((e) =>
+      parseBorderElem(e.attrs, e.content),
+    ),
   };
 
   return { overlay, palette };

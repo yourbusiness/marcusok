@@ -54,3 +54,85 @@ describe("worker 响应分流（domain 直传 / 非 domain 回退主线程）", 
     }
   });
 });
+
+describe("worker 超时（挂死保护）", () => {
+  // 挂死 worker：postMessage 后永不响应，模拟 wasm 初始化悬置/引擎死循环。
+  // 观测手段沿用本文件的 CSV 技巧：字节是 CSV，主线程本可解析成功——若
+  // 超时错误误走主线程回退，结果会变成 ok:true，与"不回退"的期望立刻区分。
+  let terminations = 0;
+
+  class HungWorker {
+    onmessage: ((e: { data: unknown }) => void) | null = null;
+    postMessage() {}
+    terminate() {
+      terminations++;
+    }
+  }
+
+  it("超时终止共享 worker、拒绝在途请求且不回退主线程", async () => {
+    // 模块级 worker 单例可能已被上方用例占用：重置模块取全新副本，
+    // 保证 getOrCreateWorker 创建的是本次的 HungWorker
+    vi.resetModules();
+    vi.useFakeTimers();
+    vi.stubGlobal("Worker", HungWorker);
+    const { parseWorkbookSource: fresh } =
+      await import("../worker/worker-client");
+
+    const promise = fresh({ bytes: csvBytes });
+    await vi.advanceTimersByTimeAsync(120_000);
+    const r = await promise;
+    expect(terminations).toBe(1);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.noFallback).toBe(true);
+      expect(r.message).toContain("timed out");
+    }
+    vi.useRealTimers();
+  });
+
+  it("超时后不永久禁用 worker 路径：下次请求重建新实例", async () => {
+    vi.useFakeTimers();
+    const { parseWorkbookSource: fresh } =
+      await import("../worker/worker-client");
+
+    const promise = fresh({ bytes: csvBytes });
+    await vi.advanceTimersByTimeAsync(120_000);
+    await promise;
+    // 第二轮超时再次 terminate 的是新实例（workerBroken 未被置位）
+    expect(terminations).toBe(2);
+    vi.useRealTimers();
+  });
+});
+
+describe("worker 构造失败（跨域脚本同步抛错）", () => {
+  // worker 脚本受浏览器同源限制：parseWorkerUrl 配成裸 CDN 域名时
+  // new Worker() 在 Chrome 下同步抛 SecurityError。异常若穿透到调用方，
+  // 主线程回退不会生效——必须就地吞掉、置 workerBroken 并回退。
+  // 观测手段沿用 CSV 技巧：字节是 CSV，主线程本可解析成功。
+  it("构造异常回退主线程（不 reject 调用方），且置 workerBroken 不再重试构造", async () => {
+    vi.resetModules();
+    let constructions = 0;
+    class CrossOriginWorker {
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      constructor() {
+        constructions++;
+        throw new Error(
+          "Failed to construct 'Worker': Script cannot be accessed from origin",
+        );
+      }
+      postMessage() {}
+      terminate() {}
+    }
+    vi.stubGlobal("Worker", CrossOriginWorker);
+    const { parseWorkbookSource: fresh } =
+      await import("../worker/worker-client");
+
+    const r1 = await fresh({ bytes: csvBytes });
+    expect(r1.ok).toBe(true); // 主线程回退生效（CSV 可解析）
+    if (r1.ok) expect(r1.workbook.sheets[0].rowCount).toBe(2);
+    const r2 = await fresh({ bytes: csvBytes });
+    expect(r2.ok).toBe(true);
+    // workerBroken 已置位：第二次请求直接走主线程，不再重付构造
+    expect(constructions).toBe(1);
+  });
+});

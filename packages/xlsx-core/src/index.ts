@@ -1,13 +1,16 @@
 /**
  * @marcusok/xlsx-core — the repo's single modern-xlsx integration point.
  *
- * The engine (modern-xlsx, Rust + WASM) is a devDependency bundled INTO this
- * package's dist, so consumers depend on @marcusok/xlsx-core alone: they see
+ * The engine (modern-xlsx, Rust + WASM) is bundled INTO this package's dist
+ * at build time, so consumers depend on @marcusok/xlsx-core alone: they see
  * zero external runtime dependencies and are immune to modern-xlsx's
- * engines.node>=24 declaration. Packages that consume this core mark it
- * `external` in their main builds, so a page using several @marcusok
- * packages loads one engine instance (and one WASM binary) on the main
- * thread. Worker entrypoints of consuming packages must stay
+ * engines.node>=24 declaration. The pinned `modern-xlsx` dependency stays
+ * declared in package.json solely for consumer-side d.ts resolution (tsup
+ * leaves type re-exports as external imports — see the package README for
+ * the full rationale), not for runtime. Packages that consume this core
+ * mark it `external` in their main builds, so a page using several
+ * @marcusok packages loads one engine instance (and one WASM binary) on the
+ * main thread. Worker entrypoints of consuming packages must stay
  * single-file-self-contained (browser module workers cannot resolve bare
  * specifiers), so they bundle this core — the duplication there is inherent
  * and unchanged from the pre-core era.

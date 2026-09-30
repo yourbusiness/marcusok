@@ -37,6 +37,10 @@ export interface LoaderOptions {
    * Worker operation timeout, default 120s. A timed-out operation terminates
    * the shared worker and rejects its sibling requests, so raise this only
    * for legitimately huge workloads (and prefer splitting the input).
+   *
+   * Must be > 0: both consuming packages pass the value to setTimeout
+   * verbatim (`value ?? 120_000`), so 0/negative is "time out immediately",
+   * not "disable" — there is no disable value.
    */
   workerTimeoutMs?: number;
 }

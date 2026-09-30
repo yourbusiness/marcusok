@@ -36,7 +36,9 @@ function borderDecl(style: string, color: string | null): string {
   return `${base} ${color ?? "#000000"}`;
 }
 
-/** 填充 → background 声明（none 省略）。 */
+/** 填充 → background-color 声明（none 省略）。渐变不在本函数输出：它与
+ * 对角线边框同落 background-image，必须在 compileStylesheet 分层合成
+ * （见 gradientLayer），否则两条独立声明按源序后者胜、渐变被冲掉。 */
 function fillDecl(fill: PreviewStyles["fills"][number] | undefined): string {
   if (!fill) return "";
   switch (fill.kind) {
@@ -47,18 +49,23 @@ function fillDecl(fill: PreviewStyles["fills"][number] | undefined): string {
     case "pattern":
       // 图案填充近似：底色为主，图案色不还原（文档标注的近似项）
       return `background-color:${fill.bgColor ?? fill.fgColor ?? "#ffffff"};`;
-    case "gradient": {
-      const stops = fill.stops
-        .map((s) => `${s.color} ${Math.round(s.position * 100)}%`)
-        .join(", ");
-      // xlsx degree：0=左→右、90=上→下（ECMA-376 CT_GradientFill）；CSS 线性
-      // 渐变 0deg=向上、90deg=向右、180deg=向下，故 CSS 角度 = degree + 90
-      const angle = ((fill.degree % 360) + 360) % 360;
-      return `background:linear-gradient(${(angle + 90) % 360}deg, ${stops});`;
-    }
     default:
       return "";
   }
+}
+
+/** 渐变填充的 background-image 层（null = 无）。 */
+function gradientLayer(
+  fill: PreviewStyles["fills"][number] | undefined,
+): string | null {
+  if (!fill || fill.kind !== "gradient") return null;
+  const stops = fill.stops
+    .map((s) => `${s.color} ${Math.round(s.position * 100)}%`)
+    .join(", ");
+  // xlsx degree：0=左→右、90=上→下（ECMA-376 CT_GradientFill）；CSS 线性
+  // 渐变 0deg=向上、90deg=向右、180deg=向下，故 CSS 角度 = degree + 90
+  const angle = ((fill.degree % 360) + 360) % 360;
+  return `linear-gradient(${(angle + 90) % 360}deg, ${stops})`;
 }
 
 function fontDecl(font: PreviewStyles["fonts"][number] | undefined): string {
@@ -66,13 +73,22 @@ function fontDecl(font: PreviewStyles["fonts"][number] | undefined): string {
   let css = "";
   if (font.bold) css += "font-weight:700;";
   if (font.italic) css += "font-style:italic;";
-  if (font.underline) css += "text-decoration:underline;";
-  if (font.strike) css += "text-decoration:line-through;";
-  if (font.underline && font.strike)
-    css = "text-decoration:underline line-through;";
+  // 下划线与删除线同置必须合成一条 text-decoration（两条独立声明按源序
+  // 后者胜，只剩 line-through）；此前修复合同时用了整串赋值，把已累加的
+  // font-weight/font-style 一并冲掉——bold+下划线+删除线的字体丢失粗体
+  if (font.underline && font.strike) {
+    css += "text-decoration:underline line-through;";
+  } else if (font.underline) {
+    css += "text-decoration:underline;";
+  } else if (font.strike) {
+    css += "text-decoration:line-through;";
+  }
   if (font.size) css += `font-size:${font.size}pt;`;
+  // 字体名拼入 CSS 前剥掉双引号与反斜杠：双引号截断字符串、反斜杠转义
+  // 闭合引号，都会让恶意 xlsx 的字体名破坏整段生成的样式规则（颜色等
+  // 其余插值均经十六进制/命名表校验，字体名是唯一裸拼点）
   const family = font.name
-    ? `"${font.name.replace(/"/g, "")}", Calibri, "Segoe UI", system-ui, sans-serif`
+    ? `"${font.name.replace(/["\\]/g, "")}", Calibri, "Segoe UI", system-ui, sans-serif`
     : `Calibri, "Segoe UI", system-ui, sans-serif`;
   css += `font-family:${family};`;
   if (font.color) css += `color:${font.color};`;
@@ -138,10 +154,28 @@ function alignDecl(xf: PreviewXf): string {
   return css;
 }
 
+/** 对角线边框的 background-image 层（null = 无）。CSS 无原生对角线，用
+ * 线性渐变近似（细对角线）；方向由 PreviewBorder.diagonalUp 决定。 */
+function diagonalLayer(
+  border: PreviewStyles["borders"][number] | undefined,
+): string | null {
+  if (!border?.diagonal) return null;
+  const c = border.diagonal.color ?? "#000000";
+  const w =
+    border.diagonal.style === "medium" || border.diagonal.style === "thick"
+      ? "2px"
+      : "1px";
+  // 方向：diagonalUp = "/"（to top right）；缺省/Down = "\"（to bottom
+  // right，Excel diagonalDown 是常见形态）
+  const dir = border.diagonalUp ? "to top right" : "to bottom right";
+  return `linear-gradient(${dir}, transparent calc(50% - ${w}), ${c} calc(50% - ${w}), ${c} calc(50% + ${w}), transparent calc(50% + ${w}))`;
+}
+
 function borderDeclFor(
   border: PreviewStyles["borders"][number] | undefined,
 ): string {
   if (!border) return "";
+  // 只出四边声明；对角线在 diagonalLayer（与渐变填充合成 background-image）
   let css = "";
   if (border.left)
     css += `border-left:${borderDecl(border.left.style, border.left.color)};`;
@@ -151,15 +185,6 @@ function borderDeclFor(
     css += `border-top:${borderDecl(border.top.style, border.top.color)};`;
   if (border.bottom)
     css += `border-bottom:${borderDecl(border.bottom.style, border.bottom.color)};`;
-  // 对角线：CSS 无原生支持，用线性渐变近似（细对角线）
-  if (border.diagonal) {
-    const c = border.diagonal.color ?? "#000000";
-    const w =
-      border.diagonal.style === "medium" || border.diagonal.style === "thick"
-        ? "2px"
-        : "1px";
-    css += `background-image:linear-gradient(to top right, transparent calc(50% - ${w}), ${c} calc(50% - ${w}), ${c} calc(50% + ${w}), transparent calc(50% + ${w}));`;
-  }
   return css;
 }
 
@@ -170,8 +195,21 @@ export function compileStylesheet(styles: PreviewStyles): string {
     const font = styles.fonts[xf.fontId];
     const fill = styles.fills[xf.fillId];
     const border = styles.borders[xf.borderId];
+    // 渐变填充与对角线边框都落 background-image：两条独立声明会按源序
+    // 后者胜（先写的渐变被冲掉），必须合成一条逗号分隔的多层声明（对角线
+    // 在上层）。此前渐变用 background 简写，同样会整体重置 image 层。
+    const diag = diagonalLayer(border);
+    const grad = gradientLayer(fill);
+    const bgImage =
+      diag || grad
+        ? `background-image:${[diag, grad].filter(Boolean).join(",")};`
+        : "";
     const css =
-      fontDecl(font) + fillDecl(fill) + borderDeclFor(border) + alignDecl(xf);
+      fontDecl(font) +
+      fillDecl(fill) +
+      bgImage +
+      borderDeclFor(border) +
+      alignDecl(xf);
     if (css) parts.push(`.xpv-xf-${i}{${css}}`);
   });
   return parts.join("\n");

@@ -93,6 +93,8 @@ describe("主题色覆盖层（读取侧 null 的找回）", () => {
       top: null,
       bottom: null,
       diagonal: null,
+      diagonalUp: false,
+      diagonalDown: false,
     });
     expect(overlay!.borders[1].bottom?.color).toEqual({
       kind: "theme",
@@ -127,6 +129,57 @@ describe("主题色覆盖层（读取侧 null 的找回）", () => {
 
   it("单独解析 styles.xml 字符串（无 zip 场景）不抛错", () => {
     expect(() => buildStylesOverlay(strToU8("not a zip"))).not.toThrow();
+  });
+});
+
+describe("下划线 val 枚举与对角线标志（ECMA-376 语义）", () => {
+  // <u> 的 val 是 ST_UnderlineValues 枚举（缺省 "single"），不是布尔：
+  // 显式 val="single" 与 <u/> 等价（LibreOffice 等第三方导出器常见形态），
+  // 此前按 flagElem 布尔口径解析会把这些文件的下划线整体丢掉。
+  // 对角线同理：ECMA-376 要求 <border> 带 diagonalUp/Down 标志才显示，
+  // 仅有 <diagonal style> 不画线（此前凭空渲染且方向固定 "/"）。
+  const STYLES = `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><u val="single"/><sz val="11"/><name val="Calibri"/></font><font><u val="none"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="3"><border><left/><right/><top/><bottom/><diagonal style="thin"/></border><border diagonalDown="1"><left/><right/><top/><bottom/><diagonal style="thin"/></border><border diagonalUp="1"><left/><right/><top/><bottom/><diagonal style="thin"/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>`;
+  const bytes = buildXlsx({
+    sheets: [
+      {
+        name: "U",
+        xml: `<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row>`,
+      },
+    ],
+    styles: STYLES,
+  });
+
+  it('<u val="single"/> 等价于 <u/>：有下划线；val="none" 显式无', () => {
+    const { overlay } = buildStylesOverlay(bytes);
+    expect(overlay!.fonts[0].underline).toBe(false); // 无 <u> 元素
+    expect(overlay!.fonts[1].underline).toBe(true); // val="single"（缺省值的显式形态）
+    expect(overlay!.fonts[2].underline).toBe(false); // val="none"
+  });
+
+  it('无 Up/Down 标志的对角线样式不渲染；diagonalDown → "\\"、diagonalUp → "/"', async () => {
+    const { overlay } = buildStylesOverlay(bytes);
+    expect(overlay!.borders[0]).toMatchObject({
+      diagonal: { style: "thin" },
+      diagonalUp: false,
+      diagonalDown: false,
+    });
+    expect(overlay!.borders[1]).toMatchObject({
+      diagonalDown: true,
+      diagonalUp: false,
+    });
+    expect(overlay!.borders[2]).toMatchObject({
+      diagonalUp: true,
+      diagonalDown: false,
+    });
+    const model = buildPreviewWorkbook(await readBuffer(bytes), bytes);
+    const st = model.sheets[0].styles;
+    // 模型层：无标志 → diagonal 置 null（Excel 语义：不画 Excel 不画的线）
+    expect(st.borders[0].diagonal).toBeNull();
+    // diagonalDown → 保留样式、方向为 "\"（diagonalUp=false）
+    expect(st.borders[1].diagonal).toEqual({ style: "thin", color: null });
+    expect(st.borders[1].diagonalUp).toBe(false);
+    // diagonalUp → 方向 "/"（diagonalUp=true）
+    expect(st.borders[2].diagonalUp).toBe(true);
   });
 });
 

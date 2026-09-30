@@ -146,22 +146,28 @@ export class WorkbookBuilder {
     // underneath both. Data rows start at sheet row headerRowCount (0-based),
     // so slice(headerRowCount) iterates only data rows; mutating styleIndex is
     // a plain JS property write, bypassing ws.cell(ref) ref-parsing overhead.
-    // slice() hoisted out of the per-column loop: with the base style every
-    // column now sets styles (no more `if (effective)` skip), so re-slicing
-    // the row array per column would add an O(rows × columns) copy.
+    // 列样式先按列算好（经 cachedStyleIndex 去重），再按行主序遍历真实存在
+    // 的单元格、按 cell.reference 解出的真实列号取样式。不能按
+    // `row.cells[i]` 位置索引取格：writeAoaRow 对缺失值（null，含归一后的
+    // 空串）跳格，row.cells 是稠密打包数组，cells[i] 不对应第 i 列——行内
+    // 任一前列缺失即整体左移，样式会静默写到错误的列上（与上方表头路径
+    // 注释指出的同一引擎行为；toStr 的 toJSON 兜底注释也记录过同款错位）。
     const dataRows = ws.rows.slice(headerRowCount);
-    columns.forEach((c, i) => {
+    const colStyleIdx = columns.map((c) =>
       // 基底恒非空，mergeStyles 在 base 存在时必返回样式——用 ! 收窄
-      const effective = mergeStyles(
-        BaseCellStyle,
-        mergeStyles(config.dataStyle, c.style),
-      )!;
-      const idx = this.cachedStyleIndex(effective);
-      for (const row of dataRows) {
-        const cell = row.cells[i];
-        if (cell) cell.styleIndex = idx;
+      this.cachedStyleIndex(
+        mergeStyles(BaseCellStyle, mergeStyles(config.dataStyle, c.style))!,
+      ),
+    );
+    for (const row of dataRows) {
+      for (const cell of row.cells) {
+        if (typeof cell.reference !== "string") continue;
+        const col = refCol(cell.reference);
+        if (col >= 0 && col < colStyleIdx.length) {
+          cell.styleIndex = colStyleIdx[col];
+        }
       }
-    });
+    }
 
     // Freeze header rows
     if (config.freezeRows && config.freezeRows > 0) {
@@ -221,9 +227,29 @@ export class WorkbookBuilder {
 }
 
 /**
+ * "BC3" → 1（0-based 列号）。只解析前导字母：全表数据格遍历下比
+ * decodeCellRef 的完整往返便宜（excel-preview 侧 model.ts 的同款快路径）。
+ */
+function refCol(reference: string): number {
+  let col = 0;
+  for (let i = 0; i < reference.length; i++) {
+    const c = reference.charCodeAt(i);
+    if (c >= 65 && c <= 90) col = col * 26 + (c - 64);
+    else if (c >= 97 && c <= 122) col = col * 26 + (c - 96);
+    else break;
+  }
+  return col - 1;
+}
+
+/**
  * If a column has a typed FormatSpec (date/datetime/number) but no explicit
  * style.numFormat, inject the matching Excel numFormat so the value displays
  * correctly. Explicit numFormat on the column style always wins.
+ *
+ * 语义澄清：注入结果落在列级 style，经 mergeStyles 恒压过表级
+ * dataStyle.numFormat（override 无条件胜出）。date/datetime 列必须如此——
+ * 否则序列号会被表级装饰格式（如 "#,##0"）渲染错；number 列同理不继承
+ * 表级千分位，需要千分位时在 format spec 里声明 thousands: true。
  */
 function withAutoNumFormat(c: ColumnConfig): ColumnConfig {
   const spec = typeof c.format === "object" ? c.format : null;

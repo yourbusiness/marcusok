@@ -83,6 +83,40 @@ describe("WorkbookBuilder round-trip", () => {
     expect(ws.mergeCells.some((r) => r === "A2:A3")).toBe(true);
   });
 
+  it("applies column styles to the correct cells when earlier columns are missing", async () => {
+    // 回归守卫：writeAoaRow 对缺失值（null，含归一后的空串）跳格，row.cells
+    // 稠密打包——此前按 row.cells[i] 位置索引写样式，行内任一前列缺失即整体
+    // 左移错位（缺 b 的行：C 错拿 B 列样式；首列缺失变体：B/C 各左移一列）。
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "Sparse",
+      columns: [
+        { prop: "a", label: "A", style: { numFormat: "0" } },
+        { prop: "b", label: "B", style: { numFormat: "0.00" } },
+        { prop: "c", label: "C", style: { font: { bold: true } } },
+      ],
+      data: [
+        { a: 1, b: 2, c: 3 },
+        { a: 4, c: 6 }, // b 缺失
+        { c: 9 }, // a、b 均缺失（首列缺失变体）
+      ],
+    });
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("Sparse")!;
+    // 完整行：三种列样式结构互不相同 → 索引互不相同（前置条件）
+    const aIdx = ws.cell("A2").styleIndex;
+    const bIdx = ws.cell("B2").styleIndex;
+    const cIdx = ws.cell("C2").styleIndex;
+    expect(aIdx).not.toBe(bIdx);
+    expect(bIdx).not.toBe(cIdx);
+    expect(aIdx).not.toBe(cIdx);
+    // 缺 b 的行：A3/C3 仍拿本列样式（修复前 C3 错拿 B 列样式）
+    expect(ws.cell("A3").styleIndex).toBe(aIdx);
+    expect(ws.cell("C3").styleIndex).toBe(cIdx);
+    // 首列缺失变体：C4 仍拿 C 列样式（修复前 a、b 双缺失使 C4 拿 B 列样式）
+    expect(ws.cell("C4").styleIndex).toBe(cIdx);
+  });
+
   it("still exports columns written with deprecated key/header names", async () => {
     // 2.2.0 兼容承诺：pre-2.2 的 key/header 命名不做迁移也必须继续工作。
     const builder = await WorkbookBuilder.create();
