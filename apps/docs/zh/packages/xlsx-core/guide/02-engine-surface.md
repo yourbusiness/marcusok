@@ -31,6 +31,42 @@ sheet.cell("A1").value = "Hello";
 const out = await workbook.toBuffer(); // WriteOptions = { password?: string }
 ```
 
+### Worksheet 与 Cell
+
+`getSheet` / `addSheet` 交给你的是 `Worksheet`——真正用来写入的对象。它的完整成员面（modern-xlsx 1.2.0），按用途分组：
+
+| 分组         | 成员                                                                                                                                                                                                                                                                                                                          |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 标识与状态   | `name`（get/set，重命名按 ECMA-376 校验）· `state`（get/set，可见性）· `tabColor`（get/set）                                                                                                                                                                                                                                  |
+| 单元格       | `cell(ref): Cell`——返回 A1 式引用处的单元格，**不存在则创建所在行与格**；包装对象是活的，改动直接写入底层数据                                                                                                                                                                                                                 |
+| 内容与形状   | `rows`（get，按 1-based 序号排序）· `rowCount`（get）· `usedRange`（get，如 `"B2:D5"`）· `dimension`（get）· `setRowHeight(rowIndex, height)`（1-based，pt）· `setRowHidden(rowIndex, hidden)`                                                                                                                                |
+| 列           | `columns`（get/set，`ColumnInfo[]`）· `setColumnWidth(col, width)`——1-based，Excel 字符宽度单位                                                                                                                                                                                                                               |
+| 合并         | `mergeCells`（get）· `addMergeCell("A1:C3")` · `removeMergeCell(range): boolean`                                                                                                                                                                                                                                              |
+| 筛选与视图   | `autoFilter`（get/set——`AutoFilterData` 对象、区域字符串或 `null` 清除）· `view` / `viewMode` · `paneSelections`（get/set）                                                                                                                                                                                                   |
+| 窗格         | `frozenPane`（get/set）· `splitPane`（get/set——设置其一会清除另一个）                                                                                                                                                                                                                                                         |
+| 打印         | `pageSetup`（get/set）· `pageMargins`（get/set）                                                                                                                                                                                                                                                                              |
+| 保护         | `sheetProtection`（get/set，`null` 移除保护）                                                                                                                                                                                                                                                                                 |
+| 超链接       | `hyperlinks`（get）· `addHyperlink(ref, location, { display?, tooltip? })` · `removeHyperlink(ref)`                                                                                                                                                                                                                           |
+| 数据校验     | `validations`（get）                                                                                                                                                                                                                                                                                                          |
+| 高级表格特性 | `tables` / `addTable` / `getTable` / `removeTable` · `charts`（get）· `pivotTables` / `addPivotTable` / `addPivotTableFromBuilder` / `removePivotTable` · `slicers` / `addSlicer` / `removeSlicer` · `timelines`（get）· 批注：`comments`（get）/ `addComment(ref, text, author)` / `replyToComment(commentId, text, author)` |
+
+> 最后一行的数据类型（`TableDefinitionData`、`WorksheetChartData`、`PivotTableData`、`AutoFilterData`、`DataValidationData` 等）**不在**本包精选的类型再导出面内（[见下](#类型再导出)）：运行时成员可用，但 TypeScript 调用方需自行声明这些类型。上表其余各行的类型都能用再导出面干净地表达。
+
+`cell(ref)` 返回 `Cell`——一个可变的活包装：
+
+```ts
+const cell = sheet.cell("B3");
+cell.reference; // "B3"——只读的 A1 式引用
+cell.type; // CellType——引擎原始单元格类型（"number"、"sharedString" 等）
+cell.value; // get：按 cellType 强转为 JS 类型；set：自动推断单元格类型
+cell.formula; // get/set：不带前导 "=" 的公式文本；设置后单元格类型变为 "formulaStr"
+cell.styleIndex; // get/set：Workbook.styles.cellXfs 的 0-based 下标；null = 默认样式
+cell.numberFormat; // get：已解析的格式码，或 null
+cell.dateValue; // get：Date | null——用于序列号值的日期格
+```
+
+引擎自己的 README 在其 API Reference 下有更完整、带示例的版本：[Workbook](https://github.com/ABCrimson/modern-xlsx#workbook) · [Worksheet](https://github.com/ABCrimson/modern-xlsx#worksheet) · [Styles](https://github.com/ABCrimson/modern-xlsx#styles)。
+
 `initWasm` / `initWasmSync` 是引擎自己的初始化调用。通常用不到它们：`getWasmLoader().ensureLoaded()` 会替你调用（见 [WASM 加载器指南](/zh/packages/xlsx-core/guide/01-loader)）。例外是**单文件自包含的 worker 入口**——它无法使用 loader 的 Node 自动初始化路径，因此会带显式 URL 调用 `initWasm(wasmUrl)`，`@marcusok/excel-preview` 的解析 worker 正是如此。`initWasmSync` 则是 loader 的 Node 自动初始化内部调用的那个。
 
 ## 单元格与区域引用
@@ -179,6 +215,8 @@ Rust 核心抛出的错误以 `"[CODE] message"` 形式到达；`ModernXlsxError
 ```ts
 import type { CellData, CellType, Worksheet } from "@marcusok/xlsx-core";
 ```
+
+其中两个类型在站内已有字段级说明：`AlignmentData` 逐字段（含渲染器对每个取值的行为）见[预览数据模型参考](/zh/packages/excel-preview/api/02-model#对齐-previewxf-alignment)，`BorderStyle` 的 13 个取值见[导出包核心类型](/zh/packages/excel-exporter/api/02-types#borderstyle)。
 
 ## 为什么从这里再导出，而不是直接依赖 modern-xlsx
 

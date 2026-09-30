@@ -26,23 +26,30 @@ The overlay appears after a short delay, blocks page interaction, and is removed
 | `ProgressOverlayOptions` | Customize: texts, `delayMs`, theme, `blockInteraction`, … (see the [shared package](/packages/progress-overlay/guide/01-usage)). Custom texts are **merged** with the export defaults — overriding `text.title` keeps the built-in stage labels, so phase keys like `building` never render as raw keys. |
 
 ```ts
-await exportExcel(options, {
-  delayMs: 200, // don't show at all if the export finishes within 200ms
-  minVisibleMs: 300, // once shown, stay at least this long (no flash)
-  fadeOutMs: 150,
-  zIndex: 2147483000,
-  container: document.body,
-  blockInteraction: true, // false = visual cover only
-  theme: "auto", // "auto" | "light" | "dark"
-  text: {
-    title: "正在导出 Excel",
-    initial: "准备中…",
-    phases: {
-      building: "正在构建工作簿…",
-      downloading: "正在下载…",
-      finishing: "即将完成…",
+await exportExcel({
+  filename: "sales-2026",
+  sheets: [{ name: "Sales", columns, data }],
+  // `overlay` is a field of ExportOptions — every ProgressOverlayOptions
+  // entry is customizable there. The values below are the built-in export
+  // defaults; pass only what you want to change.
+  overlay: {
+    delayMs: 200, // don't show at all if the export finishes within 200ms
+    minVisibleMs: 300, // once shown, stay at least this long (no flash)
+    fadeOutMs: 150,
+    zIndex: 2147483000,
+    container: document.body,
+    blockInteraction: true, // false = visual cover only
+    theme: "auto", // "auto" | "light" | "dark"
+    text: {
+      title: "正在导出 Excel",
+      initial: "准备中…",
+      phases: {
+        building: "正在构建工作簿…",
+        downloading: "正在下载…",
+        finishing: "即将完成…",
+      },
+      hint: "数据量较大时可能需要数十秒，请勿关闭页面",
     },
-    hint: "数据量较大时可能需要数十秒，请勿关闭页面",
   },
 });
 ```

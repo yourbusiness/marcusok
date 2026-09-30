@@ -57,13 +57,36 @@ The index column's values are generated from the row number and never read from 
 
 ## CellStyle
 
-| Field        | Type                                                   | Description                                  |
-| ------------ | ------------------------------------------------------ | -------------------------------------------- |
-| `font?`      | `{ bold?, italic?, size?, color?, name? }`             | `color` is 6-digit RGB hex (e.g. `"FF0000"`) |
-| `fill?`      | `{ pattern?: "solid" \| "none", fgColor?, bgColor? }`  | Fill                                         |
-| `alignment?` | `{ horizontal?, vertical?, wrapText?, textRotation? }` | Alignment (textRotation 0–180)               |
-| `border?`    | `{ top?, bottom?, left?, right? }`                     | Borders, each `{ style, color? }`            |
-| `numFormat?` | `string`                                               | Excel number format code                     |
+| Field        | Type                                                   | Description                                                                      |
+| ------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `font?`      | `{ bold?, italic?, size?, color?, name? }`             | `color` is 6-digit RGB hex (e.g. `"FF0000"`)                                     |
+| `fill?`      | `{ pattern?: "solid" \| "none", fgColor?, bgColor? }`  | Fill                                                                             |
+| `alignment?` | `{ horizontal?, vertical?, wrapText?, textRotation? }` | Alignment (textRotation 0–180)                                                   |
+| `border?`    | `{ top?, bottom?, left?, right? }`                     | Borders, each `{ style: BorderStyle, color? }` — see [BorderStyle](#borderstyle) |
+| `numFormat?` | `string`                                               | Excel number format code                                                         |
+
+## BorderStyle
+
+The `style` value of each border side — Excel's own line-style vocabulary, inlined from modern-xlsx's `BorderSideData` so the published `.d.ts` carries no dependency imports:
+
+```ts
+type BorderStyle =
+  | "thin"
+  | "medium"
+  | "thick"
+  | "dashed"
+  | "dotted"
+  | "double"
+  | "hair"
+  | "mediumDashed"
+  | "dashDot"
+  | "mediumDashDot"
+  | "dashDotDot"
+  | "mediumDashDotDot"
+  | "slantDashDot";
+```
+
+Each name carries its own weight — there is no separate width knob (`hair` is the finest line, `thick` the heaviest). The preview's renderer maps these same values onto CSS; the Excel → CSS table lives in the [preview's data model reference](/packages/excel-preview/api/02-model#borders-previewborder).
 
 ## ExportMode / ExportPhase
 

@@ -57,13 +57,36 @@
 
 ## CellStyle
 
-| 字段         | 类型                                                   | 说明                                 |
-| ------------ | ------------------------------------------------------ | ------------------------------------ |
-| `font?`      | `{ bold?, italic?, size?, color?, name? }`             | 颜色为 6 位 RGB hex（如 `"FF0000"`） |
-| `fill?`      | `{ pattern?: "solid" \| "none", fgColor?, bgColor? }`  | 填充                                 |
-| `alignment?` | `{ horizontal?, vertical?, wrapText?, textRotation? }` | 对齐（textRotation 0–180）           |
-| `border?`    | `{ top?, bottom?, left?, right? }`                     | 边框，每边 `{ style, color? }`       |
-| `numFormat?` | `string`                                               | Excel 数字格式码                     |
+| 字段         | 类型                                                   | 说明                                                                            |
+| ------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `font?`      | `{ bold?, italic?, size?, color?, name? }`             | 颜色为 6 位 RGB hex（如 `"FF0000"`）                                            |
+| `fill?`      | `{ pattern?: "solid" \| "none", fgColor?, bgColor? }`  | 填充                                                                            |
+| `alignment?` | `{ horizontal?, vertical?, wrapText?, textRotation? }` | 对齐（textRotation 0–180）                                                      |
+| `border?`    | `{ top?, bottom?, left?, right? }`                     | 边框，每边 `{ style: BorderStyle, color? }`——取值见 [BorderStyle](#borderstyle) |
+| `numFormat?` | `string`                                               | Excel 数字格式码                                                                |
+
+## BorderStyle
+
+每条边框 `style` 的取值——即 Excel 自身的线型词汇，内联自 modern-xlsx 的 `BorderSideData`（使发布的 `.d.ts` 不含依赖导入）：
+
+```ts
+type BorderStyle =
+  | "thin"
+  | "medium"
+  | "thick"
+  | "dashed"
+  | "dotted"
+  | "double"
+  | "hair"
+  | "mediumDashed"
+  | "dashDot"
+  | "mediumDashDot"
+  | "dashDotDot"
+  | "mediumDashDotDot"
+  | "slantDashDot";
+```
+
+每种线型自带粗细——没有单独的宽度参数（`hair` 最细，`thick` 最粗）。预览渲染器对同一批取值做 Excel → CSS 映射，对照表见[预览数据模型参考](/zh/packages/excel-preview/api/02-model#边框-previewborder)。
 
 ## ExportMode / ExportPhase
 

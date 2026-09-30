@@ -31,6 +31,42 @@ sheet.cell("A1").value = "Hello";
 const out = await workbook.toBuffer(); // WriteOptions = { password?: string }
 ```
 
+### Worksheet and Cell
+
+`getSheet` / `addSheet` hand you a `Worksheet` — the object you actually write through. Its complete member surface (modern-xlsx 1.2.0), grouped:
+
+| Group                 | Members                                                                                                                                                                                                                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity & state      | `name` (get/set, ECMA-376 validated on rename) · `state` (get/set, visibility) · `tabColor` (get/set)                                                                                                                                                                                                                             |
+| Cells                 | `cell(ref): Cell` — returns the cell at an A1-style reference, **creating the row and cell if needed**; the wrapper is live, mutations write through                                                                                                                                                                              |
+| Content & shape       | `rows` (get, sorted by 1-based index) · `rowCount` (get) · `usedRange` (get, e.g. `"B2:D5"`) · `dimension` (get) · `setRowHeight(rowIndex, height)` (1-based, pt) · `setRowHidden(rowIndex, hidden)`                                                                                                                              |
+| Columns               | `columns` (get/set, `ColumnInfo[]`) · `setColumnWidth(col, width)` — 1-based, Excel character units                                                                                                                                                                                                                               |
+| Merges                | `mergeCells` (get) · `addMergeCell("A1:C3")` · `removeMergeCell(range): boolean`                                                                                                                                                                                                                                                  |
+| Filter & view         | `autoFilter` (get/set — an `AutoFilterData` object, a range string, or `null` to clear) · `view` / `viewMode` · `paneSelections` (get/set)                                                                                                                                                                                        |
+| Panes                 | `frozenPane` (get/set) · `splitPane` (get/set — setting one clears the other)                                                                                                                                                                                                                                                     |
+| Print                 | `pageSetup` (get/set) · `pageMargins` (get/set)                                                                                                                                                                                                                                                                                   |
+| Protection            | `sheetProtection` (get/set, `null` removes protection)                                                                                                                                                                                                                                                                            |
+| Hyperlinks            | `hyperlinks` (get) · `addHyperlink(ref, location, { display?, tooltip? })` · `removeHyperlink(ref)`                                                                                                                                                                                                                               |
+| Data validation       | `validations` (get)                                                                                                                                                                                                                                                                                                               |
+| Richer sheet features | `tables` / `addTable` / `getTable` / `removeTable` · `charts` (get) · `pivotTables` / `addPivotTable` / `addPivotTableFromBuilder` / `removePivotTable` · `slicers` / `addSlicer` / `removeSlicer` · `timelines` (get) · comments: `comments` (get) / `addComment(ref, text, author)` / `replyToComment(commentId, text, author)` |
+
+> The last row's data types (`TableDefinitionData`, `WorksheetChartData`, `PivotTableData`, `AutoFilterData`, `DataValidationData`, …) are **not** part of this package's curated type re-exports ([see below](#type-re-exports)): the runtime members work, but TypeScript callers must declare those types locally. Everything in the rows above types cleanly against the re-exported surface.
+
+`cell(ref)` returns a `Cell` — a live, mutable wrapper:
+
+```ts
+const cell = sheet.cell("B3");
+cell.reference; // "B3" — read-only A1-style reference
+cell.type; // CellType — the engine's raw cell type ("number", "sharedString", …)
+cell.value; // get: coerced to a JS type by cellType; set: auto-detects the cell type
+cell.formula; // get/set: formula text without the leading "="; setting it makes the cell "formulaStr"
+cell.styleIndex; // get/set: 0-based index into Workbook.styles.cellXfs; null = default style
+cell.numberFormat; // get: the resolved format code, or null
+cell.dateValue; // get: Date | null — for serial-valued date cells
+```
+
+The engine's own README carries a fuller, example-driven version of this surface under its API Reference: [Workbook](https://github.com/ABCrimson/modern-xlsx#workbook) · [Worksheet](https://github.com/ABCrimson/modern-xlsx#worksheet) · [Styles](https://github.com/ABCrimson/modern-xlsx#styles).
+
 `initWasm` / `initWasmSync` are the engine's own initialization calls. You rarely need them: `getWasmLoader().ensureLoaded()` runs them for you ([see the loader guide](/packages/xlsx-core/guide/01-loader)). The exception is a **self-contained worker entrypoint**, which cannot use the loader's Node auto-init path and therefore calls `initWasm(wasmUrl)` with an explicit URL — exactly what `@marcusok/excel-preview`'s parse worker does. `initWasmSync` is what the loader's Node auto-init calls internally.
 
 ## Cell and range references
@@ -179,6 +215,8 @@ Bundled with the values above, for consumers that want to type their own code wi
 ```ts
 import type { CellData, CellType, Worksheet } from "@marcusok/xlsx-core";
 ```
+
+Two of these have field-level coverage elsewhere on this site: `AlignmentData` is documented field by field (together with the renderer's behavior for each value) in the [preview's data model reference](/packages/excel-preview/api/02-model#alignment-previewxf-alignment), and `BorderStyle`'s 13 values are enumerated in the [exporter's core types](/packages/excel-exporter/api/02-types#borderstyle).
 
 ## Why re-export instead of depending on modern-xlsx
 

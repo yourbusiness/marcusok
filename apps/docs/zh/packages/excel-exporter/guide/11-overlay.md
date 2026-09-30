@@ -26,23 +26,29 @@ const result = await exportExcel({
 | `ProgressOverlayOptions` | 定制：文案、`delayMs`、主题、`blockInteraction` 等（见[共享包文档](/zh/packages/progress-overlay/guide/01-usage)）。定制文案与导出默认**合并**——覆盖 `text.title` 时内置阶段文案仍在，`building` 这类阶段 key 不会显示成裸 key。 |
 
 ```ts
-await exportExcel(options, {
-  delayMs: 200, // 导出在此毫秒内结束则完全不显示遮罩
-  minVisibleMs: 300, // 已经显示过就至少停留这么久（避免一闪而过）
-  fadeOutMs: 150,
-  zIndex: 2147483000,
-  container: document.body,
-  blockInteraction: true, // 置 false 则只做视觉覆盖
-  theme: "auto", // "auto" | "light" | "dark"
-  text: {
-    title: "正在导出 Excel",
-    initial: "准备中…",
-    phases: {
-      building: "正在构建工作簿…",
-      downloading: "正在下载…",
-      finishing: "即将完成…",
+await exportExcel({
+  filename: "sales-2026",
+  sheets: [{ name: "Sales", columns, data }],
+  // `overlay` 是 ExportOptions 的字段——所有 ProgressOverlayOptions 条目
+  // 都可以在这里定制。下例各值即内置导出默认值，只传想改的项即可。
+  overlay: {
+    delayMs: 200, // 导出在此毫秒内结束则完全不显示遮罩
+    minVisibleMs: 300, // 已经显示过就至少停留这么久（避免一闪而过）
+    fadeOutMs: 150,
+    zIndex: 2147483000,
+    container: document.body,
+    blockInteraction: true, // 置 false 则只做视觉覆盖
+    theme: "auto", // "auto" | "light" | "dark"
+    text: {
+      title: "正在导出 Excel",
+      initial: "准备中…",
+      phases: {
+        building: "正在构建工作簿…",
+        downloading: "正在下载…",
+        finishing: "即将完成…",
+      },
+      hint: "数据量较大时可能需要数十秒，请勿关闭页面",
     },
-    hint: "数据量较大时可能需要数十秒，请勿关闭页面",
   },
 });
 ```
