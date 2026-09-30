@@ -36,7 +36,7 @@ export interface GridLayout {
   mergeByAnchor: Map<string, PreviewMerge>;
   /** 被（非自身）合并覆盖的格子：`row:col` → anchor key。 */
   coveredBy: Map<string, string>;
-  /** 全部合并（可视窗口合并召回用）。 */
+  /** 全部合并（主格召回判定用，见 visibleMergeAnchors）。 */
   merges: PreviewMerge[];
   /** 内容边界（0-based，不含表头偏移）。 */
   rowCount: number;
@@ -58,12 +58,11 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
   const colWidths = new Float64Array(colCount);
   colWidths.fill(charsToPx(DEFAULT_COL_WIDTH_CHARS));
   for (const span of sheet.colSpans) {
-    // 隐藏列宽 0；customWidth 才覆盖默认
-    const w = span.hidden
-      ? 0
-      : span.customWidth
-        ? charsToPx(span.width)
-        : charsToPx(DEFAULT_COL_WIDTH_CHARS);
+    // 隐藏列宽 0；<col> 出现即采用其 width——引擎对未写 width 的 col 兜底
+    // 8.43（与默认一致，无副作用），此前设 customWidth 门槛会把"只写 width
+    // 不写标志"的第三方产物列宽整体吞掉（实测引擎两形态都给 customWidth
+    // =false，无从区分也不必区分；customWidth 字段在模型里保留仅作元信息）
+    const w = charsToPx(span.width);
     for (let c = span.min - 1; c <= span.max - 1 && c < colCount; c++) {
       colWidths[c] = span.hidden ? 0 : w;
     }
@@ -131,7 +130,7 @@ export interface VisibleRange {
   colEnd: number;
 }
 
-/** 可视范围 + 缓冲；再并入与窗口相交的合并区（合并召回）。 */
+/** 可视范围 + 缓冲（纯窗口，不含合并召回——见 visibleMergeAnchors）。 */
 export function computeVisibleRange(
   layout: GridLayout,
   scrollTop: number,
@@ -148,26 +147,40 @@ export function computeVisibleRange(
   );
   const colEnd = lowerBound(layout.colLeft, scrollLeft + viewW + bufferPx) + 1;
 
-  let r0 = Math.min(rowStart, layout.rowCount - 1);
-  let r1 = Math.min(Math.max(rowEnd, r0 + 1), layout.rowCount);
-  let c0 = Math.min(colStart, layout.colCount - 1);
-  let c1 = Math.min(Math.max(colEnd, c0 + 1), layout.colCount);
-
-  // 合并召回：主单元格在窗口上方/左侧的跨行/跨列合并，其覆盖区只要与窗口
-  // 相交就必须整体渲染（否则视口内的合并显示残缺）。合并表通常很小，线性
-  // 扫描即可；超大合并文件下限为窗口本身（召回一次到位，无递归）。
-  for (const m of layout.merges) {
-    const endR = m.row + m.rowSpan;
-    const endC = m.col + m.colSpan;
-    if (endR <= r0 || m.row >= r1) continue;
-    if (endC <= c0 || m.col >= c1) continue;
-    if (m.row < r0) r0 = m.row;
-    if (endR > r1) r1 = endR;
-    if (m.col < c0) c0 = m.col;
-    if (endC > c1) c1 = endC;
-  }
+  const r0 = Math.min(rowStart, layout.rowCount - 1);
+  const r1 = Math.min(Math.max(rowEnd, r0 + 1), layout.rowCount);
+  const c0 = Math.min(colStart, layout.colCount - 1);
+  const c1 = Math.min(Math.max(colEnd, c0 + 1), layout.colCount);
 
   return { rowStart: r0, rowEnd: r1, colStart: c0, colEnd: c1 };
+}
+
+/**
+ * 与主区窗口相交的合并的主格（anchor）列表：渲染层据此**增补渲染**窗口外的
+ * 合并主格（主格的 width/height 直接按合并跨度跨越，覆盖格不逐格建 DOM，
+ * 视口内的合并因此显示完整）。
+ *
+ * 此前召回是把整个合并矩形并入窗口 [r0,r1)/[c0,c1)——窗口与行号/列标表头
+ * 都按扩大后的范围循环建 DOM，A1:A100000 一类整列合并（Excel 模板常态）
+ * 会把行号表头全量建出（10 万~百万 DOM），虚拟滚动失效。改为只召回主格后
+ * 表头恒为视口规模。冻结区象限不需要召回：其行/列范围本就是 [0, frozen)
+ * 全量渲染，anchor 落在里面自然被覆盖（跨冻结线的异常合并除外，边角行为
+ * 与旧实现等同）。
+ */
+export function visibleMergeAnchors(
+  layout: GridLayout,
+  range: VisibleRange,
+): { row: number; col: number }[] {
+  const out: { row: number; col: number }[] = [];
+  for (const m of layout.merges) {
+    if (m.row < layout.frozenRows || m.col < layout.frozenCols) continue;
+    const endR = m.row + m.rowSpan;
+    const endC = m.col + m.colSpan;
+    if (endR <= range.rowStart || m.row >= range.rowEnd) continue;
+    if (endC <= range.colStart || m.col >= range.colEnd) continue;
+    out.push({ row: m.row, col: m.col });
+  }
+  return out;
 }
 
 export const HEADER_ROW_PX = HEAD_ROW_PX;

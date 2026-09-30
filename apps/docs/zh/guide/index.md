@@ -7,7 +7,7 @@
 | 包                                                                         | 分类 | 状态   | 说明                                                                                         |
 | -------------------------------------------------------------------------- | ---- | ------ | -------------------------------------------------------------------------------------------- |
 | [`@marcusok/excel-exporter`](/zh/packages/excel-exporter/)                 | 导出 | stable | Excel 导出核心库：modern-xlsx + Fast stream、完整样式、Worker 多线程、快速写入、流式降级兜底 |
-| [`@marcusok/excel-preview`](/zh/packages/excel-preview/)                   | 预览 | beta   | xlsx 只读预览：Worker 解析 + 虚拟滚动，样式/合并/冻结/数字格式还原                           |
+| [`@marcusok/excel-preview`](/zh/packages/excel-preview/)                   | 预览 | stable | xlsx 只读预览：Worker 解析 + 虚拟滚动，样式/合并/冻结/数字格式还原                           |
 | [`@marcusok/xlsx-core`](https://www.npmjs.com/package/@marcusok/xlsx-core) | 共享 | stable | 全仓唯一的 modern-xlsx 引擎层：WASM 加载、资产分发、稳定再导出                               |
 
 ## 工程约定

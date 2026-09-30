@@ -12,7 +12,8 @@ import type { AlignmentData, BorderStyle } from "@marcusok/xlsx-core";
 /** 解析后的工作簿（纯数据，结构化克隆安全）。 */
 export interface PreviewWorkbook {
   sheets: PreviewSheet[];
-  /** 打开时选中的 sheet（0-based；超出范围由渲染层钳制）。 */
+  /** 打开时选中的 sheet（0-based；解析层已对越界 activeTab 钳制到 0，
+   * 渲染层的越界回退是第二重兜底，见 render() 的初始 sheet 处理）。 */
   activeSheetIndex: number;
   /** 日期系统：决定序列号 → 日期的偏移（1904 系统需 +1462 天）。 */
   dateSystem: "date1900" | "date1904";
@@ -71,6 +72,9 @@ export interface PreviewColSpan {
   /** Excel 字符宽度单位；缺省 8.43。 */
   width: number;
   hidden: boolean;
+  /** 文件声明的 customWidth 标志（元信息）。渲染层不依赖它判定列宽：
+   * <col> 出现即采用其 width——引擎对未写 width 的 col 兜底 8.43（与默认
+   * 一致），只写 width 不写标志的第三方产物列宽不能丢（见 buildLayout）。 */
   customWidth: boolean;
 }
 

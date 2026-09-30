@@ -286,10 +286,15 @@ function scanDateTokens(code: string): (DateTokens | string)[] {
       ) {
         run += code[i + run.length];
       }
-      // 邻接消歧：直接前一个记号是 h，或紧跟（允许一个分隔符）s 记号 → 分钟
+      // 邻接消歧：直接前一个记号是 h，或紧跟（允许一个分隔符）s 记号 → 分钟。
+      // 比较必须大小写不敏感（Excel 格式码记号本身大小写等价，第三方生成器
+      // 常写大写 HH:MM:SS）——此前 tok[0] === "h" 按原字符比较，大写 H:MM 的
+      // MM 被当月份渲染成"6:12"（12 月），与下方 formatDateSection 的
+      // toLowerCase 口径不一致（实测踩坑）
       const prevTok = [...out].reverse().find((t) => typeof t !== "string");
-      const nextIsS = /^[\s:.\/]?s/.test(code.slice(i + run.length));
-      const isMinute = lower === "m" && (prevTok?.tok[0] === "h" || nextIsS);
+      const nextIsS = /^[\s:.\/]?s/i.test(code.slice(i + run.length));
+      const isMinute =
+        lower === "m" && (prevTok?.tok[0].toLowerCase() === "h" || nextIsS);
       out.push({ tok: run, isMinute });
       i += run.length;
       continue;
@@ -325,15 +330,24 @@ export function formatDateSection(
   if (!d || Number.isNaN(d.getTime())) return "#######";
 
   const days = Math.floor(serial);
-  // 1900 幽灵日：serial 60 是 Excel 显示的 1900-02-29（真实不存在，继承自
-  // Lotus 1-2-3）。引擎 serialToDate 把它折叠成 2/28（core 实测），这里按
-  // Excel 显示口径回补一天。星期几无需调整——2/28/1900 与 Excel 的
-  // 2/29/1900 同为周三（Excel 的前置闰年偏差在该日恰好抵消）。
-  const dayOfMonth = days === 60 ? 29 : d.getUTCDate();
   const frac = serial - days;
   const totalSec = Math.round(frac * SECS_PER_DAY);
-  const secsOfDay =
-    totalSec >= SECS_PER_DAY ? totalSec - SECS_PER_DAY : totalSec;
+  // 四舍五入到 86400（当天最后半秒内）→ 时间归 0 点且日期进到次日（Excel
+  // 显示次日 0:00；此前日期不联动，1.9999999 显示 "1/1 0:00"）。
+  // 进位日期不能靠 d + 1 天推：引擎 serialToDate 在幽灵日邻域自身会进位
+  //（60.99999… 直接返回 3/1 0 点）而普通区间不进位（1.9999999 返回
+  // 23:59:59.992），再 +1 天会重复进位——改用取整后的序列号回询引擎
+  //（+0.5 锚在当天正午，日期分量稳定）。
+  const rollDay = totalSec >= SECS_PER_DAY;
+  const serialDay = days + (rollDay ? 1 : 0);
+  const dd = rollDay ? (serialToDate(serialDay + 0.5) ?? d) : d;
+  // 1900 幽灵日：serialDay 60 是 Excel 显示的 1900-02-29（真实不存在，继承
+  // 自 Lotus 1-2-3）。引擎 serialToDate 把它折叠成 2/28（core 实测），这里按
+  // Excel 显示口径回补一天（覆盖取整进位与未进位两种落入形态）。星期几无需
+  // 调整——2/28/1900 与 Excel 的 2/29/1900 同为周三（Excel 的前置闰年偏差
+  // 在该日恰好抵消）。
+  const dayOfMonth = serialDay === 60 ? 29 : dd.getUTCDate();
+  const secsOfDay = rollDay ? totalSec - SECS_PER_DAY : totalSec;
   // 浮点秒仅小数秒（ss.0）显示路径使用；整秒路径保持 round 口径不变
   const totalSecFloat = frac * SECS_PER_DAY;
   const secsOfDayFloat =
@@ -364,12 +378,12 @@ export function formatDateSection(
     const len = tok.length;
     if (head === "y") {
       out +=
-        len >= 3 ? String(d.getUTCFullYear()) : pad(d.getUTCFullYear() % 100);
+        len >= 3 ? String(dd.getUTCFullYear()) : pad(dd.getUTCFullYear() % 100);
     } else if (head === "m") {
       if (isMinute) {
         out += len >= 2 ? pad(minute) : String(minute);
       } else {
-        const m = d.getUTCMonth();
+        const m = dd.getUTCMonth();
         out +=
           len >= 4
             ? MONTH_LONG[m]
@@ -380,7 +394,7 @@ export function formatDateSection(
                 : String(m + 1);
       }
     } else if (head === "d") {
-      const wd = d.getUTCDay();
+      const wd = dd.getUTCDay();
       out +=
         len >= 4
           ? DAY_LONG[wd]

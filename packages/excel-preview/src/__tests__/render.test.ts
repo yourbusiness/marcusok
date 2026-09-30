@@ -7,6 +7,7 @@ import {
   columnIndexLabel,
   computeVisibleRange,
   ptToPx,
+  visibleMergeAnchors,
 } from "../render/layout";
 import { compileStylesheet } from "../render/css";
 import type { PreviewStyles } from "../types";
@@ -51,15 +52,50 @@ describe("layout 几何", () => {
     expect(l.frozenCols).toBe(1);
   });
 
-  it("computeVisibleRange：合并召回（主格在窗口外）", async () => {
-    // 大跨度合并 A1:A500：窗口在第 100 行附近时，合并主格必须被召回
+  it("computeVisibleRange：纯窗口不因合并扩大，主格经 anchor 召回", async () => {
+    // 大跨度合并 A1:A500：窗口在第 100 行附近时，窗口本身不再被合并矩形
+    // 扩大（旧实现把 [r0,r1) 扩到合并末行，行号表头随之全量建 DOM——整列
+    // 合并的虚拟滚动失效），合并主格改由 visibleMergeAnchors 召回
     const bytes = bigWorkbookBytes(600, 6);
     const model = await parse(bytes);
     model.sheets[0].merges = [{ row: 0, col: 0, rowSpan: 500, colSpan: 1 }];
     const l = buildLayout(model.sheets[0]);
     const range = computeVisibleRange(l, l.rowTop[100], 0, 500, 300, 0);
-    expect(range.rowStart).toBe(0); // 召回到合并主格
-    expect(range.rowEnd).toBeGreaterThanOrEqual(101);
+    expect(range.rowStart).toBeGreaterThanOrEqual(90); // 窗口不被合并拉回第 0 行
+    expect(range.rowEnd).toBeLessThanOrEqual(120);
+    const anchors = visibleMergeAnchors(l, range);
+    expect(anchors).toEqual([{ row: 0, col: 0 }]); // 主格被召回
+    // 窗口外的合并不召回（B 列无合并）
+    const anchors2 = visibleMergeAnchors(l, {
+      ...range,
+      colStart: 2,
+      colEnd: 6,
+    });
+    expect(anchors2).toEqual([]);
+  });
+
+  it("buildLayout：<col> 只写 width 不写 customWidth 也生效", () => {
+    // 引擎对"未写 width 的 col"兜底 8.43、对"写了 width 无标志"保留原值且
+    // customWidth=false——两形态无从靠标志区分，渲染一律采用 width
+    const l = buildLayout({
+      name: "S",
+      visible: true,
+      showGridLines: true,
+      rightToLeft: false,
+      rowCount: 1,
+      colCount: 2,
+      rows: [],
+      colSpans: [
+        { min: 1, max: 1, width: 30, hidden: false, customWidth: false },
+        { min: 2, max: 2, width: 8.43, hidden: false, customWidth: false },
+      ],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+      styles: { fonts: [], fills: [], borders: [], xfs: [] },
+    });
+    expect(l.colWidths[0]).toBe(charsToPx(30));
+    expect(l.colWidths[1]).toBe(charsToPx(8.43));
   });
 });
 
@@ -293,6 +329,74 @@ describe("SheetRenderer", () => {
     // 5000×8=40000 格，视口 ~800×600 → 数百格量级，绝不能全量
     expect(cells).toBeLessThan(2000);
     expect(cells).toBeGreaterThan(50);
+    r.destroy();
+  });
+
+  it("整列合并不击穿虚拟滚动：表头恒为视口规模、主格仍被召回渲染", async () => {
+    // 回归守卫：旧合并召回把整个合并矩形并入窗口，A1:A5000 的行号表头会
+    // 全量建出（5000 个 .xpv-hcell）。新语义：表头按纯窗口渲染，合并主格
+    // 经 anchor 增补（跨 5000 行的大格子本体由 merge 跨度一次建成）
+    const bytes = bigWorkbookBytes(5000, 8);
+    const model = await parse(bytes);
+    model.sheets[0].merges = [{ row: 0, col: 0, rowSpan: 5000, colSpan: 1 }];
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const headers = container.querySelectorAll(".xpv-hcell").length;
+    expect(headers).toBeLessThan(100); // 视口规模，绝不能是 5000
+    expect(headers).toBeGreaterThan(10);
+    // 合并主格（A1）被渲染在主象限，且高度 = 合并 5000 行的总高
+    const layers = container.querySelectorAll(".xpv-layer");
+    const a1 = [...layers[0].querySelectorAll(".xpv-cell")].find(
+      (c) => c.textContent !== "",
+    );
+    expect(a1).toBeTruthy();
+    const l = buildLayout(model.sheets[0]);
+    expect((a1 as HTMLElement).style.height).toBe(`${l.totalHeight}px`);
+    r.destroy();
+  });
+
+  it("文本溢出封顶到下一个非空格前缘（Excel 截断语义）", async () => {
+    // A 列长文本、B 列空、C 列有内容：溢出允许（A 盖过 B），但上限到 C 前缘
+    // ——旧实现无上限，长文本会视觉盖到 C 的内容上。清空 colSpans 用默认
+    // 列宽，保证 A 的溢出空间（64×2）大于自身宽度
+    const model = await parse(sampleWorkbookBytes());
+    model.sheets[0] = {
+      ...model.sheets[0],
+      rows: [
+        {
+          index: 1,
+          height: null,
+          hidden: false,
+          cells: [
+            {
+              col: 0,
+              type: "string",
+              value: "很长的溢出文本".repeat(6),
+              styleIndex: null,
+            },
+            { col: 2, type: "string", value: "blocker", styleIndex: null },
+          ],
+        },
+      ],
+      colSpans: [],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+    };
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    // A 格（长文本）溢出，上限 = C 列左缘 − A 列左缘（A+B 两列默认宽 64×2）
+    const a1 = [...container.querySelectorAll(".xpv-cell")].find((c) =>
+      c.textContent?.includes("溢出"),
+    ) as HTMLElement;
+    expect(a1).toBeTruthy();
+    expect(a1.classList.contains("xpv-spill")).toBe(true);
+    const span = a1.querySelector("span") as HTMLElement;
+    const l = buildLayout(model.sheets[0]);
+    expect(span.style.maxWidth).toBe(`${l.colLeft[2] - l.colLeft[0]}px`);
+    expect(l.colLeft[2] - l.colLeft[0]).toBe(128); // 64×2，构造自检
+    // blocker 右侧到网格边界也无内容：同样允许溢出，但上限不同——
+    // 关键断言是 A 格上限正确封顶在 blocker 前缘
     r.destroy();
   });
 

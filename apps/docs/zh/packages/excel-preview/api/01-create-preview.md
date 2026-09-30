@@ -13,16 +13,16 @@ function createPreview(
 
 ## PreviewOptions
 
-| 选项            | 类型                                        | 默认值           | 说明                              |
-| --------------- | ------------------------------------------- | ---------------- | --------------------------------- |
-| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | —（必填）        | 文件字节                          |
-| `password`      | `string`                                    | —                | 加密工作簿的密码（Agile AES-256） |
-| `sheet`         | `string \| number`                          | 文件 `activeTab` | 初始 sheet（名称或 0 起索引）     |
-| `showHeaders`   | `boolean`                                   | `true`           | 行列表头（A/B/C + 1/2/3）         |
-| `showGridLines` | `boolean`                                   | 遵循文件         | 网格线                            |
-| `showTabs`      | `boolean`                                   | `true`           | sheet 页签栏（隐藏表永不出现）    |
-| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                | 成功回调：sheet 列表、规模与耗时  |
-| `onError`       | `(error: PreviewError) => void`             | —                | 失败回调（错误码见下）            |
+| 选项            | 类型                                        | 默认值           | 说明                                                                                                                                  |
+| --------------- | ------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | —（必填）        | 文件字节                                                                                                                              |
+| `password`      | `string`                                    | —                | 加密工作簿的密码（Agile AES-256）                                                                                                     |
+| `sheet`         | `string \| number`                          | 文件 `activeTab` | 初始 sheet（名称或 0 起索引）                                                                                                         |
+| `showHeaders`   | `boolean`                                   | `true`           | 行列表头（A/B/C + 1/2/3）                                                                                                             |
+| `showGridLines` | `boolean`                                   | 遵循文件         | 网格线                                                                                                                                |
+| `showTabs`      | `boolean`                                   | `true`           | sheet 页签栏（隐藏表永不出现）                                                                                                        |
+| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                | 渲染就绪回调：首次解析渲染完成后与**每次 sheet 切换完成后**都会触发（`duration.parse` 复用首次解析耗时）；上报 sheet 列表、规模与耗时 |
+| `onError`       | `(error: PreviewError) => void`             | —                | 失败回调（错误码见下）                                                                                                                |
 
 `PreviewParsedInfo`：
 
@@ -70,3 +70,13 @@ const workbook = await parseWorkbookBytes(bytes, { password: "…" });
 ```
 
 失败时抛出带 `.code` 属性的 `Error`（错误码同上）。模型字段见[数据模型](/zh/packages/excel-preview/api/02-model)。
+
+## 其他导出
+
+| 导出              | 说明                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| `formatCellValue` | 渲染器同源的单元格格式化器（见[数据模型](/zh/packages/excel-preview/api/02-model)） |
+| `configureWasm`   | 资源自托管配置（见[资源与自托管](/zh/packages/excel-preview/guide/02-assets)）      |
+| `getWasmLoader`   | 共享 loader 单例——读取当前配置与状态（与 `@marcusok/xlsx-core` 导出的是同一对象）   |
+
+`configureWasm` / `getWasmLoader` 是 `@marcusok/xlsx-core` 的再导出：从任一包导入，配置的都是同一个共享 loader。

@@ -1,6 +1,6 @@
 # Assets & Self-hosting
 
-The preview ships two runtime assets: the WASM engine binary (~2MB, gzip ≈ 650KB) and the self-contained parse worker. Both are located automatically in bundlers and Node; configuration is only needed for self-hosted copies.
+The preview ships two runtime assets: the WASM engine binary (1.9MB, gzip ≈ 650KB) and the self-contained parse worker. Both are located automatically in bundlers and Node; configuration is only needed for self-hosted copies.
 
 ## How assets resolve by default
 
@@ -42,6 +42,16 @@ Notes carried over from the exporter's loader (they share it):
 
 - Call `configureWasm` **before** the first preview; a WASM URL change after a successful load only takes effect in a fresh JS realm (page reload or a newly created worker).
 - The worker falls back to the main-thread parse path when it fails to load — the preview keeps working, at the cost of blocking during large parses.
+
+## Loader defaults
+
+The shared loader's tunables and their defaults (same for the exporter — one loader, one set of options):
+
+| Option            | Default   | Meaning                                                                                                                                                                                                                                                    |
+| ----------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timeoutMs`       | `10_000`  | Per-attempt WASM load timeout (fetch/instantiate)                                                                                                                                                                                                          |
+| `maxRetries`      | `3`       | Total load attempts including the first (backoff 300ms / 600ms between retries)                                                                                                                                                                            |
+| `workerTimeoutMs` | `120_000` | Parse-worker operation timeout. A timed-out parse terminates the shared worker and rejects its in-flight requests without a main-thread rerun; the next parse rebuilds a fresh worker. Must be > 0 — `0`/negative is "time out immediately", not "disable" |
 
 ## Vite dev-server caveat
 

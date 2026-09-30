@@ -13,16 +13,16 @@ function createPreview(
 
 ## PreviewOptions
 
-| Option          | Type                                        | Default            | Description                                              |
-| --------------- | ------------------------------------------- | ------------------ | -------------------------------------------------------- |
-| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | — (required)       | The file bytes                                           |
-| `password`      | `string`                                    | —                  | Password for encrypted workbooks (Agile AES-256)         |
-| `sheet`         | `string \| number`                          | file's `activeTab` | Initial sheet (name or 0-based index)                    |
-| `showHeaders`   | `boolean`                                   | `true`             | Row/column headers (A/B/C + 1/2/3)                       |
-| `showGridLines` | `boolean`                                   | from the file      | Grid lines                                               |
-| `showTabs`      | `boolean`                                   | `true`             | Sheet tab bar (hidden sheets never appear)               |
-| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                  | Success callback with sheet list, dimensions and timings |
-| `onError`       | `(error: PreviewError) => void`             | —                  | Failure callback (see codes below)                       |
+| Option          | Type                                        | Default            | Description                                                                                                                                                                                     |
+| --------------- | ------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | — (required)       | The file bytes                                                                                                                                                                                  |
+| `password`      | `string`                                    | —                  | Password for encrypted workbooks (Agile AES-256)                                                                                                                                                |
+| `sheet`         | `string \| number`                          | file's `activeTab` | Initial sheet (name or 0-based index)                                                                                                                                                           |
+| `showHeaders`   | `boolean`                                   | `true`             | Row/column headers (A/B/C + 1/2/3)                                                                                                                                                              |
+| `showGridLines` | `boolean`                                   | from the file      | Grid lines                                                                                                                                                                                      |
+| `showTabs`      | `boolean`                                   | `true`             | Sheet tab bar (hidden sheets never appear)                                                                                                                                                      |
+| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                  | Render-ready callback: fires after the first parse+render **and again after every sheet switch** (`duration.parse` reuses the first parse's timing). Reports sheet list, dimensions and timings |
+| `onError`       | `(error: PreviewError) => void`             | —                  | Failure callback (see codes below)                                                                                                                                                              |
 
 `PreviewParsedInfo`:
 
@@ -70,3 +70,13 @@ const workbook = await parseWorkbookBytes(bytes, { password: "…" });
 ```
 
 Throws an `Error` with a `.code` property (same codes as above) on failure. See the [model types](/packages/excel-preview/api/02-model).
+
+## Other exports
+
+| Export            | What it is                                                                                            |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| `formatCellValue` | The cell formatter the renderer itself uses (see [model types](/packages/excel-preview/api/02-model)) |
+| `configureWasm`   | Asset self-hosting config (see [assets](/packages/excel-preview/guide/02-assets))                     |
+| `getWasmLoader`   | The shared loader singleton — current options/state (same object as `@marcusok/xlsx-core`'s)          |
+
+`configureWasm` / `getWasmLoader` are re-exports of `@marcusok/xlsx-core`: importing them from either package configures the same shared loader.

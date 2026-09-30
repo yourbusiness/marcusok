@@ -323,7 +323,8 @@ export const packages: PackageEntry[] = [
     npmName: "@marcusok/excel-preview",
     category: "preview",
     version: excelPreviewPkg.version,
-    status: "beta",
+    // 已发 1.0.x 正式版（initial release + patch），与导出包同为 stable 口径
+    status: "stable",
     zh: true,
     tagline: {
       zh: "xlsx 只读预览（Worker 解析 + 虚拟滚动，样式/合并/冻结/数字格式还原）",

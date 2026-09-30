@@ -16,6 +16,7 @@ What v1 deliberately does not do, and why.
 
 - **Rich text** runs render as their concatenated plain text; run-level styling is on the roadmap (the current model keeps only the joined text, so restoring runs will need a parser addition).
 - **Pattern fills** (hatched patterns like `gray125`) render as their background/foreground solid approximation; solid and gradient fills render exactly.
+- **Rotated text** (`textRotation`) is clipped to the cell box when it does not fit — Excel also truncates rotated text that exceeds the cell, but its clipping follows the rotated text run rather than the axis-aligned cell rectangle, so edge cases near the diagonal differ slightly.
 - **Number columns narrower than their content** clip instead of showing Excel's `####` (real `####` needs text measurement per cell — not worth the scroll cost yet).
 - **External hyperlink URLs** are not rendered in v1; the hyperlink _styling_ (blue/underline from the file's font) still shows because it is ordinary font data. Tooltips are not surfaced either.
 - **`rightToLeft` sheets** currently render left-to-right (the flag is parsed and carried in the model).

@@ -20,7 +20,9 @@ preview.destroy();
 ```
 
 That is the entire setup. Node/SSR (no Worker global) runs the same pipeline on
-the main thread with no code change.
+the main thread with no code change. `onParsed` fires after the first render
+and again after every `setSheet`/tab switch (`duration.parse` reuses the first
+parse's timing).
 
 ## What it restores
 
@@ -61,7 +63,7 @@ docs site for the full [limits list](https://yourbusiness.github.io/marcusok/).
 
 ## Assets
 
-The WASM binary (~2MB, gzip ≈ 650KB) and the self-contained parse worker
+The WASM binary (1.9MB, gzip ≈ 650KB) and the self-contained parse worker
 resolve automatically in bundlers and Node. Pages using several @marcusok
 spreadsheet packages share one engine instance and one WASM binary on the main
 thread through `@marcusok/xlsx-core` (the single runtime dependency).

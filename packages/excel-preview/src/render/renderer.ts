@@ -30,6 +30,7 @@ import { formatCellValue } from "../numfmt/format";
 import {
   buildLayout,
   computeVisibleRange,
+  visibleMergeAnchors,
   columnIndexLabel,
   HEADER_COL_PX,
   HEADER_ROW_PX,
@@ -418,29 +419,40 @@ export class SheetRenderer {
     if (!l || !this.workbook) return;
     const headW = this.showHeaders ? HEADER_COL_PX : 0;
     const headH = this.showHeaders ? HEADER_ROW_PX : 0;
-    const vw = (this.viewport.clientWidth || FALLBACK_VIEW_W) - headW;
-    const vh = (this.viewport.clientHeight || FALLBACK_VIEW_H) - headH;
+    // 主区窗口：可视区在"网格坐标"下的位置 = 滚动偏移 − 表头（表头是 overlay，
+    // 占据视口顶部/左侧但不在滚动坐标里体现）+ 被冻结层覆盖的尺寸；可用宽高
+    // 相应扣除表头与冻结区。此前漏减表头偏移，窗口整体偏 24/40px，靠 200px
+    // buffer 掩盖（表头加高或 buffer 调小时会露出顶部缺行）。
+    const vw =
+      (this.viewport.clientWidth || FALLBACK_VIEW_W) -
+      headW -
+      l.colLeft[l.frozenCols];
+    const vh =
+      (this.viewport.clientHeight || FALLBACK_VIEW_H) -
+      headH -
+      l.rowTop[l.frozenRows];
     if (vw <= 0 || vh <= 0) return;
 
-    // 主窗口：可视区在"网格坐标"下的位置 = 滚动偏移 + 被冻结层覆盖的尺寸
     const main = computeVisibleRange(
       l,
-      this.viewport.scrollTop + l.rowTop[l.frozenRows],
-      this.viewport.scrollLeft + l.colLeft[l.frozenCols],
+      this.viewport.scrollTop - headH + l.rowTop[l.frozenRows],
+      this.viewport.scrollLeft - headW + l.colLeft[l.frozenCols],
       vw,
       vh,
     );
 
-    this.updateLayer(
-      this.cellsLayer,
-      {
-        rowStart: Math.max(main.rowStart, l.frozenRows),
-        rowEnd: main.rowEnd,
-        colStart: Math.max(main.colStart, l.frozenCols),
-        colEnd: main.colEnd,
-      },
-      "m:",
-    );
+    const mainRange = {
+      rowStart: Math.max(main.rowStart, l.frozenRows),
+      rowEnd: main.rowEnd,
+      colStart: Math.max(main.colStart, l.frozenCols),
+      colEnd: main.colEnd,
+    };
+    // 与主区窗口相交的合并主格：窗口外的主格也要渲染（合并显示完整性），
+    // 但只召回主格本身、不扩大窗口与表头范围（整列合并的 DOM 爆炸，见
+    // visibleMergeAnchors 注释）
+    const anchors = visibleMergeAnchors(l, mainRange);
+
+    this.updateLayer(this.cellsLayer, mainRange, "m:", anchors);
 
     if (l.frozenRows > 0) {
       this.updateLayer(
@@ -480,7 +492,8 @@ export class SheetRenderer {
     this.updateHeaders(main);
   }
 
-  /** 单象限差量渲染。prefix 区分象限 key 命名空间。 */
+  /** 单象限差量渲染。prefix 区分象限 key 命名空间；anchors 为需增补召回的
+   * 合并主格（在窗口外，见 visibleMergeAnchors），仅主象限使用。 */
   private updateLayer(
     layer: HTMLElement,
     range: {
@@ -490,34 +503,64 @@ export class SheetRenderer {
       colEnd: number;
     },
     prefix: string,
+    anchors: { row: number; col: number }[] = [],
   ): void {
     const l = this.layout!;
-    const sheet = this.workbook!.sheets[this.sheetIndex];
     const want = new Set<string>();
+
+    // 单格渲染（含合并几何与隐藏行列检查）：窗口循环与 anchor 召回共用
+    const ensure = (r: number, cell: PreviewCell): void => {
+      const c = cell.col;
+      const merge = l.mergeByAnchor.get(`${r}:${c}`);
+      const left = l.colLeft[c];
+      const top = l.rowTop[r];
+      const width = merge
+        ? l.colLeft[Math.min(c + merge.colSpan, l.colCount)] - left
+        : l.colWidths[c];
+      const height = merge
+        ? l.rowTop[Math.min(r + merge.rowSpan, l.rowCount)] - top
+        : l.rowHeights[r];
+      if (width <= 0 || height <= 0) return; // 隐藏行列中的格子不渲染
+      // 文本溢出：溢出宽度封顶到行内下一个"有内容/被合并覆盖"格的前缘
+      // （Excel 溢出到第一个非空格前截断——此前无上限，长文本会视觉盖到
+      // 远处内容格上）
+      let spillPx: number | undefined;
+      if (cell.type === "string") {
+        const limit = this.spillLimitPx(c, r, range.colEnd);
+        if (limit > width) spillPx = limit;
+      }
+      const key = `${prefix}${r}:${c}`;
+      want.add(key);
+      if (!this.rendered.has(key)) {
+        this.createCell(
+          layer,
+          key,
+          cell,
+          this.workbook!.sheets[this.sheetIndex],
+          left,
+          top,
+          width,
+          height,
+          spillPx,
+        );
+      }
+    };
 
     for (let r = range.rowStart; r < range.rowEnd; r++) {
       const rowMap = this.rowIndex.get(r);
       if (!rowMap) continue;
       for (const cell of rowMap.values()) {
-        const c = cell.col;
-        if (c < range.colStart || c >= range.colEnd) continue;
-        if (l.coveredBy.has(`${r}:${c}`)) continue;
-        const merge = l.mergeByAnchor.get(`${r}:${c}`);
-        const left = l.colLeft[c];
-        const top = l.rowTop[r];
-        const width = merge
-          ? l.colLeft[Math.min(c + merge.colSpan, l.colCount)] - left
-          : l.colWidths[c];
-        const height = merge
-          ? l.rowTop[Math.min(r + merge.rowSpan, l.rowCount)] - top
-          : l.rowHeights[r];
-        if (width <= 0 || height <= 0) continue; // 隐藏行列中的格子不渲染
-        const key = `${prefix}${r}:${c}`;
-        want.add(key);
-        if (!this.rendered.has(key)) {
-          this.createCell(layer, key, cell, r, sheet, left, top, width, height);
-        }
+        if (cell.col < range.colStart || cell.col >= range.colEnd) continue;
+        if (l.coveredBy.has(`${r}:${cell.col}`)) continue;
+        ensure(r, cell);
       }
+    }
+    for (const a of anchors) {
+      // anchor 正常不是被覆盖格（coveredBy 不含 anchor 自身）；重叠合并的
+      // 异常文件里后写覆盖先写，防御性跳过
+      if (l.coveredBy.has(`${a.row}:${a.col}`)) continue;
+      const cell = this.rowIndex.get(a.row)?.get(a.col);
+      if (cell) ensure(a.row, cell);
     }
 
     for (const [key, el] of this.rendered) {
@@ -533,15 +576,15 @@ export class SheetRenderer {
     layer: HTMLElement,
     key: string,
     cell: PreviewCell,
-    row: number,
     sheet: PreviewSheet,
     left: number,
     top: number,
     width: number,
     height: number,
+    spillPx?: number,
   ): void {
     const el = document.createElement("div");
-    el.className = this.cellClasses(cell, sheet, row);
+    el.className = this.cellClasses(cell, sheet);
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
     el.style.width = `${width}px`;
@@ -559,7 +602,15 @@ export class SheetRenderer {
     if (fmt.color) el.style.color = fmt.color;
     const rotation = rotationCss(xf?.alignment?.textRotation);
     if (fmt.text !== "") {
-      if (rotation) {
+      if (spillPx !== undefined && !rotation) {
+        // 溢出截断容器：el 本体保持原格宽（背景/边框不外溢、overflow 放开），
+        // 文本在 span 里按溢出上限截断（Excel 溢出到第一个非空格前）
+        el.classList.add("xpv-spill");
+        const span = document.createElement("span");
+        span.textContent = fmt.text;
+        span.style.cssText = `max-width:${spillPx}px;overflow:hidden;`;
+        el.appendChild(span);
+      } else if (rotation) {
         const span = document.createElement("span");
         span.textContent = fmt.text;
         span.style.cssText = rotation;
@@ -572,11 +623,7 @@ export class SheetRenderer {
     this.rendered.set(key, el);
   }
 
-  private cellClasses(
-    cell: PreviewCell,
-    sheet: PreviewSheet,
-    row: number,
-  ): string {
+  private cellClasses(cell: PreviewCell, sheet: PreviewSheet): string {
     const xf =
       cell.styleIndex != null ? sheet.styles.xfs[cell.styleIndex] : undefined;
     let cls = "xpv-cell";
@@ -588,20 +635,25 @@ export class SheetRenderer {
       else cls += " xpv-mid";
     }
     if (xf) cls += ` xpv-xf-${cell.styleIndex}`;
-    // 文本溢出：右邻无内容且未被合并覆盖 → 允许溢出（Excel 视觉语义）
-    if (cell.type === "string" && this.canSpill(cell.col, row)) {
-      cls += " xpv-spill";
-    }
     return cls;
   }
 
-  private canSpill(col: number, row: number): boolean {
+  /**
+   * 文本溢出上限（px）：本格左缘到行内下一个"有内容 / 被合并覆盖"格左缘的
+   * 距离；无阻挡时到扫描终点。扫描以窗口右界 +1 为上限——溢出超出视口的
+   * 部分本就会被 viewport 裁剪，无需扫到网格尽头（避免超宽行 O(总列数)
+   * 的逐格扫描）。
+   */
+  private spillLimitPx(col: number, row: number, colEnd: number): number {
     const l = this.layout!;
-    if (col + 1 >= l.colCount) return false;
-    if (l.coveredBy.has(`${row}:${col + 1}`)) return false;
     const rowMap = this.rowIndex.get(row);
-    if (!rowMap) return true;
-    return !rowMap.has(col + 1);
+    const stop = Math.min(l.colCount, Math.max(colEnd + 1, col + 2));
+    for (let c = col + 1; c < stop; c++) {
+      if (rowMap?.has(c) || l.coveredBy.has(`${row}:${c}`)) {
+        return l.colLeft[c] - l.colLeft[col];
+      }
+    }
+    return l.colLeft[stop] - l.colLeft[col];
   }
 
   private updateHeaders(range: {
@@ -668,7 +720,9 @@ export class SheetRenderer {
     }
   }
 
-  /** 表头格子的创建/复用与几何写入（四条表头带共用）。 */
+  /** 表头格子的创建/复用（四条表头带共用）。几何与内容对同一 key 恒定
+   * （列标由列号、行号由行号唯一决定），按文件头不变量只在创建时写入，
+   * 复用路径零 DOM 写入。 */
   private headerCell(
     want: Set<string>,
     key: string,
@@ -682,13 +736,13 @@ export class SheetRenderer {
       el = document.createElement("div");
       el.className = "xpv-hcell";
       el.textContent = label;
+      el.style.left = pos.left;
+      el.style.top = pos.top;
+      el.style.width = pos.width;
+      el.style.height = pos.height;
       layer.appendChild(el);
       this.renderedHeaders.set(key, el);
     }
-    el.style.left = pos.left;
-    el.style.top = pos.top;
-    el.style.width = pos.width;
-    el.style.height = pos.height;
   }
 
   destroy(): void {
