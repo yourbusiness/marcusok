@@ -194,8 +194,11 @@ export function getAllHomeStats(
       key: "packages",
       value: pkgs.length,
       decimals: 0,
-      zh: "已发布库包",
-      en: "Published packages",
+      // 口径是"文档站收录的包"而非"npm 已发布"：@marcusok/xlsx-core 已发
+      // npm 但有意不在本注册表（共享引擎层，其用法随两个业务包的文档讲），
+      // 按发布数会虚报（对照 guide/index.md 的仓库结构表则含它）
+      zh: "文档站收录库包",
+      en: "Documented packages",
       href:
         pkgs.length === 1
           ? `https://www.npmjs.com/package/${primaryPackage?.npmName ?? ""}`

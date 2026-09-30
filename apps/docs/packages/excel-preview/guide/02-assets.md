@@ -28,6 +28,8 @@ configureWasm({
 
 Note the field name: the parse worker uses its own `parseWorkerUrl` option — the shared loader serves several @marcusok packages, and each package's worker is a different script, so a single `workerUrl` field would cross-wire them (`workerUrl` is the _export_ worker's option, read by @marcusok/excel-exporter).
 
+> **Worker scripts are same-origin only.** A browser rejects a cross-origin worker script at `Worker` construction (`SecurityError`) — a raw CDN URL for `parseWorkerUrl` will not load. The preview detects it, prints a console warning and falls back to main-thread parsing for the session, but to actually use the worker, serve it from your own origin (a local copy or a reverse proxy). Only the WASM binary can come from a plain CDN.
+
 With bundler asset imports:
 
 ```ts

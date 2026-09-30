@@ -20,7 +20,7 @@ pnpm lint        # ESLint
 pnpm typecheck   # TypeScript type checking
 ```
 
-Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages themselves only need Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 devDependency (bundled into the published packages at build time via `@marcusok/xlsx-core`) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected — published packages have exactly one same-scope runtime dependency (`@marcusok/xlsx-core`, the shared engine layer).
+Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages themselves only need Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 dependency (a real `dependencies` entry of `@marcusok/xlsx-core` — kept for consumer-side d.ts resolution, and bundled into that package's dist at build time; the two app-facing packages carry it only as a devDependency) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected — published packages have exactly one same-scope runtime dependency (`@marcusok/xlsx-core`, the shared engine layer).
 
 ## Tooling
 
@@ -43,12 +43,14 @@ marcusok/
 ├── apps/                       # Applications (scales horizontally)
 │   ├── docs/                   # VitePress public docs site (English default + Chinese, GitHub Pages)
 │   └── play/                   # Local integration sandbox (React 19 + antd 6, private app)
-├── packages/                   # Shared packages (scales horizontally)
-│   └── excel-exporter/         # Export category: Excel export
-│       ├── src/                # Source (incl. workers/ entry) and __tests__/
-│       └── dist/               # tsup build output
-├── docs/                       # Design documents (Chinese)
-│   ├── excel-export-design.md  # Excel export core design doc (~230k chars, the main one)
+├── packages/                   # Shared packages (each: src/ with __tests__/,
+│                               # dist/ from tsup; scales horizontally)
+│   ├── excel-exporter/         # Export: Excel export core
+│   ├── excel-preview/          # Preview: read-only xlsx preview
+│   └── xlsx-core/              # Shared: modern-xlsx engine layer
+├── docs/                       # Design documents (Chinese) — intentionally
+│                               # untracked (.gitignore), local-only
+│   ├── excel-export-design.md  # Excel export core design doc (~250k chars, the main one)
 │   └── release-*.md / ci-*.md  # Release & CI walkthroughs, debug notes, docs-site plan
 ├── scripts/                    # Repo-level scripts (dev.mjs unified dev launcher)
 ├── .changeset/                 # Changesets config
@@ -98,6 +100,8 @@ pnpm changeset publish         # publish with the next dist-tag
 > normal two-phase (version PR → merge to publish) flow.
 
 ## Reference Docs
+
+> These are internal design documents, deliberately **not tracked** by git (`.gitignore` ignores `/docs/`): they exist only on the maintainer's machine. The links below resolve only there — a fresh clone has no `docs/` directory.
 
 - [`docs/excel-export-design.md`](./docs/excel-export-design.md) — Excel export core design doc
 - [`docs/release-guide.md`](./docs/release-guide.md) — Release guide

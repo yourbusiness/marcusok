@@ -28,6 +28,8 @@ configureWasm({
 
 注意字段名：解析 worker 走独立的 `parseWorkerUrl` 选项——共享 loader 服务同页多个 @marcusok 包，各包的 worker 是不同脚本，单字段会让两包互拿对方的 worker（`workerUrl` 是**导出** worker 的选项，由 @marcusok/excel-exporter 读取）。
 
+> **worker 脚本只能同源。** 浏览器在 `Worker` 构造时直接拒绝跨域 worker 脚本（抛 `SecurityError`）——`parseWorkerUrl` 填裸 CDN 地址是加载不出来的。预览会检测到该情形、在控制台告警并回退主线程解析，但要想真正用上 worker，需从自己的源提供该文件（本地副本或反向代理）；可走裸 CDN 的只有 WASM 二进制。
+
 配合打包器资产导入：
 
 ```ts
