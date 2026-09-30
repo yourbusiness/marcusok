@@ -1,6 +1,21 @@
 # Getting Started
 
-Run your first Excel export in minutes. Requirement: Node `>= 22`. Example commands use pnpm; npm / yarn work the same (`pnpm >= 9` is only a dev requirement of this repository, not of consumers).
+MarcusOK publishes four packages across three categories — how they relate is on the [Ecosystem](/guide/) page. This page starts with the one decision that comes first (which package to install), then walks through a first export with the most common one.
+
+Requirement: Node `>= 22`. Example commands use pnpm; npm / yarn work the same (`pnpm >= 9` is only a dev requirement of this repository, not of consumers).
+
+## Which package do I need?
+
+| I want to…                                                     | Install                      | Start at                                                            |
+| -------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------- |
+| Export data to a downloadable `.xlsx`                          | `@marcusok/excel-exporter`   | The [exporter walkthrough](#_2-first-export) below                  |
+| Show an uploaded `.xlsx` / `.xlsm` / `.csv`, read-only         | `@marcusok/excel-preview`    | [Preview quick start](/packages/excel-preview/guide/01-quick-start) |
+| Drive the same progress overlay for a non-Excel task           | `@marcusok/progress-overlay` | [Overlay usage](/packages/progress-overlay/guide/01-usage)          |
+| Build directly on the modern-xlsx engine (own reader / writer) | `@marcusok/xlsx-core`        | [Loader guide](/packages/xlsx-core/guide/01-loader)                 |
+
+Everything below walks through `@marcusok/excel-exporter`; the other packages' quick starts are linked in the table above.
+
+Two of those rows are unusual in practice: `@marcusok/xlsx-core` and `@marcusok/progress-overlay` are normally installed **for** you as dependencies of the two document packages, so you only add them explicitly when you want them on their own. The full comparison — dependency graph, what is shared at runtime, how versions relate — is in [Package Relationships & Selection](/guide/03-package-relationships).
 
 ## 1. Install
 
@@ -62,4 +77,5 @@ No `main.ts` wiring, no bundler plugins: the shipped assets (`modern-xlsx.wasm` 
 ## 3. Next steps
 
 - Learn how [auto mode routing](/packages/excel-exporter/guide/03-auto-mode) picks main / worker / stream
-- Try different modes and row counts in the [play](/play)
+- Try different modes and row counts in the [play](/play) — the same page also demos the preview package and the progress overlay
+- Start on another package from the [table above](#which-package-do-i-need), or see [Package Relationships & Selection](/guide/03-package-relationships) to compare them

@@ -432,6 +432,8 @@ export const packages: PackageEntry[] = [
       en: "Generic progress overlay (spinner / percentage bar, glass panel, light & dark themes)",
     },
     keywords: ["overlay", "progress", "spinner", "loading", "ui"],
+    // 独立演示（不经业务包直接驱动遮罩），由 play 页与包首页复用。
+    demo: "OverlayDemo",
     highlights: [
       {
         icon: "zap",

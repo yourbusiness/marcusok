@@ -15,10 +15,10 @@ pnpm test          # turbo 全仓测试（docs 执行 zh/en 页面镜像校验�
 pnpm typecheck     # turbo 全仓类型检查（docs 执行 vue-tsc --noEmit）
 ```
 
-> 注意：不要直接在本目录裸跑 `pnpm build`，它依赖 `@marcusok/excel-exporter` 与
-> `@marcusok/excel-preview` 的 `dist/` 产物（两个包的 live demo 各自 import 包入口；
-> registry 还读取这两个包与 `@marcusok/progress-overlay` 的 `package.json` 版本号），
-> turbo 依赖图会保证顺序。
+> 注意：不要直接在本目录裸跑 `pnpm build`，它依赖 `@marcusok/excel-exporter`、
+> `@marcusok/excel-preview` 与 `@marcusok/progress-overlay` 的 `dist/` 产物（三个包的
+> live demo 各自 import 包入口；registry 还读取这三个包与 `@marcusok/xlsx-core` 的
+> `package.json` 版本号），turbo 依赖图会保证顺序。
 > wasm/worker 资产无需拷贝：包内通过 `new URL(<file>, import.meta.url)` 自动定位，
 > 由 VitePress 的构建按 hashed asset 输出（仅当未来某个包确需 public/ 拷贝时，
 > 才在 `.vitepress/registry.ts` 的 `runtimeAssets` 登记）。
@@ -27,7 +27,7 @@ pnpm typecheck     # turbo 全仓类型检查（docs 执行 vue-tsc --noEmit）
 
 ```text
 .vitepress/config.ts                 # 站点配置（base、i18n、导航、自动侧边栏）
-.vitepress/registry.ts               # ★ 包注册表：新增包只需在此登记（含侧边栏/统计/亮点）
+.vitepress/registry.ts               # ★ 包注册表：新增包只需在此登记（含侧边栏/统计/亮点/live demo）
 .vitepress/theme/components/         # 自定义 Vue 组件（首页卡片、live demo 等）
 scripts/check-i18n.mjs               # en/zh 页面镜像校验（`pnpm test` 会执行）
 src/demos/<name>/                    # 每个包各自的确定性 mock 数据生成器

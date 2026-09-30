@@ -605,6 +605,25 @@
   cursor: not-allowed;
 }
 
+/* 分组标签（如遮罩演示的"主题"）与选中态按钮：选中态需要压过上面那条
+ * `.vp-doc .demo-panel button`（0-2-1），所以用两个类选择器（0-3-0）。 */
+.vp-doc .demo-panel__label {
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
+}
+
+.vp-doc .demo-panel__theme.is-active {
+  border-color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+}
+
+.vp-doc .demo-panel__note {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: var(--vp-c-text-2);
+}
+
 .vp-doc .demo-panel .progress {
   height: 8px;
   margin: 14px 0 10px;
