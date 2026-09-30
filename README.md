@@ -20,7 +20,7 @@ pnpm lint        # ESLint
 pnpm typecheck   # TypeScript type checking
 ```
 
-Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages themselves only need Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 dependency (a real `dependencies` entry of `@marcusok/xlsx-core` — kept for consumer-side d.ts resolution, and bundled into that package's dist at build time; the two app-facing packages carry it only as a devDependency) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected — published packages have exactly one same-scope runtime dependency (`@marcusok/xlsx-core`, the shared engine layer).
+Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages themselves only need Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 dependency (a real `dependencies` entry of `@marcusok/xlsx-core` — kept for consumer-side d.ts resolution, and bundled into that package's dist at build time; the two app-facing packages carry it only as a devDependency) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected — the app-facing export package carries two same-scope runtime dependencies (`@marcusok/xlsx-core`, the shared engine layer; `@marcusok/progress-overlay`, the shared overlay UI, since 2.8.0).
 
 ## Tooling
 

@@ -18,6 +18,8 @@ export default tseslint.config(
       "packages/excel-exporter/tsup.config.ts",
       "packages/excel-exporter/vitest.config.ts",
       "packages/excel-preview/scripts/**",
+      "packages/progress-overlay/tsup.config.ts",
+      "packages/progress-overlay/vitest.config.ts",
       "packages/excel-preview/tsup.config.ts",
       "packages/excel-preview/vitest.config.ts",
       "packages/xlsx-core/scripts/**",

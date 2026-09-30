@@ -26,8 +26,9 @@ const selectedMode = ref<(typeof modes)[number]>("auto");
 const datasetKey = ref("sales");
 const rowsCount = ref(10000);
 const exporting = ref(false);
-// 默认关：保留页面内联进度条，便于与全屏遮罩做对比
-const useOverlay = ref(false);
+// 2.8.0 起遮罩默认开启（overlay 选项缺省即显示），复选框语义反转：
+// 勾选 = overlay: false 关闭遮罩、回看页面内联进度条的形态
+const disableOverlay = ref(false);
 const progress = ref(0);
 const phases = ref<{ phase: string; ms: number }[]>([]);
 const result = ref<{
@@ -57,7 +58,7 @@ const statusText = computed(() =>
         dataset: "Dataset",
         mode: "Mode",
         rows: "Rows",
-        overlay: "Full-screen overlay",
+        overlay: "Disable full-screen overlay (on by default)",
         engine: "engine",
         ok: "OK",
         fail: "failed",
@@ -72,7 +73,7 @@ const statusText = computed(() =>
         dataset: "数据集",
         mode: "模式",
         rows: "数据量",
-        overlay: "全屏遮罩",
+        overlay: "禁用全屏遮罩（默认开启）",
         engine: "引擎",
         ok: "成功",
         fail: "失败",
@@ -135,13 +136,12 @@ async function run() {
         if (!disposed.value) phases.value.push({ phase, ms });
       },
     };
-    // overlay 是独立子路径，按需加载：不开这个开关的页面不会加载它的代码。
-    // 它链式追加而非替换 onProgress/onPhase，上面的进度与阶段展示照常工作。
-    const res = useOverlay.value
-      ? await (
-          await import("@marcusok/excel-exporter/overlay")
-        ).exportExcelWithOverlay(exportOptions, { delayMs: 200 })
-      : await exportExcel(exportOptions);
+    // 遮罩 2.8.0 起默认开启且链式追加 onProgress/onPhase（不替换），上面的
+    // 进度与阶段展示照常工作；勾选禁用时传 overlay: false 回到无遮罩形态。
+    const res = await exportExcel({
+      ...exportOptions,
+      overlay: disableOverlay.value ? false : undefined,
+    });
     // A failed export still receives the trailing onProgress(1) (library
     // contract), so the bar always completes; the failure itself is shown
     // via `result.success: false` / the error block below.
@@ -182,7 +182,7 @@ async function run() {
         </select>
       </label>
       <label>
-        <input v-model="useOverlay" type="checkbox" :disabled="exporting" />
+        <input v-model="disableOverlay" type="checkbox" :disabled="exporting" />
         {{ statusText.overlay }}
       </label>
       <button type="button" :disabled="exporting" @click="run">

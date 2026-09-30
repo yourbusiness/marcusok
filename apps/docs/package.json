@@ -19,6 +19,7 @@
   "dependencies": {
     "@marcusok/excel-exporter": "workspace:*",
     "@marcusok/excel-preview": "workspace:*",
+    "@marcusok/progress-overlay": "workspace:*",
     "vue": "^3.5.13"
   },
   "devDependencies": {

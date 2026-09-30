@@ -70,6 +70,7 @@
     "monorepo"
   ],
   "dependencies": {
+    "@marcusok/progress-overlay": "workspace:*",
     "@marcusok/xlsx-core": "workspace:*"
   },
   "devDependencies": {

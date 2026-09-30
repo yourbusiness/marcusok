@@ -1,5 +1,6 @@
 import excelExporterPkg from "@marcusok/excel-exporter/package.json" with { type: "json" };
 import excelPreviewPkg from "@marcusok/excel-preview/package.json" with { type: "json" };
+import progressOverlayPkg from "@marcusok/progress-overlay/package.json" with { type: "json" };
 
 export interface LocalizedText {
   zh: string;
@@ -83,10 +84,11 @@ export interface BenchmarkSeries {
 
 /**
  * 包大类：导出（现有 excel-exporter，后续或补其他文档类型导出）/
- * 文档预览。分类只是注册表里的元数据，不落物理目录——目录结构仍按
- * packages/<name> 平铺，避免破坏各处按目录名工作的链接与约定。
+ * 文档预览 / 公共组件（业务包共用的底层能力，如进度遮罩）。分类只是注册表
+ * 里的元数据，不落物理目录——目录结构仍按 packages/<name> 平铺，避免破坏
+ * 各处按目录名工作的链接与约定。
  */
-export type PackageCategory = "export" | "preview";
+export type PackageCategory = "export" | "preview" | "shared";
 
 export interface PackageCategoryDef {
   id: PackageCategory;
@@ -97,6 +99,7 @@ export interface PackageCategoryDef {
 export const PACKAGE_CATEGORIES: PackageCategoryDef[] = [
   { id: "export", label: { zh: "导出", en: "Export" } },
   { id: "preview", label: { zh: "文档预览", en: "Document Preview" } },
+  { id: "shared", label: { zh: "公共组件", en: "Shared Components" } },
 ];
 
 /**
@@ -376,5 +379,44 @@ export const packages: PackageEntry[] = [
       },
     ],
     demo: "PreviewDemo",
+  },
+  {
+    dir: "progress-overlay",
+    npmName: "@marcusok/progress-overlay",
+    category: "shared",
+    version: progressOverlayPkg.version,
+    status: "stable",
+    zh: true,
+    tagline: {
+      zh: "通用进度遮罩（旋转圆环 / 百分比条，毛玻璃面板，明暗主题）",
+      en: "Generic progress overlay (spinner / percentage bar, glass panel, light & dark themes)",
+    },
+    keywords: ["overlay", "progress", "spinner", "loading", "ui"],
+    highlights: [
+      {
+        icon: "zap",
+        title: { zh: "零依赖", en: "Zero dependencies" },
+        details: {
+          zh: "纯 DOM + 一次注入的样式，无框架绑定；React/Vue/原生页面都能一行接入。",
+          en: "Pure DOM with a single injected stylesheet, no framework tie-in; drop into React, Vue or vanilla pages alike.",
+        },
+      },
+      {
+        icon: "pen",
+        title: { zh: "两态自适应", en: "Two-state adaptive" },
+        details: {
+          zh: "时长未知显示旋转圆环，流式进度一到即切百分比条；进度粒度由调用方数据源决定。",
+          en: "Spinner while duration is unknown, switching to a percentage bar as soon as streamed progress arrives; granularity follows the caller's data source.",
+        },
+      },
+      {
+        icon: "shield",
+        title: { zh: "并发与无障碍", en: "Concurrency & a11y" },
+        details: {
+          zh: "并发任务共用一份 DOM、引用计数收尾；aria-live 文案区与 progressbar 语义、reduced-motion 全套支持。",
+          en: "Concurrent tasks share one reference-counted DOM node; aria-live labels, progressbar semantics and reduced-motion are all wired in.",
+        },
+      },
+    ],
   },
 ];

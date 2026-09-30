@@ -8,7 +8,7 @@ Run your first Excel export in minutes. Requirement: Node `>= 22`. Example comma
 pnpm add @marcusok/excel-exporter
 ```
 
-That is the entire setup — one same-scope runtime dependency (`@marcusok/xlsx-core`, the shared engine layer). The export engine (modern-xlsx JS glue + fflate) is bundled in at build time inside the core layer, and the WASM binary ships under the core package's `exports` map, so there is no engine package to wire in and no `engines` conflict from upstream ranges.
+That is the entire setup — two same-scope runtime dependencies (`@marcusok/xlsx-core`, the shared engine layer; `@marcusok/progress-overlay`, the shared overlay UI since 2.8.0). The export engine (modern-xlsx JS glue + fflate) is bundled in at build time inside the core layer, and the WASM binary ships under the core package's `exports` map, so there is no engine package to wire in and no `engines` conflict from upstream ranges.
 
 ## 2. First export
 

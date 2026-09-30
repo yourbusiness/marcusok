@@ -11,7 +11,7 @@
 pnpm add @marcusok/excel-exporter
 ```
 
-这就是全部。本包**唯一运行时依赖是同 scope 的 `@marcusok/xlsx-core`**（共享 modern-xlsx 引擎层）：导出引擎（modern-xlsx JS 胶水 + fflate）已在构建期打包进核心层，WASM 二进制通过核心层的 `exports` 暴露——没有需要额外接线的引擎包、没有可选兜底包。打包器配置仅在一种场景下需要：Vite 开发服务器（见下方[预构建注意事项](#vite-开发服务器-预构建注意事项)）。
+这就是全部。本包有**两个同 scope 运行时依赖**：`@marcusok/xlsx-core`（共享 modern-xlsx 引擎层，导出引擎 modern-xlsx JS 胶水 + fflate 已在构建期打包进核心层，WASM 二进制通过核心层的 `exports` 暴露）与 `@marcusok/progress-overlay`（共享遮罩 UI 层，2.8.0 起）——没有需要额外接线的引擎包、没有可选兜底包。打包器配置仅在一种场景下需要：Vite 开发服务器（见下方[预构建注意事项](#vite-开发服务器-预构建注意事项)）。
 
 ## 浏览器：资源自动定位
 

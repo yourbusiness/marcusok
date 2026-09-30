@@ -5,6 +5,7 @@
  * FontData.color / FillData.fgColor / BorderSideData.color (verified from
  * dist/validate-chart-D1O7LOfU.d.mts @ modern-xlsx 1.2.0).
  */
+import type { ProgressOverlayOptions } from "@marcusok/progress-overlay";
 
 /**
  * Cell border line style. Inlined from modern-xlsx's BorderSideData
@@ -301,6 +302,20 @@ export interface ExportOptions {
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   /** Trigger browser download (default true). Set false to only return a Blob. */
   download?: boolean;
+  /**
+   * Full-screen progress overlay during the export (default **on**).
+   *
+   * - omitted / `true` — overlay with the default export texts (`正在导出 Excel`,
+   *   spinner until the first intermediate progress, percentage bar afterwards);
+   *   in Node/SSR this is a no-op.
+   * - `false` — no overlay at all: nothing is mounted, no extra frame is yielded,
+   *   the option callbacks run exactly as before this capability existed.
+   * - {@link ProgressOverlayOptions} — customize texts, delay, theme, etc.
+   *
+   * Applies to `exportExcel` / `exportTable` / `exportEcharts` alike (the two
+   * convenience wrappers delegate to `exportExcel`).
+   */
+  overlay?: boolean | ProgressOverlayOptions;
 }
 
 /** Export result. */

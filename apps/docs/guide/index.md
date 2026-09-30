@@ -4,11 +4,12 @@
 
 ## Current packages
 
-| Package                                                                    | Category | Status | Description                                                                                                  |
-| -------------------------------------------------------------------------- | -------- | ------ | ------------------------------------------------------------------------------------------------------------ |
-| [`@marcusok/excel-exporter`](/packages/excel-exporter/)                    | Export   | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback |
-| [`@marcusok/excel-preview`](/packages/excel-preview/)                      | Preview  | stable | Read-only xlsx preview: worker parsing + virtual scrolling, styles/merges/freeze/number formats restored     |
-| [`@marcusok/xlsx-core`](https://www.npmjs.com/package/@marcusok/xlsx-core) | Shared   | stable | The repo's single modern-xlsx engine layer: WASM loading, asset distribution, stable re-export surface       |
+| Package                                                                    | Category | Status | Description                                                                                                       |
+| -------------------------------------------------------------------------- | -------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](/packages/excel-exporter/)                    | Export   | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback      |
+| [`@marcusok/excel-preview`](/packages/excel-preview/)                      | Preview  | stable | Read-only xlsx preview: worker parsing + virtual scrolling, styles/merges/freeze/number formats restored          |
+| [`@marcusok/xlsx-core`](https://www.npmjs.com/package/@marcusok/xlsx-core) | Shared   | stable | The repo's single modern-xlsx engine layer: WASM loading, asset distribution, stable re-export surface            |
+| [`@marcusok/progress-overlay`](/packages/progress-overlay/)                | Shared   | stable | Shared progress-overlay UI (spinner / percentage bar, glass panel, themes) behind the exporter's `overlay` option |
 
 ## Engineering conventions
 

@@ -4,6 +4,7 @@ import type {
   ExportOptions,
   ExportResult,
   ExportMode,
+  ExportPhase,
 } from "./types";
 import { WorkbookBuilder } from "./workbook-builder";
 import { exportAsStream } from "./streaming-builder";
@@ -18,6 +19,12 @@ import {
 import { validateSheetName, validateMerges } from "./format-utils";
 import { columnLabel, flattenColumnTree } from "./column-tree";
 import { applyIndexColumn, assertNoReservedIndexProp } from "./sheet-normalize";
+import {
+  nextPaint,
+  showProgressOverlay,
+  type ProgressOverlayOptions,
+  type ProgressOverlayTextOptions,
+} from "@marcusok/progress-overlay";
 
 export * from "./types";
 export * from "./style-presets";
@@ -28,6 +35,12 @@ export * from "./echarts-export";
 // re-export，签名与行为一致，来源从本包 internals 换成 @marcusok/xlsx-core）。
 export { configureWasm, getWasmLoader } from "@marcusok/xlsx-core";
 export type { LoaderOptions, LoadState } from "@marcusok/xlsx-core";
+// 遮罩类型随 `overlay` 选项暴露：调用方定制它时无需再从子路径或公共包取类型。
+export type {
+  ProgressOverlayHandle,
+  ProgressOverlayOptions,
+  ProgressOverlayTextOptions,
+} from "@marcusok/progress-overlay";
 export { WorkbookBuilder } from "./workbook-builder";
 export { exportAsStream } from "./streaming-builder";
 // 序号列的展开工具（exportExcel 入口已自动调用一次）。底层入口
@@ -394,7 +407,45 @@ function validateInput(options: ExportOptions): void {
 }
 
 /**
+ * 遮罩的导出语义文案（默认值）与 ExportPhase → 阶段 key 的映射。
+ *
+ * onPhase 只在阶段**结束后**回调（见 types.ts），没有"阶段开始"事件，所以
+ * 文案只能乐观推进：收到 `init` 即表示 init 已完、当前在做 build。
+ */
+const OVERLAY_TEXT: ProgressOverlayTextOptions = {
+  title: "正在导出 Excel",
+  initial: "准备中…",
+  phases: {
+    building: "正在构建工作簿…",
+    downloading: "正在下载…",
+    finishing: "即将完成…",
+  },
+  hint: "数据量较大时可能需要数十秒，请勿关闭页面",
+};
+
+function overlayPhaseKey(phase: ExportPhase, willDownload: boolean): string {
+  if (phase === "init") return "building";
+  if (phase === "build") return willDownload ? "downloading" : "finishing";
+  return "finishing";
+}
+
+/** 调用方的 text 片段与导出默认合并：phases 嵌套表单独并，避免整体替换。 */
+function mergeOverlayText(
+  caller: ProgressOverlayTextOptions | undefined,
+): ProgressOverlayTextOptions {
+  return {
+    ...OVERLAY_TEXT,
+    ...caller,
+    phases: { ...OVERLAY_TEXT.phases, ...caller?.phases },
+  };
+}
+
+/**
  * Export to Excel (main entry).
+ *
+ * 自 2.8.0 起默认显示全屏进度遮罩（浏览器环境；Node/SSR 无 document 时
+ * 无操作）。`overlay: false` 完全关闭；传 {@link ProgressOverlayOptions}
+ * 定制文案/延迟/主题。遮罩能力抽自 @marcusok/progress-overlay。
  *
  * @example
  * ```ts
@@ -416,6 +467,55 @@ function validateInput(options: ExportOptions): void {
 export async function exportExcel(
   options: ExportOptions,
 ): Promise<ExportResult> {
+  // null/undefined options（JS 调用方）直接透传核心：validateInput 会以结构化
+  // { success: false } 拒绝。必须在接线**之前**早退——下方 `{ ...options }`
+  // 的展开会把 null 变成合法对象、改变报错口径（options must be an object
+  // → filename must be a non-empty string）。
+  if (options === null || typeof options !== "object") {
+    return exportExcelCore(options);
+  }
+  // overlay: false → 零开销直通：不挂遮罩、不让帧、回调链原样。
+  if (options.overlay === false) return exportExcelCore(options);
+  const overlayOptions: ProgressOverlayOptions =
+    options?.overlay === undefined || options?.overlay === true
+      ? {}
+      : options.overlay;
+
+  // Node 无 document 时 showProgressOverlay 返回 NOOP 句柄，接线零副作用；
+  // willDownload 的口径与 download 阶段一致（types.ts：download !== false
+  // 且有 document 才上报）。
+  const willDownload =
+    options?.download !== false && typeof document !== "undefined";
+  const overlay = showProgressOverlay({
+    ...overlayOptions,
+    text: mergeOverlayText(overlayOptions.text),
+  });
+  try {
+    // 先让出一帧：遮罩挂载与紧接其后的同步构建若落在同一个任务里，浏览器
+    // 永远不会绘制遮罩（用户只看到页面卡死）。delayMs 为 0 时这一步是遮罩
+    // 能被看见的唯一保证。
+    await nextPaint();
+    return await exportExcelCore({
+      ...options,
+      // 链式追加而非替换：调用方挂在自己回调上的指标面板照常工作。
+      onProgress: (progress) => {
+        overlay.setProgress(progress);
+        options?.onProgress?.(progress);
+      },
+      onPhase: (phase, durationMs) => {
+        overlay.setPhase(overlayPhaseKey(phase, willDownload));
+        options?.onPhase?.(phase, durationMs);
+      },
+    });
+  } finally {
+    // 关闭时机只能在这里：收尾的 onProgress(1) 在失败路径同样会发（types.ts
+    // 契约），成功后 download 还排在它之后，用进度值判定关闭都会出错。
+    overlay.close();
+  }
+}
+
+/** {@link exportExcel} 的路由与构建主体（overlay 接线在包装层完成）。 */
+async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
   const start = performance.now();
 
   // Leading 0 fires exactly once here, on every route (the stream fallback

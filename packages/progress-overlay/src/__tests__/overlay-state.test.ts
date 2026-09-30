@@ -15,18 +15,18 @@ function makeClock(start = 1_000) {
 function makeState(over: Partial<OverlayStateConfig> = {}) {
   const clock = makeClock();
   const state = new OverlayState(
-    { delayMs: 200, minVisibleMs: 300, willDownload: true, ...over },
+    { delayMs: 200, minVisibleMs: 300, ...over },
     clock.now,
   );
   return { state, clock };
 }
 
 describe("OverlayState 延迟门控", () => {
-  it("初始为 preparing 且是不确定态", () => {
+  it("初始为 null 阶段（渲染 initial 文案）且是不确定态", () => {
     const { state } = makeState();
     expect(state.snapshot()).toEqual({
       determinate: null,
-      label: "preparing",
+      phase: null,
     });
     expect(state.isRevealed).toBe(false);
   });
@@ -90,7 +90,7 @@ describe("OverlayState 关闭语义", () => {
     const { state } = makeState();
     state.close();
     expect(state.progress(0.5)).toBeNull();
-    expect(state.phase("build")).toBeNull();
+    expect(state.phase("building")).toBeNull();
   });
 });
 
@@ -106,7 +106,7 @@ describe("OverlayState 进度", () => {
     const { state } = makeState();
     expect(state.progress(0.42)).toEqual({
       determinate: 0.42,
-      label: "preparing",
+      phase: null,
     });
     expect(state.progress(0.43)?.determinate).toBe(0.43);
   });
@@ -119,7 +119,7 @@ describe("OverlayState 进度", () => {
 
   it("收尾的 1 不关闭遮罩，仅在已是确定态时推到 100%", () => {
     const { state } = makeState();
-    // 全程没有中间进度（workbook 路由）：不凭这一个 1 假装走完全程
+    // 全程没有中间进度（无流式进度的调用方）：不凭这一个 1 假装走完全程
     expect(state.progress(1)).toBeNull();
     expect(state.snapshot().determinate).toBeNull();
   });
@@ -131,38 +131,24 @@ describe("OverlayState 进度", () => {
   });
 });
 
-describe("OverlayState 阶段文案", () => {
-  it("init 完成 -> 构建中（onPhase 只在阶段结束后回调，文案只能乐观推进）", () => {
+describe("OverlayState 阶段", () => {
+  it("setPhase 存调用方定义的 key，状态机不解释其含义", () => {
     const { state } = makeState();
-    expect(state.phase("init")?.label).toBe("building");
+    expect(state.phase("building")?.phase).toBe("building");
   });
 
-  it("build 完成 -> 有 download 时切下载中，否则切即将完成", () => {
-    const withDownload = makeState({ willDownload: true });
-    expect(withDownload.state.phase("build")?.label).toBe("downloading");
-
-    const noDownload = makeState({ willDownload: false });
-    expect(noDownload.state.phase("build")?.label).toBe("finishing");
-  });
-
-  it("download 完成 -> 即将完成", () => {
+  it("相同 key 不产生新快照（label 是 aria-live 区域，幂等防重复播报）", () => {
     const { state } = makeState();
-    state.phase("build");
-    expect(state.phase("download")?.label).toBe("finishing");
-  });
-
-  it("文案无变化时不返回新快照", () => {
-    const { state } = makeState();
-    state.phase("init");
-    expect(state.phase("init")).toBeNull();
+    state.phase("building");
+    expect(state.phase("building")).toBeNull();
   });
 
   it("阶段推进不影响已经拿到的确定态", () => {
     const { state } = makeState();
     state.progress(0.6);
-    expect(state.phase("build")).toEqual({
+    expect(state.phase("downloading")).toEqual({
       determinate: 0.6,
-      label: "downloading",
+      phase: "downloading",
     });
   });
 });

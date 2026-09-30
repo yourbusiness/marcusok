@@ -30,8 +30,6 @@ import {
   type ExportResult,
   type MergeRange,
 } from "@marcusok/excel-exporter";
-// 遮罩走独立子路径：不用它的调用方不会被打包进这份代码
-import { exportExcelWithOverlay } from "@marcusok/excel-exporter/overlay";
 import {
   createDataset,
   DATASET_PRESETS,
@@ -181,8 +179,9 @@ export default function BasicExportDemo() {
   const [mode, setMode] = useState<ExportMode>("auto");
   const [headerMode, setHeaderMode] = useState<"flat" | "grouped">("flat");
   const [withMerges, setWithMerges] = useState(false);
-  // 默认关：保留原有的内联进度卡片，便于与全屏遮罩做 A/B 对比
-  const [withOverlay, setWithOverlay] = useState(false);
+  // 2.8.0 起遮罩默认开启（overlay 选项缺省即显示），复选框语义反转：
+  // 勾选 = overlay: false 关闭遮罩、回看内联进度卡片的形态
+  const [disableOverlay, setDisableOverlay] = useState(false);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<{
     percent: number;
@@ -351,10 +350,12 @@ export default function BasicExportDemo() {
     };
 
     try {
-      // 遮罩是链式追加而非替换 onProgress/onPhase，上面的指标面板照常工作
-      const result = withOverlay
-        ? await exportExcelWithOverlay(exportOptions, { delayMs: 200 })
-        : await exportExcel(exportOptions);
+      // 遮罩默认开启且链式追加 onProgress/onPhase（不替换），上面的指标面板
+      // 照常工作；勾选禁用时传 overlay: false 回到 2.7 及之前的无遮罩形态
+      const result = await exportExcel({
+        ...exportOptions,
+        overlay: disableOverlay ? false : undefined,
+      });
       if (cancelledRef.current) return;
       pushRecord({
         result,
@@ -486,10 +487,10 @@ export default function BasicExportDemo() {
           <Space orientation="vertical" size={6}>
             <Typography.Text type="secondary">导出交互</Typography.Text>
             <Checkbox
-              checked={withOverlay}
-              onChange={(e) => setWithOverlay(e.target.checked)}
+              checked={disableOverlay}
+              onChange={(e) => setDisableOverlay(e.target.checked)}
             >
-              全屏进度遮罩
+              禁用全屏进度遮罩（默认开启）
             </Checkbox>
           </Space>
           <Space>

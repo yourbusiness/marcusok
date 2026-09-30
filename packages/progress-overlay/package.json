@@ -1,0 +1,61 @@
+{
+  "name": "@marcusok/progress-overlay",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Framework-agnostic full-screen progress overlay: spinner for indeterminate work, percentage bar for streamed progress, glass panel with light/dark themes. Shared UI layer for @marcusok packages.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourbusiness/marcusok.git",
+    "directory": "packages/progress-overlay"
+  },
+  "bugs": {
+    "url": "https://github.com/yourbusiness/marcusok/issues"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "overlay",
+    "progress",
+    "spinner",
+    "loading",
+    "ui",
+    "monorepo"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "eslint": "^9.16.0",
+    "happy-dom": "^20.14.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

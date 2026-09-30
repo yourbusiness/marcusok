@@ -1,16 +1,17 @@
 import type { ComponentType } from "react";
 
 /**
- * 包大类，与文档站 registry 的分类口径一致（导出 / 文档预览）。
+ * 包大类，与文档站 registry 的分类口径一致（导出 / 文档预览 / 公共组件）。
  * category 管包所属大类（侧边栏与首页按它分区），与 group（包内 demo
  * 聚合为子菜单）正交。
  */
-export type DemoCategory = "export" | "preview";
+export type DemoCategory = "export" | "preview" | "shared";
 
 /** 全部分类与菜单文案（含展示顺序），新增分类时在此登记。 */
 export const DEMO_CATEGORIES: { id: DemoCategory; label: string }[] = [
   { id: "export", label: "导出" },
   { id: "preview", label: "文档预览" },
+  { id: "shared", label: "公共组件" },
 ];
 
 export interface DemoEntry {

@@ -11,7 +11,7 @@
 pnpm add @marcusok/excel-exporter
 ```
 
-That is the entire setup. The package has a **single same-scope runtime dependency**: `@marcusok/xlsx-core`, the shared modern-xlsx engine layer — the export engine (modern-xlsx JS glue + fflate) is bundled in at build time inside the core layer, and the WASM binary ships under the core package's `exports` map. There is no engine package to wire in and no optional fallback package. Bundler config is needed in exactly one case: Vite's dev server (see the [pre-bundling caveat](#vite-dev-server-pre-bundling-caveat) below).
+That is the entire setup. The package has **two same-scope runtime dependencies**: `@marcusok/xlsx-core`, the shared modern-xlsx engine layer — the export engine (modern-xlsx JS glue + fflate) is bundled in at build time inside the core layer, and the WASM binary ships under the core package's `exports` map — plus `@marcusok/progress-overlay` (since 2.8.0), the shared progress-overlay UI behind the `overlay` option. There is no engine package to wire in and no optional fallback package. Bundler config is needed in exactly one case: Vite's dev server (see the [pre-bundling caveat](#vite-dev-server-pre-bundling-caveat) below).
 
 ## Browser: assets resolve automatically
 

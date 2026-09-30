@@ -43,8 +43,10 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     target: "es2022",
-    // 主入口不打包 core：共享单份引擎与 wasm 的关键（见文件头注释）。
-    external: ["@marcusok/xlsx-core"],
+    // 主入口不打包 core 与 progress-overlay：共享单份引擎与 wasm 的关键
+    // （见文件头注释）；遮罩同理 external——多个 @marcusok 业务包同页面引用
+    // 时共享一份实现与样式注入。
+    external: ["@marcusok/xlsx-core", "@marcusok/progress-overlay"],
     // copy-wasm 挂在 onSuccess 而非只在 "build" script：本配置 clean:true，
     // watch 模式首次构建即清空 dist（连带删掉上次 build 复制的 wasm）且
     // 此后不再回补，开着 pnpm dev 时 Node 自动初始化/集成测试会因

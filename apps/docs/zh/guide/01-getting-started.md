@@ -8,7 +8,7 @@
 pnpm add @marcusok/excel-exporter
 ```
 
-这就是全部——唯一运行时依赖是同 scope 的 `@marcusok/xlsx-core`（**共享引擎层**）：导出引擎（modern-xlsx JS 胶水 + fflate）已在构建期打包进核心层，WASM 二进制通过核心层的 `exports` 暴露，既没有需要额外接线的引擎包，也不会被上游的 engines 声明影响安装。
+这就是全部——两个同 scope 运行时依赖：`@marcusok/xlsx-core`（**共享引擎层**，导出引擎 modern-xlsx JS 胶水 + fflate 已在构建期打包进核心层，WASM 二进制通过核心层的 `exports` 暴露）与 `@marcusok/progress-overlay`（**共享遮罩 UI 层**，2.8.0 起）。既没有需要额外接线的引擎包，也不会被上游的 engines 声明影响安装。
 
 ## 2. 第一个导出
 
