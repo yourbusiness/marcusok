@@ -4,13 +4,13 @@ What v1 deliberately does not do, and why.
 
 ## Not supported (friendly errors)
 
-| Case                                                            | Behavior                                                                                                                                                                                |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Legacy `.xls` (BIFF8)                                           | `LEGACY_FORMAT` error with a "re-save as .xlsx" hint. OLE2/BIFF is a different binary world; a future optional adapter could bring SheetJS in, but v1 keeps the dependency chain clean. |
-| `.ods` / other suites                                           | `UNSUPPORTED`/`CORRUPT` errors.                                                                                                                                                         |
-| XML/HTML "spreadsheets" (SpreadsheetML 2003, HTML-table `.xls`) | `UNSUPPORTED` error — they are text but not CSV, so rendering them as a data grid is meaningless; re-save as a real `.xlsx`.                                                            |
-| Corrupt / non-ZIP data                                          | `CORRUPT` error.                                                                                                                                                                        |
-| Environments without WebAssembly                                | `WASM` error — xlsx parsing is WASM-only in v1 (there is no pure-JS fallback reader for xlsx); CSV still parses without WebAssembly.                                                    |
+| Case                                                            | Behavior                                                                                                                                                                                                                      |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Legacy `.xls` (BIFF8)                                           | `LEGACY_FORMAT` error with a "re-save as .xlsx" hint. OLE2/BIFF is a different binary world; a future optional adapter could bring SheetJS in, but v1 keeps the dependency chain clean.                                       |
+| `.ods` / other suites (also ZIP packages)                       | `CORRUPT` error — they are ZIP archives without an `xl/workbook.xml`, which is reported as "not a valid xlsx".                                                                                                                |
+| XML/HTML "spreadsheets" (SpreadsheetML 2003, HTML-table `.xls`) | `UNSUPPORTED` error — they are text but not CSV, so rendering them as a data grid is meaningless; re-save as a real `.xlsx`.                                                                                                  |
+| Corrupt data                                                    | Broken ZIP structure (truncated files, …) or a workbook with no sheets at all → `CORRUPT`; not a ZIP and no readable text either → `UNSUPPORTED` (the format cannot be identified).                                           |
+| Environments without WebAssembly / engine load failure          | `WASM` error — xlsx parsing is WASM-only in v1 (there is no pure-JS fallback reader for xlsx); a 404 asset URL, a CSP that forbids WebAssembly or a network failure reports `WASM` too. CSV still parses without WebAssembly. |
 
 ## Rendered with known approximations
 
@@ -37,3 +37,6 @@ Formula cells render their **cached** `<v>` values — the same convention as Sh
 ## Scale
 
 Parsing is not streaming (OOXML parts cross-reference each other; browsers cannot stream-parse a zip of interdependent parts) — the whole file is read into memory inside the worker. 100k × 10 cells parse in ~1.5s (measured); virtual scrolling keeps the DOM at viewport size regardless of file dimensions. Multi-hundred-MB files will hit memory limits before anything else.
+The repo's performance test asserts a different, looser bound: 100k × 8 model build < 4s, measured inside happy-dom without real rendering, and skipped in CI and the release pipeline (`RUN_PERF=0`).
+
+**Row-count ceiling (a browser limit, not memory)**: the grid is one tall container element, and at 20px per row (15pt) roughly 890k rows (~17.9M px) hit the element-size cap in Firefox / Safari — rows past that point are unreachable. Chrome's cap is ~33.5M px (about 1.67M rows). Headers and row/column labels stay viewport-sized either way; only the scrollable range is cut short. Previewing a full sheet (1,048,576 rows) needs the renderer to switch to chunked offsets first.

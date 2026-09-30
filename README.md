@@ -1,14 +1,15 @@
 # marcusok
 
-A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Packages are organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — a read-only xlsx preview is available today). Both categories share one engine through [`@marcusok/xlsx-core`](./packages/xlsx-core).
+A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Packages are organized in three categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow), **Document preview** (rendering documents in the browser — a read-only xlsx preview is available today) and **Shared** (the capability layer both are built on). The two app-facing categories share one engine through [`@marcusok/xlsx-core`](./packages/xlsx-core).
 
 ## Packages
 
-| Package                                                 | Category | Description                                                                                                         |
-| ------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](./packages/excel-exporter) | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)    |
-| [`@marcusok/excel-preview`](./packages/excel-preview)   | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery) |
-| [`@marcusok/xlsx-core`](./packages/xlsx-core)           | Shared   | The repo's single modern-xlsx engine layer: WASM loading, asset distribution, stable re-export surface              |
+| Package                                                     | Category | Description                                                                                                                |
+| ----------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](./packages/excel-exporter)     | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)           |
+| [`@marcusok/excel-preview`](./packages/excel-preview)       | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery)        |
+| [`@marcusok/xlsx-core`](./packages/xlsx-core)               | Shared   | The repo's single modern-xlsx engine layer: WASM loading, asset distribution, stable re-export surface                     |
+| [`@marcusok/progress-overlay`](./packages/progress-overlay) | Shared   | Framework-agnostic progress overlay (spinner / percentage bar, glass panel, themes) behind the exporter's `overlay` option |
 
 ## Quick Start
 
@@ -47,10 +48,12 @@ marcusok/
 │                               # dist/ from tsup; scales horizontally)
 │   ├── excel-exporter/         # Export: Excel export core
 │   ├── excel-preview/          # Preview: read-only xlsx preview
+│   ├── progress-overlay/       # Shared: progress overlay UI (exporter's overlay option)
 │   └── xlsx-core/              # Shared: modern-xlsx engine layer
 ├── docs/                       # Design documents (Chinese) — intentionally
 │                               # untracked (.gitignore), local-only
 │   ├── excel-export-design.md  # Excel export core design doc (~250k chars, the main one)
+│   ├── excel-preview-plan.md   # Excel preview design & verification notes
 │   └── release-*.md / ci-*.md  # Release & CI walkthroughs, debug notes, docs-site plan
 ├── scripts/                    # Repo-level scripts (dev.mjs unified dev launcher)
 ├── .changeset/                 # Changesets config
@@ -69,7 +72,7 @@ marcusok/
 3. Reuse the repo-root `tsconfig.base.json` and `eslint.config.mjs` for cross-package shared config (there is no `packages/_shared/` yet; extract one when a real need arises).
 4. Turborepo's `^build` dependency graph handles build order automatically; new packages require no CI/CD changes.
 5. Changesets releases each package independently — nothing blocks anything else.
-6. Declare the package's category (`export` / `preview`) in the docs registry (`apps/docs/.vitepress/registry.ts`) so the docs site groups it correctly; categories live only in that registry, not in the directory layout.
+6. Declare the package's category (`export` / `preview` / `shared`) in the docs registry (`apps/docs/.vitepress/registry.ts`) so the docs site groups it correctly; categories live only in that registry, not in the directory layout.
 
 ## Release Process
 
@@ -104,6 +107,7 @@ pnpm changeset publish         # publish with the next dist-tag
 > These are internal design documents, deliberately **not tracked** by git (`.gitignore` ignores `/docs/`): they exist only on the maintainer's machine. The links below resolve only there — a fresh clone has no `docs/` directory.
 
 - [`docs/excel-export-design.md`](./docs/excel-export-design.md) — Excel export core design doc
+- [`docs/excel-preview-plan.md`](./docs/excel-preview-plan.md) — Excel preview design & verification notes
 - [`docs/release-guide.md`](./docs/release-guide.md) — Release guide
 - [`docs/release-publish-logic.md`](./docs/release-publish-logic.md) — Release logic in depth
 - [`docs/release-workflow-analysis.md`](./docs/release-workflow-analysis.md) — Release workflow analysis

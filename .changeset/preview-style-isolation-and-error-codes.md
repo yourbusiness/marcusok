@@ -1,0 +1,5 @@
+---
+"@marcusok/excel-preview": patch
+---
+
+Fix three preview defects. (1) Sheet-level CSS is now scoped per renderer instance, so mounting several previews on one page no longer cross-wires them: previously the cell-style rules (`.xpv-xf-N`) and the grid-line rule were global, so the last-mounted instance's rules won the cascade for every instance — styles from one file leaked into another, and an instance with `showGridLines: false` still drew grid lines when another instance had them on. (2) Error codes now match the documented contract: a ZIP that isn't a valid xlsx (`.ods` / `.docx`-style packages, truncated files) and a workbook with no sheets report `CORRUPT` instead of `UNKNOWN`, and a failed WebAssembly load reports `WASM` instead of `UNKNOWN`; `UNKNOWN` is now reserved for genuinely unclassified failures. A workbook with zero sheets also surfaces as an error instead of rendering an empty preview with no `onParsed` / `onError` callback. (3) Formula cells whose cached result is a string now overflow into adjacent empty cells, matching literal text (Excel spills both).

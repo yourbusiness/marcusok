@@ -6,6 +6,8 @@
  * tabColor 为 null、hyperlinks/comments 为 []），输出统一形态；并把样式链
  * （fonts/fills/borders/cellXfs/numFmts）解析成渲染层直接可用的扁平结构，
  * 颜色经覆盖层（styles-overlay）找回主题色/indexed。
+ *
+ * 唯一会抛错的路径：零 sheet 的 workbook（畸形文件，见文件末的守卫）。
  */
 import type {
   CellData,
@@ -412,6 +414,20 @@ export function buildPreviewWorkbook(
       continue;
     }
     sheets.push(buildSheet(ws, styles));
+  }
+
+  // 零 sheet 的 workbook：畸形/损坏文件实测会产出这种模型（zip 里只有
+  // workbook.xml，或 workbook.xml 的 XML 已损坏而引擎仍"成功"读取），
+  // 渲染层对空 sheet 列表无 sheet 可切，会静默空白且 onParsed/onError 均
+  // 不触发。此处按确定性域错误上报（code 经 normalizeEngineError 透传），
+  // 走与其它解析失败一致的报错路径。
+  if (sheets.length === 0) {
+    throw Object.assign(
+      new Error(
+        "The workbook contains no sheets. The file is corrupt or was written by an unsupported tool.",
+      ),
+      { code: "CORRUPT" },
+    );
   }
 
   // activeTab：bookViews[0].activeTab（0-based）；越界由渲染层钳制

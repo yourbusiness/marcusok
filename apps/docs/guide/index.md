@@ -23,9 +23,10 @@
 
 ## Roadmap
 
-The ecosystem grows on demand and is organized around two package categories:
+The ecosystem grows on demand and is organized around three package categories:
 
 - **Export** — turn application data into downloadable documents. Excel export ([`@marcusok/excel-exporter`](/packages/excel-exporter/)) is available today; other document formats (e.g. PDF) may follow.
 - **Document preview** — preview documents in the browser. A read-only xlsx preview ([`@marcusok/excel-preview`](/packages/excel-preview/)) is available today; other document formats may follow.
+- **Shared** — the capability layer the packages above are built on: [`@marcusok/xlsx-core`](https://www.npmjs.com/package/@marcusok/xlsx-core) (the shared engine) and [`@marcusok/progress-overlay`](/packages/progress-overlay/) (the shared overlay UI). Both are published and usable standalone.
 
-When a new package ships, register it in `apps/docs/.vitepress/registry.ts` with its category and add its docs; it automatically appears in the navigation, sidebar and home cards.
+When a new package ships, register it in `apps/docs/.vitepress/registry.ts` with its category (`export` / `preview` / `shared`) and add its docs; it automatically appears in the navigation, sidebar and home cards.

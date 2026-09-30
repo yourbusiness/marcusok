@@ -26,7 +26,7 @@ import {
   parseOnMainThread,
 } from "../worker/worker-client";
 import { csvToWorkbook, parseCsvText } from "../parse/csv";
-import { strToU8 } from "fflate";
+import { strToU8, zipSync } from "fflate";
 
 describe("color 基础", () => {
   it("ARGB → CSS（FF 前缀剥离、非 FF 转 rgba、非法 null）", () => {
@@ -422,6 +422,50 @@ describe("解析入口（主线程路径 + 错误归一）", () => {
     }
   });
 
+  it("非 xlsx 的 zip（.ods/.docx 同形）→ CORRUPT,而非 UNKNOWN", async () => {
+    // 实测：引擎抛 MISSING_PART（zip 里没有 xl/workbook.xml）。此前只有 4 个
+    // 引擎码被识别，这里会落到 UNKNOWN 并透出引擎原文
+    const ods = zipSync({
+      mimetype: strToU8("application/vnd.oasis.opendocument.spreadsheet"),
+      "content.xml": strToU8("<office:document-content/>"),
+    });
+    const r = await parseOnMainThread({ bytes: ods });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.code).toBe("CORRUPT");
+      expect(r.message).toMatch(/valid \.xlsx/i);
+    }
+  });
+
+  it("截断/损坏的 zip（ZIP 头在、目录坏）→ CORRUPT,而非 UNKNOWN", async () => {
+    // 实测：引擎抛 ZIP_READ（Could not find EOCD）——真实截断的 xlsx 同形
+    const truncated = new Uint8Array([
+      0x50,
+      0x4b,
+      0x03,
+      0x04,
+      ...new Uint8Array(200).fill(0x41),
+    ]);
+    const r = await parseOnMainThread({ bytes: truncated });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("CORRUPT");
+  });
+
+  it("零 sheet 的 zip → CORRUPT（不再静默产出空模型）", async () => {
+    // 实测：zip 里只有 workbook.xml（含 XML 已损坏的形态）时引擎"成功"返回
+    // 0 个 sheet；渲染层对空 sheet 列表无 sheet 可切 → 静默空白且 onParsed/
+    // onError 均不触发。模型层守卫改为确定性域错误
+    const noSheets = zipSync({
+      "xl/workbook.xml": strToU8('<?xml version="1.0"?><workbook/>'),
+    });
+    const r = await parseOnMainThread({ bytes: noSheets });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.code).toBe("CORRUPT");
+      expect(r.message).toMatch(/no sheets/i);
+    }
+  });
+
   it("加密文件无密码 → PASSWORD_PROTECTED；带密码读出", async () => {
     const enc = await encryptedBytes("pw123");
     const noPw = await parseOnMainThread({ bytes: enc });
@@ -470,6 +514,35 @@ describe("解析入口（主线程路径 + 错误归一）", () => {
     expect(normalizeEngineError(new Error("wasm exploded"))).toMatchObject({
       code: "UNKNOWN",
       domain: false,
+    });
+  });
+
+  it("normalizeEngineError：结构类码 → CORRUPT，WASM 类码 → WASM", () => {
+    const e = (code: string, message: string) =>
+      Object.assign(new Error(message), { code });
+    // 结构类（实测：非 xlsx 的 zip 抛 MISSING_PART、截断包抛 ZIP_READ）：
+    // 确定性的文件性问题，标 domain（主线程复跑必然同错）
+    for (const code of ["ZIP_READ", "ZIP_ENTRY", "MISSING_PART", "XML_PARSE"]) {
+      expect(normalizeEngineError(e(code, "raw engine text"))).toMatchObject({
+        code: "CORRUPT",
+        domain: true,
+      });
+    }
+    // WASM 类：环境性失败，不标 domain（worker 内失败不代表主线程也失败）
+    for (const code of ["WASM", "WASM_ERROR", "WASM_INIT_FAILED"]) {
+      expect(normalizeEngineError(e(code, "raw engine text"))).toMatchObject({
+        code: "WASM",
+        domain: false,
+      });
+    }
+    // 预览自产码透传（模型层抛的零 sheet CORRUPT 走这条路），不再折成 UNKNOWN
+    expect(normalizeEngineError(e("CORRUPT", "no sheets"))).toMatchObject({
+      code: "CORRUPT",
+      domain: true,
+    });
+    expect(normalizeEngineError(e("UNSUPPORTED", "nope"))).toMatchObject({
+      code: "UNSUPPORTED",
+      domain: true,
     });
   });
 

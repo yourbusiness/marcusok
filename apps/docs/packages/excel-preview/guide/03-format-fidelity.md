@@ -4,7 +4,7 @@ Cell display text goes through a compensation layer that fixes a set of engine d
 
 ## Builtin number formats: Excel's actual table
 
-ECMA-376 defines builtin id 14 as `mm-dd-yy`, but Excel renders it as `m/d/yyyy` (en-US). The engine returns the ECMA string, and its `loadFormatTable` override cannot win (the builtin table always takes lookup precedence — a structural property of the engine). The preview therefore carries its own **Excel-behavior table** for ids 0–49 (14 → `m/d/yyyy`, 18 → `h:mm AM/PM`, 46 → `[h]:mm:ss`, …) and resolves ids to format _strings_ before formatting.
+ECMA-376 defines builtin id 14 as `mm-dd-yy`, but Excel renders it as `m/d/yyyy` (en-US). The engine returns the ECMA string, and its `loadFormatTable` override cannot win (the builtin table always takes lookup precedence — a structural property of the engine). The preview therefore carries its own **Excel-behavior table** for the locale-dependent ids — 0–22 and 37–49 (14 → `m/d/yyyy`, 18 → `h:mm AM/PM`, 46 → `[h]:mm:ss`, …) — and resolves ids to format _strings_ before formatting. Ids 23–36 (international-currency placeholders, rare in practice) keep the engine's ECMA strings instead of a hand-written behavior table.
 
 ## Literal compensation in numeric sections
 

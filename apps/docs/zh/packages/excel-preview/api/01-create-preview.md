@@ -13,16 +13,16 @@ function createPreview(
 
 ## PreviewOptions
 
-| 选项            | 类型                                        | 默认值           | 说明                                                                                                                                  |
-| --------------- | ------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | —（必填）        | 文件字节                                                                                                                              |
-| `password`      | `string`                                    | —                | 加密工作簿的密码（Agile AES-256）                                                                                                     |
-| `sheet`         | `string \| number`                          | 文件 `activeTab` | 初始 sheet（名称或 0 起索引）                                                                                                         |
-| `showHeaders`   | `boolean`                                   | `true`           | 行列表头（A/B/C + 1/2/3）                                                                                                             |
-| `showGridLines` | `boolean`                                   | 遵循文件         | 网格线                                                                                                                                |
-| `showTabs`      | `boolean`                                   | `true`           | sheet 页签栏（隐藏表永不出现）                                                                                                        |
-| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                | 渲染就绪回调：首次解析渲染完成后与**每次 sheet 切换完成后**都会触发（`duration.parse` 复用首次解析耗时）；上报 sheet 列表、规模与耗时 |
-| `onError`       | `(error: PreviewError) => void`             | —                | 失败回调（错误码见下）                                                                                                                |
+| 选项            | 类型                                        | 默认值           | 说明                                                                                                                                           |
+| --------------- | ------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | —（必填）        | 文件字节                                                                                                                                       |
+| `password`      | `string`                                    | —                | 加密工作簿的密码（Agile AES-256）                                                                                                              |
+| `sheet`         | `string \| number`                          | 文件 `activeTab` | 初始 sheet（名称或 0 起索引）。名称不存在或索引越界时静默回退文件 `activeTab`——与实例方法 `setSheet()` 不同，后者会把无效入参经 `onError` 报出 |
+| `showHeaders`   | `boolean`                                   | `true`           | 行列表头（A/B/C + 1/2/3）                                                                                                                      |
+| `showGridLines` | `boolean`                                   | 遵循文件         | 网格线                                                                                                                                         |
+| `showTabs`      | `boolean`                                   | `true`           | sheet 页签栏（隐藏表永不出现）                                                                                                                 |
+| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                | 渲染就绪回调：首次解析渲染完成后与**每次 sheet 切换完成后**都会触发（`duration.parse` 复用首次解析耗时）；上报 sheet 列表、规模与耗时          |
+| `onError`       | `(error: PreviewError) => void`             | —                | 失败回调（错误码见下）                                                                                                                         |
 
 `PreviewParsedInfo`：
 
@@ -38,14 +38,14 @@ interface PreviewParsedInfo {
 
 ## PreviewError 错误码
 
-| 错误码               | 含义                                   |
-| -------------------- | -------------------------------------- |
-| `PASSWORD_PROTECTED` | 加密工作簿，`password` 缺失或错误      |
-| `LEGACY_FORMAT`      | 旧版 `.xls`（BIFF8）——请另存为 `.xlsx` |
-| `CORRUPT`            | 不是有效的 ZIP/xlsx 结构               |
-| `UNSUPPORTED`        | 既不是 xlsx/zip 也不是纯文本（CSV）    |
-| `WASM`               | WebAssembly 不可用（仅主线程回退路径） |
-| `UNKNOWN`            | 其他（原始错误在 `.cause`，可得时）    |
+| 错误码               | 含义                                                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `PASSWORD_PROTECTED` | 加密工作簿，`password` 缺失或错误                                                                                     |
+| `LEGACY_FORMAT`      | 旧版 `.xls`（BIFF8）——请另存为 `.xlsx`                                                                                |
+| `CORRUPT`            | ZIP 但不是有效 xlsx：部件缺失/损坏（`.ods` / `.docx` 同形包、截断文件），或工作簿一个 sheet 都没有                    |
+| `UNSUPPORTED`        | 既不是 ZIP 也不是可识别的纯文本——含 XML/HTML 伪表格（SpreadsheetML 2003、HTML 表格另存为 `.xls`）与 UTF-16 编码的 CSV |
+| `WASM`               | 当前环境不支持 WebAssembly，或引擎加载失败（资产 404、CSP 禁止 WebAssembly、网络失败）                                |
+| `UNKNOWN`            | 其他；底层错误信息原样透传（失败来自预览自身 boot 路径时，原始错误对象在 `.cause`）                                   |
 
 ## PreviewInstance
 

@@ -23,9 +23,10 @@
 
 ## 路线图
 
-生态将按需扩展，按两大类组织：
+生态将按需扩展，按三大类组织：
 
 - **导出** —— 把业务数据导出为可下载的文档。Excel 导出（[`@marcusok/excel-exporter`](/zh/packages/excel-exporter/)）已交付，后续可能补充其他文档类型（如 PDF）。
 - **文档预览** —— 在浏览器内预览文档。只读 xlsx 预览（[`@marcusok/excel-preview`](/zh/packages/excel-preview/)）已交付，其他文档格式以后按需跟进。
+- **公共组件** —— 上面两类共同依赖的能力层：[`@marcusok/xlsx-core`](https://www.npmjs.com/package/@marcusok/xlsx-core)（共享引擎）与 [`@marcusok/progress-overlay`](/zh/packages/progress-overlay/)（共享遮罩 UI）。两者均已发布，也可独立使用。
 
-新包发布后，只需在文档站 `apps/docs/.vitepress/registry.ts` 登记一条记录（含所属分类）并补充对应文档，即可自动出现在本站在线文档中。
+新包发布后，只需在文档站 `apps/docs/.vitepress/registry.ts` 登记一条记录（含所属分类：`export` / `preview` / `shared`）并补充对应文档，即可自动出现在本站在线文档中。

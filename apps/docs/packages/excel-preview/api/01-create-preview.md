@@ -13,16 +13,16 @@ function createPreview(
 
 ## PreviewOptions
 
-| Option          | Type                                        | Default            | Description                                                                                                                                                                                     |
-| --------------- | ------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | — (required)       | The file bytes                                                                                                                                                                                  |
-| `password`      | `string`                                    | —                  | Password for encrypted workbooks (Agile AES-256)                                                                                                                                                |
-| `sheet`         | `string \| number`                          | file's `activeTab` | Initial sheet (name or 0-based index)                                                                                                                                                           |
-| `showHeaders`   | `boolean`                                   | `true`             | Row/column headers (A/B/C + 1/2/3)                                                                                                                                                              |
-| `showGridLines` | `boolean`                                   | from the file      | Grid lines                                                                                                                                                                                      |
-| `showTabs`      | `boolean`                                   | `true`             | Sheet tab bar (hidden sheets never appear)                                                                                                                                                      |
-| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                  | Render-ready callback: fires after the first parse+render **and again after every sheet switch** (`duration.parse` reuses the first parse's timing). Reports sheet list, dimensions and timings |
-| `onError`       | `(error: PreviewError) => void`             | —                  | Failure callback (see codes below)                                                                                                                                                              |
+| Option          | Type                                        | Default            | Description                                                                                                                                                                                                                   |
+| --------------- | ------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`        | `File \| Blob \| Uint8Array \| ArrayBuffer` | — (required)       | The file bytes                                                                                                                                                                                                                |
+| `password`      | `string`                                    | —                  | Password for encrypted workbooks (Agile AES-256)                                                                                                                                                                              |
+| `sheet`         | `string \| number`                          | file's `activeTab` | Initial sheet (name or 0-based index). A missing name or an out-of-range index silently falls back to the file's `activeTab` — unlike the instance method `setSheet()`, which surfaces the invalid argument through `onError` |
+| `showHeaders`   | `boolean`                                   | `true`             | Row/column headers (A/B/C + 1/2/3)                                                                                                                                                                                            |
+| `showGridLines` | `boolean`                                   | from the file      | Grid lines                                                                                                                                                                                                                    |
+| `showTabs`      | `boolean`                                   | `true`             | Sheet tab bar (hidden sheets never appear)                                                                                                                                                                                    |
+| `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                  | Render-ready callback: fires after the first parse+render **and again after every sheet switch** (`duration.parse` reuses the first parse's timing). Reports sheet list, dimensions and timings                               |
+| `onError`       | `(error: PreviewError) => void`             | —                  | Failure callback (see codes below)                                                                                                                                                                                            |
 
 `PreviewParsedInfo`:
 
@@ -38,14 +38,14 @@ interface PreviewParsedInfo {
 
 ## PreviewError codes
 
-| Code                 | Meaning                                                        |
-| -------------------- | -------------------------------------------------------------- |
-| `PASSWORD_PROTECTED` | Encrypted workbook, no/wrong `password` option                 |
-| `LEGACY_FORMAT`      | Legacy `.xls` (BIFF8) — re-save as `.xlsx`                     |
-| `CORRUPT`            | Not a valid ZIP/xlsx structure                                 |
-| `UNSUPPORTED`        | Recognized neither as xlsx/zip nor as plain text (CSV)         |
-| `WASM`               | WebAssembly unavailable (main-thread fallback path only)       |
-| `UNKNOWN`            | Anything else (the original error is in `.cause` when present) |
+| Code                 | Meaning                                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PASSWORD_PROTECTED` | Encrypted workbook, no/wrong `password` option                                                                                                                        |
+| `LEGACY_FORMAT`      | Legacy `.xls` (BIFF8) — re-save as `.xlsx`                                                                                                                            |
+| `CORRUPT`            | A ZIP that isn't a valid xlsx: missing/corrupt parts (`.ods` / `.docx`-style packages, truncated files) or a workbook with no sheets at all                           |
+| `UNSUPPORTED`        | Not a ZIP and not recognizable plain text — includes XML/HTML "spreadsheets" (SpreadsheetML 2003, HTML tables saved as `.xls`) and UTF-16 CSV                         |
+| `WASM`               | WebAssembly is unavailable in this environment, or the engine failed to load (404 asset URL, a CSP that forbids WebAssembly, network failure)                         |
+| `UNKNOWN`            | Anything else; the underlying error message is passed through as-is (the original error object is in `.cause` when the failure came from the preview's own boot path) |
 
 ## PreviewInstance
 

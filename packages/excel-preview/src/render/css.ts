@@ -12,6 +12,12 @@
  *  - 网格线不在本表编译：渲染层以 .xpv-cell 的右/下 border 另行注入，
  *    且规则前置于 xf 类（同特异性级联后源序胜，数据边框覆盖网格线，
  *    见 renderer.ts 的 GRID_COLOR 说明）
+ *
+ * 选择器按实例作用域（scope）前缀：类名 .xpv-xf-N 是全局的、每个实例都会
+ * 生成同名规则，同页挂载多个预览时后插入的 <style> 会按源序覆盖前者——
+ * 两个预览的同一索引格子会互相串样式。scope 由 renderer 按实例唯一分配，
+ * 规则编译成 `.xpv-s2 .xpv-xf-3{…}`；不传 scope（单元测试直接编译规则时）
+ * 保持旧的无前缀输出。
  */
 import type { PreviewStyles, PreviewXf } from "../types";
 
@@ -188,8 +194,15 @@ function borderDeclFor(
   return css;
 }
 
-/** 编译整个样式表为一段 CSS（.xpv-xf-0 … .xpv-xf-N）。 */
-export function compileStylesheet(styles: PreviewStyles): string {
+/**
+ * 编译整个样式表为一段 CSS（`.xpv-xf-0 … .xpv-xf-N`）。
+ * @param scope 实例作用域类（renderer 分配的 `.xpv-sN`）；给出时每条规则
+ *   编译为后代选择器，隔离同页多实例的同名类；缺省保持无前缀输出。
+ */
+export function compileStylesheet(
+  styles: PreviewStyles,
+  scope?: string,
+): string {
   const parts: string[] = [];
   styles.xfs.forEach((xf, i) => {
     const font = styles.fonts[xf.fontId];
@@ -210,7 +223,11 @@ export function compileStylesheet(styles: PreviewStyles): string {
       bgImage +
       borderDeclFor(border) +
       alignDecl(xf);
-    if (css) parts.push(`.xpv-xf-${i}{${css}}`);
+    if (css) {
+      parts.push(
+        scope ? `.${scope} .xpv-xf-${i}{${css}}` : `.xpv-xf-${i}{${css}}`,
+      );
+    }
   });
   return parts.join("\n");
 }

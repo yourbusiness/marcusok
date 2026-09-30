@@ -160,7 +160,18 @@ export async function parseOnMainThread(
         message: "WebAssembly is not supported in this environment.",
       };
     }
-    await loader.ensureLoaded();
+    try {
+      await loader.ensureLoaded();
+    } catch (err) {
+      // 加载/初始化失败（资产 404、CSP 禁 WebAssembly、网络、二进制不匹配）：
+      // xlsx-core 抛的是不带 code 的普通 Error，直接上抛会被归一成 UNKNOWN、
+      // 调用方无法按码分流。这里补上 WASM 码，交统一映射产出友好文案（原始
+      // 错误经 cause 链保留，诊断信息不丢）。
+      throw Object.assign(
+        new Error(err instanceof Error ? err.message : String(err)),
+        { code: "WASM" },
+      );
+    }
     const wb = await readBuffer(
       req.bytes,
       req.password ? { password: req.password } : undefined,

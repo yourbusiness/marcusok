@@ -58,11 +58,19 @@ const BASE_CSS = `
 
 /**
  * 网格线：以 .xpv-cell 的右/下 border 实现。规则必须注入在 xf 类**之前**——
- * 两者同为单类选择器（特异性 0,1,0），同源冲突按源序后者胜：前置后带数据
+ * 两者同为同特异性选择器（0,2,0，见下），同源冲突按源序后者胜：前置后带数据
  * 边框的格子由 .xpv-xf-N 覆盖网格线，无 xf 边框的格子吃网格线（见 setSheet
  * 的拼接顺序，曾经后置导致数据边框整体被网格灰覆盖）。
+ *
+ * 两条规则都按实例作用域前缀（`.xpv-sN …`，见 compileStylesheet）：类名与
+ * 网格线开关是每实例一份的，无前缀时同页第二个预览的 <style> 会按源序
+ * 覆盖第一个（样式串染），且"关网格线"的实例仍会被另一个实例开着的规则
+ * 画上网格线——两种情形都只在多实例共存时出现。
  */
 const GRID_COLOR = "#e1e1e1";
+
+/** 实例序号：作用域类 `.xpv-sN` 的唯一来源（模块级自增，进程内不重复）。 */
+let instanceSeq = 0;
 
 /** 视口尺寸不可用（happy-dom / 首帧未布局）时的回退渲染尺寸。 */
 const FALLBACK_VIEW_W = 800;
@@ -117,10 +125,13 @@ export class SheetRenderer {
   private opts: RenderOptions = {};
   private destroyFns: (() => void)[] = [];
   private sheetStyleEl: HTMLStyleElement | null = null;
+  /** 实例作用域类（`.xpv-sN`）：sheet 级规则的隔离前缀，见 GRID_COLOR 注释。 */
+  private readonly scope: string;
 
   constructor(container: HTMLElement) {
+    this.scope = `xpv-s${++instanceSeq}`;
     this.root = document.createElement("div");
-    this.root.className = "xpv-root";
+    this.root.className = `xpv-root ${this.scope}`;
     container.appendChild(this.root);
   }
 
@@ -242,11 +253,12 @@ export class SheetRenderer {
       this.rowIndex.set(r.index - 1, m);
     }
     // 网格线规则前置于 xf 类（级联依据见 GRID_COLOR 注释），数据边框才能
-    // 在同特异性下按源序覆盖网格线。
+    // 在同特异性下按源序覆盖网格线；两条规则都带实例作用域前缀，多实例
+    // 共存时才不会互相串样式。
     this.sheetStyleEl!.textContent =
       (this.showGridLines
-        ? `.xpv-cell{border-right:1px solid ${GRID_COLOR};border-bottom:1px solid ${GRID_COLOR};}`
-        : "") + compileStylesheet(sheet.styles);
+        ? `.${this.scope} .xpv-cell{border-right:1px solid ${GRID_COLOR};border-bottom:1px solid ${GRID_COLOR};}`
+        : "") + compileStylesheet(sheet.styles, this.scope);
 
     this.rendered.clear();
     this.renderedHeaders.clear();
@@ -523,9 +535,10 @@ export class SheetRenderer {
       if (width <= 0 || height <= 0) return; // 隐藏行列中的格子不渲染
       // 文本溢出：溢出宽度封顶到行内下一个"有内容/被合并覆盖"格的前缘
       // （Excel 溢出到第一个非空格前截断——此前无上限，长文本会视觉盖到
-      // 远处内容格上）
+      // 远处内容格上）。formulaStr 是公式的缓存字符串结果，与文本同属
+      // 左对齐类（见 cellClasses），Excel 同样溢出到相邻空格。
       let spillPx: number | undefined;
-      if (cell.type === "string") {
+      if (cell.type === "string" || cell.type === "formulaStr") {
         const limit = this.spillLimitPx(c, r, range.colEnd);
         if (limit > width) spillPx = limit;
       }

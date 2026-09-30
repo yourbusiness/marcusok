@@ -472,6 +472,91 @@ describe("SheetRenderer", () => {
     r.destroy();
   });
 
+  it("多实例样式隔离：sheet 级规则带各自的实例作用域，互不串染", async () => {
+    // 回归守卫：.xpv-cell 与 .xpv-xf-N 是全局类名，此前每个实例的 <style>
+    // 都写同名规则——同页两个预览按源序后者胜，样式互相覆盖；且"关网格线"
+    // 的实例仍会被另一个实例开着的网格线规则画上边框（级联不按 DOM 归属
+    // 生效，只看选择器与源序）。
+    const model = await parse(sampleWorkbookBytes());
+    const c1 = document.createElement("div");
+    const c2 = document.createElement("div");
+    document.body.append(c1, c2);
+    const r1 = new SheetRenderer(c1);
+    r1.render(model, { showGridLines: true });
+    const r2 = new SheetRenderer(c2);
+    r2.render(model, { showGridLines: false });
+
+    const scopeOf = (c: HTMLElement) =>
+      (c.firstElementChild as HTMLElement).className
+        .split(/\s+/)
+        .find((k) => /^xpv-s\d+$/.test(k));
+    const s1 = scopeOf(c1);
+    const s2 = scopeOf(c2);
+    expect(s1).toBeTruthy();
+    expect(s2).toBeTruthy();
+    expect(s1).not.toBe(s2);
+
+    // 按作用域类取回各自的 sheet 级样式元素，避免受其它用例残留样式干扰
+    const cssOf = (scope: string) =>
+      [...document.querySelectorAll("style")]
+        .map((s) => s.textContent ?? "")
+        .filter((t) => t.includes(`.${scope} .xpv-xf-`))
+        .join("\n");
+    const css1 = cssOf(s1!);
+    const css2 = cssOf(s2!);
+    // 两条规则都限定在各自实例下，且没有任何无作用域的裸规则（串染回归信号）
+    expect(css1).toContain(`.${s1} .xpv-cell{border-right`);
+    expect(css1).not.toMatch(/^\.xpv-cell\{border-right/m);
+    expect(css1).not.toMatch(/^\.xpv-xf-\d+\{/m);
+    // 关网格线的实例：自己的样式表里不该有网格线规则（此前 A 的规则会按
+    // 源序盖到 B 的格子上，B 关不掉）
+    expect(css2).not.toContain(".xpv-cell{border-right");
+
+    r1.destroy();
+    r2.destroy();
+  });
+
+  it("公式串结果同样参与文本溢出（与文本同属左对齐类）", async () => {
+    // A 列公式缓存串 + C 列 blocker：溢出上限同样封顶到 blocker 前缘。
+    // 此前溢出判定只认 type === "string"，公式串结果不溢出（Excel 会溢出）
+    const model = await parse(sampleWorkbookBytes());
+    model.sheets[0] = {
+      ...model.sheets[0],
+      rows: [
+        {
+          index: 1,
+          height: null,
+          hidden: false,
+          cells: [
+            {
+              col: 0,
+              type: "formulaStr",
+              value: "很长的公式缓存字符串".repeat(4),
+              styleIndex: null,
+            },
+            { col: 2, type: "string", value: "blocker", styleIndex: null },
+          ],
+        },
+      ],
+      colSpans: [],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+    };
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const a1 = [...container.querySelectorAll(".xpv-cell")].find((c) =>
+      c.textContent?.includes("公式缓存"),
+    ) as HTMLElement;
+    expect(a1).toBeTruthy();
+    expect(a1.classList.contains("xpv-spill")).toBe(true);
+    const l = buildLayout(model.sheets[0]);
+    expect((a1.querySelector("span") as HTMLElement).style.maxWidth).toBe(
+      `${l.colLeft[2] - l.colLeft[0]}px`,
+    );
+    r.destroy();
+  });
+
   it("网格线规则前置于 xf 类（同特异性级联，数据边框覆盖网格线）", async () => {
     const model = await parse(sampleWorkbookBytes());
     const r = new SheetRenderer(container);
