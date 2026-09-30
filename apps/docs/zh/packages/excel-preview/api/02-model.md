@@ -188,6 +188,7 @@ type PreviewFill =
 | `thick`                                                             | `3px solid`          |
 | `double`                                                            | `3px double`         |
 | `dashed`、`dashDot`、`dashDotDot`                                   | `1px dashed`         |
+| `dotted`                                                            | `1px dotted`         |
 | `mediumDashDot`、`mediumDashDotDot`、`mediumDashed`、`slantDashDot` | `2px dashed`         |
 | 其它无法识别的取值                                                  | `1px solid`          |
 

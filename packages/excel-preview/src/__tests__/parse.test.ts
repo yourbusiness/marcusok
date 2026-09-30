@@ -280,6 +280,35 @@ describe("模型构建（含覆盖层合并）", () => {
     expect(model.activeSheetIndex).toBe(0);
   });
 
+  it("activeTab 指向隐藏 sheet：顺延到首个可见 sheet", async () => {
+    // 第 3 个 sheet（index 2）是 hidden——此前 activeSheetIndex=2 会渲染
+    // 隐藏内容，而页签栏按 visible 过滤后无对应页签可切走
+    const bytes = sampleWorkbookBytes(2);
+    const model = buildPreviewWorkbook(await readBuffer(bytes), bytes);
+    expect(model.activeSheetIndex).toBe(0);
+  });
+
+  it("全隐藏 workbook：activeTab 保持原值（无目标可回退）", async () => {
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "A",
+          state: "hidden",
+          xml: `<row r="1"><c r="A1" t="inlineStr"><is><t>a</t></is></c></row>`,
+        },
+        {
+          name: "B",
+          state: "hidden",
+          xml: `<row r="1"><c r="A1" t="inlineStr"><is><t>b</t></is></c></row>`,
+        },
+      ],
+      styles: RICH_STYLES,
+      activeTab: 1,
+    });
+    const model = buildPreviewWorkbook(await readBuffer(bytes), bytes);
+    expect(model.activeSheetIndex).toBe(1);
+  });
+
   it("date1904 标记透传", async () => {
     const { readBuffer } = await import("@marcusok/xlsx-core");
     const bytes = date1904Bytes();

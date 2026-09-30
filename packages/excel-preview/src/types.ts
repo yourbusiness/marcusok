@@ -12,8 +12,9 @@ import type { AlignmentData, BorderStyle } from "@marcusok/xlsx-core";
 /** 解析后的工作簿（纯数据，结构化克隆安全）。 */
 export interface PreviewWorkbook {
   sheets: PreviewSheet[];
-  /** 打开时选中的 sheet（0-based；解析层已对越界 activeTab 钳制到 0，
-   * 渲染层的越界回退是第二重兜底，见 render() 的初始 sheet 处理）。 */
+  /** 打开时选中的 sheet（0-based；解析层已对越界 activeTab 钳制到 0、对
+   * 指向隐藏页签的 activeTab 顺延到首个可见 sheet，渲染层的越界回退是
+   * 第二重兜底，见 render() 的初始 sheet 处理）。 */
   activeSheetIndex: number;
   /** 日期系统：决定序列号 → 日期的偏移（1904 系统需 +1462 天）。 */
   dateSystem: "date1900" | "date1904";

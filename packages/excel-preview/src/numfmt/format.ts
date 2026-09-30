@@ -688,8 +688,11 @@ export function formatCellValue(
   }
   // 有条件段但无一命中：Excel 用"第一个无条件段"作 else（[<0]A;[>0]B;C 命中
   // C），而不是 section[0]——此前 5 配 [<0]"neg";[>1000]"big";0 会输出 "neg5"。
+  // 所有段都带条件且无一命中（单段 [>100]0.00 配 5）则显示空——不回退任何
+  // 条件段渲染（此前会输出 "5.00"）。
   if (!chosen && sections.some((s) => s.condition)) {
     chosen = sections.find((s) => !s.condition);
+    if (!chosen) return { text: "" };
   }
   let signFromSingle = false;
   if (!chosen) {
@@ -736,9 +739,14 @@ export function formatCellValue(
     return { text, color: chosen.color ?? undefined };
   }
 
-  // 数字段：拆边字面量，|值| 交引擎，再拼回；单段负值补前导负号
+  // 数字段：拆边字面量，|值| 交引擎，再拼回；单段负值补前导负号。
+  // core 为空 = 段内无任何数字记号（纯字面量段，如 "yes"）：Excel 不显示
+  // 数值本身（负号同理）——此前回退 General 会把数字拼成 "yes5"
   const { prefix, suffix, core } = extractEdgeLiterals(chosen.code);
-  const r = engineText(Math.abs(n), core || "General");
+  if (!core) {
+    return { text: prefix + suffix, color: chosen.color ?? undefined };
+  }
+  const r = engineText(Math.abs(n), core);
   const sign = signFromSingle ? "-" : "";
   return {
     text: sign + prefix + r.text + suffix,

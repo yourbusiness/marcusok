@@ -119,8 +119,9 @@ export function buildXlsx(spec: XlsxSpec): Uint8Array {
   return zipSync(files);
 }
 
-/** 基础样本：主题色字体/填充、indexed 填充、合并、冻结、隐藏行列、公式缓存。 */
-export function sampleWorkbookBytes(): Uint8Array {
+/** 基础样本：主题色字体/填充、indexed 填充、合并、冻结、隐藏行列、公式缓存。
+ * activeTab 可注入（默认 0）——专测 activeTab 指向隐藏 sheet 的回退。 */
+export function sampleWorkbookBytes(activeTab = 0): Uint8Array {
   return buildXlsx({
     sheets: [
       {
@@ -142,7 +143,7 @@ export function sampleWorkbookBytes(): Uint8Array {
       },
     ],
     styles: RICH_STYLES,
-    activeTab: 0,
+    activeTab,
   });
 }
 

@@ -90,11 +90,12 @@ function fontDecl(font: PreviewStyles["fonts"][number] | undefined): string {
     css += "text-decoration:line-through;";
   }
   if (font.size) css += `font-size:${font.size}pt;`;
-  // 字体名拼入 CSS 前剥掉双引号与反斜杠：双引号截断字符串、反斜杠转义
-  // 闭合引号，都会让恶意 xlsx 的字体名破坏整段生成的样式规则（颜色等
-  // 其余插值均经十六进制/命名表校验，字体名是唯一裸拼点）
+  // 字体名拼入 CSS 前剥掉双引号、反斜杠与控制字符：双引号截断字符串、
+  // 反斜杠转义闭合引号、换行等控制字符在 CSS 字符串里非法且可能提前闭合
+  // 规则块，都会让恶意 xlsx 的字体名破坏整段生成的样式规则（颜色等其余
+  // 插值均经十六进制/命名表校验，字体名是唯一裸拼点）
   const family = font.name
-    ? `"${font.name.replace(/["\\]/g, "")}", Calibri, "Segoe UI", system-ui, sans-serif`
+    ? `"${font.name.replace(/["\\\u0000-\u001f]/g, "")}", Calibri, "Segoe UI", system-ui, sans-serif`
     : `Calibri, "Segoe UI", system-ui, sans-serif`;
   css += `font-family:${family};`;
   if (font.color) css += `color:${font.color};`;

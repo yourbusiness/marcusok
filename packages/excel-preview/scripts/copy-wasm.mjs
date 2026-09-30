@@ -19,7 +19,8 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const distDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 
-// modern-xlsx is a devDependency here (bundled via core in the worker build).
+// modern-xlsx sits in dependencies (dist/index.d.ts re-exports its types), but
+// its runtime code is bundled via xlsx-core — the wasm binary is copied by hand.
 const src = resolve(
   dirname(require.resolve("modern-xlsx")),
   "modern-xlsx.wasm",
@@ -28,7 +29,7 @@ const src = resolve(
 if (!statSync(src, { throwIfNoEntry: false })) {
   throw new Error(
     `[excel-preview] modern-xlsx.wasm not found at ${src}. ` +
-      "Run pnpm install first (modern-xlsx is a devDependency of this package).",
+      "Run pnpm install first (modern-xlsx is a dependency of this package).",
   );
 }
 

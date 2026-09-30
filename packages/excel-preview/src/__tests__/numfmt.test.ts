@@ -207,6 +207,24 @@ describe("条件分段", () => {
       undefined,
     );
   });
+  it("所有段都带条件且无一命中：显示空（不回退条件段）", () => {
+    // Excel 语义：单段 [>100]0.00 配 5 显示空——此前回退该条件段渲染成 "5.00"
+    expect(F("number", "5", "[>100]0.00")).toBe("");
+    expect(F("number", "50", '[<0]"neg";[>100]"big"')).toBe("");
+  });
+});
+
+describe("纯字面量数字段", () => {
+  it("段内无数字记号：数值不显示（Excel 语义）", () => {
+    // 此前 core 空时回退 General，把数字拼在字面量后（"yes5"）
+    expect(F("number", "5", '"yes"')).toBe("yes");
+    // 负号随数值一并隐藏
+    expect(F("number", "-5", '"yes"')).toBe("yes");
+  });
+  it("颜色段保留", () => {
+    expect(F("number", "5", '[Red]"yes"')).toBe("yes");
+    expect(C("number", "5", '[Red]"yes"')).toBe("#ff0000");
+  });
 });
 
 describe("[$display-locale] 货币/区域标记", () => {

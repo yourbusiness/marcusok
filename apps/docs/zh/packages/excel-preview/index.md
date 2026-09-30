@@ -34,7 +34,8 @@ const preview = createPreview(el, {
   onError: (e) => console.error(e.code, e.message),
 });
 
-// 这两个方法要等解析完成后才生效（在此之前是空操作）
+// setSheet()/getSheetNames() 在解析完成前是空操作；
+// destroy() 立即生效（阻断尚未完成的渲染与回调）
 preview.setSheet("Sheet2"); // 名称或索引
 preview.destroy(); // 卸载并释放资源
 ```

@@ -130,7 +130,7 @@ function csvCellType(v: string): { type: "number" | "string"; value: string } {
 
 /**
  * CSV 字节 → PreviewWorkbook（单 sheet、无样式、无冻结/合并）。
- * 超 16384 列/超宽行按原样保留（渲染层有列上限保护）。
+ * 超 16384 列/超宽行按原样保留（渲染层无列数上限，前缀和按列数线性分配）。
  */
 export function csvToWorkbook(bytes: Uint8Array): PreviewWorkbook {
   const text = decodeBytes(bytes);

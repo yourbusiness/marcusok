@@ -640,8 +640,11 @@ export class SheetRenderer {
     const xf =
       cell.styleIndex != null ? sheet.styles.xfs[cell.styleIndex] : undefined;
     let cls = "xpv-cell";
-    // General 对齐分流：数字右、文本左、布尔/错误/公式串居中（Excel 语义）
-    if (!xf?.alignment?.horizontal) {
+    // General 对齐分流：数字右、文本左、布尔/错误/公式串居中（Excel 语义）。
+    // "general" 是合法枚举值且引擎原样透传（实测），显式写它的文件与缺省
+    // 同语义——此前只判 falsy，显式 general 的数字格会丢失右对齐
+    const horizontal = xf?.alignment?.horizontal;
+    if (!horizontal || horizontal === "general") {
       if (cell.type === "number") cls += " xpv-num";
       else if (cell.type === "string" || cell.type === "formulaStr")
         cls += " xpv-text";

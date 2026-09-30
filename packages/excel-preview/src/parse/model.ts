@@ -432,12 +432,20 @@ export function buildPreviewWorkbook(
 
   // activeTab：bookViews[0].activeTab（0-based）；越界由渲染层钳制
   const activeTabRaw = wb.workbookViews?.[0]?.activeTab;
-  const activeSheetIndex =
+  let activeSheetIndex =
     typeof activeTabRaw === "number" &&
     activeTabRaw >= 0 &&
     activeTabRaw < sheets.length
       ? activeTabRaw
       : 0;
+  // activeTab 指向隐藏页签（畸形/三方产物；Excel 自身保存时会回退首个可见
+  // 页签）时顺延到第一个可见 sheet——否则渲染层会渲染隐藏内容，而页签栏
+  // 按 visible 过滤后无对应页签可切走。全隐藏的畸形文件无目标可回退，保持
+  // 原值（渲染隐藏 sheet 是唯一选择）。
+  if (!sheets[activeSheetIndex].visible) {
+    const firstVisible = sheets.findIndex((s) => s.visible);
+    if (firstVisible >= 0) activeSheetIndex = firstVisible;
+  }
 
   return {
     sheets,

@@ -304,6 +304,41 @@ describe("SheetRenderer", () => {
     r.destroy();
   });
 
+  it("显式 horizontal=general 与缺省同语义：数字格仍走右对齐分流", async () => {
+    // styles.xml 可显式写 <alignment horizontal="general"/>（合法枚举值，
+    // 引擎原样透传）——此前 cellClasses 只判 falsy，这种数字格丢失右对齐
+    const model = await parse(sampleWorkbookBytes());
+    const sheet = model.sheets[0];
+    const sIdx = sheet.styles.xfs.length;
+    sheet.styles = {
+      ...sheet.styles,
+      xfs: [
+        ...sheet.styles.xfs,
+        {
+          fontId: 0,
+          fillId: 0,
+          borderId: 0,
+          numFmtCode: "General",
+          alignment: { horizontal: "general" },
+        },
+      ],
+    };
+    sheet.rows = [
+      {
+        index: 1,
+        height: null,
+        hidden: false,
+        cells: [{ col: 0, type: "number", value: "42", styleIndex: sIdx }],
+      },
+    ];
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const cell = container.querySelector(".xpv-cell") as HTMLElement;
+    expect(cell).toBeTruthy();
+    expect(cell.classList.contains("xpv-num")).toBe(true);
+    r.destroy();
+  });
+
   it("切 sheet 与销毁", async () => {
     const model = await parse(sampleWorkbookBytes());
     const r = new SheetRenderer(container);
