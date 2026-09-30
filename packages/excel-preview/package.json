@@ -1,6 +1,6 @@
 {
   "name": "@marcusok/excel-preview",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "description": "Read-only xlsx preview in the browser: WASM parsing in a Web Worker, Excel-faithful number/date formatting, and DOM virtual scrolling with merged-cell and frozen-pane support.",
   "license": "MIT",
