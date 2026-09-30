@@ -75,11 +75,11 @@ configureWasm(options: LoaderOptions): void
 
 ### WASM 加载器
 
-`getWasmLoader()` 返回共享的 `WasmLoader` 实例。观察它请用 `isReady` / `supported` 两个 getter 与 `getOptions()`——`LoadState` 状态机（`idle` / `loading` / `ready` / `error`）是私有状态，不是可读字段。它与上文的 `configureWasm` 都是 [`@marcusok/xlsx-core`](/zh/packages/xlsx-core/) 的重导出——导出包与预览包共用的引擎层；状态机、`ensureLoaded()` 与 `defaultWasmUrl()` 的完整说明见该包的[加载器指南](/zh/packages/xlsx-core/guide/01-loader)。
+`getWasmLoader()` 返回本包的 `WasmLoader` 单例。观察它请用 `isReady` / `supported` 两个 getter 与 `getOptions()`——`LoadState` 状态机（`idle` / `loading` / `ready` / `error`）是私有状态，不是可读字段。它与上文的 `configureWasm` 都来自打包进本包 `dist` 的内部引擎层（`@marcusok/excel-preview` 也为它自己打包同一层——两包各持一个 loader 实例）。
 
 ### 遮罩
 
-`ProgressOverlayOptions` / `ProgressOverlayTextOptions` / `ProgressOverlayHandle` 被重导出，便于在不引入第二个 import 的前提下给 `overlay` 选项标注类型。遮罩本体由 [`@marcusok/progress-overlay`](/zh/packages/progress-overlay/) 实现；见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)。
+`ProgressOverlayOptions` / `ProgressOverlayTextOptions` / `ProgressOverlayHandle` 被重导出，便于在不引入第二个 import 的前提下给 `overlay` 选项标注类型。遮罩本体已内置于本包；见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)。
 
 ### 子路径
 
@@ -102,4 +102,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> 本文档覆盖常用的稳定 API。主入口另外还重导出了上表列出的 `format-utils` 工具、`BorderStyle` 以及来自 `@marcusok/xlsx-core` 的其它引擎类型；完整列表见 `src/index.ts`。
+> 本文档覆盖常用的稳定 API。主入口另外还重导出了上表列出的 `format-utils` 工具、`BorderStyle` 以及来自内置引擎层的其它引擎类型；完整列表见 `src/index.ts`。

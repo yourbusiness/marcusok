@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Button, Card, Checkbox, Flex, Space, Typography } from "antd";
 import { PlayCircleOutlined } from "@ant-design/icons";
+// /overlay 子路径发布的是历史兼容层的别名（showExportOverlay 即
+// showProgressOverlay 本体，OverlayOptions/ExportOverlayHandle 同一类型）。
 import {
-  showProgressOverlay,
-  type ProgressOverlayHandle,
-  type ProgressOverlayOptions,
-} from "@marcusok/progress-overlay";
+  showExportOverlay,
+  type ExportOverlayHandle,
+  type OverlayOptions,
+} from "@marcusok/excel-exporter/overlay";
 
 /**
- * progress-overlay 独立演示：不经任何业务包，直接驱动通用遮罩。
+ * progress-overlay 演示：直接驱动 excel-exporter 内置的通用遮罩
+ * （/overlay 子路径，无需业务流程）。
  *
  * 模拟任务分两段——先 1.5s 无进度（展示不确定态 spinner 与 hint），再
  * setProgress 逐格推进（展示确定态进度条与百分比）。两段切换正是
@@ -16,7 +19,7 @@ import {
  * 的观感对照。
  */
 
-type ThemeChoice = NonNullable<ProgressOverlayOptions["theme"]>;
+type ThemeChoice = NonNullable<OverlayOptions["theme"]>;
 
 export default function ProgressOverlayDemo() {
   const [theme, setTheme] = useState<ThemeChoice>("auto");
@@ -24,14 +27,11 @@ export default function ProgressOverlayDemo() {
   const [delayed, setDelayed] = useState(true);
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState<string | null>(null);
+  // 防连点重入用 ref 而非 state：setRunning 是异步的，同一帧内的第二次点击
+  // 读到的 running 仍是旧值。卸载时不做任何标记——任务收尾由 runTask 的
+  // finally 里 overlay.close() 保证，StrictMode 下的 effect cleanup 会误伤
+  // （那正是本 demo 曾点击无反应的原因）。
   const runningRef = useRef(false);
-
-  useEffect(() => {
-    return () => {
-      // 组件卸载兜底：极端情况下任务句柄尚未关闭时不留挂遮罩。
-      runningRef.current = true;
-    };
-  }, []);
 
   const runTask = async (): Promise<void> => {
     if (runningRef.current) return;
@@ -40,7 +40,7 @@ export default function ProgressOverlayDemo() {
     setLastRun(null);
     const startedAt = performance.now();
 
-    const overlay: ProgressOverlayHandle = showProgressOverlay({
+    const overlay: ExportOverlayHandle = showExportOverlay({
       delayMs: delayed ? 200 : 0,
       theme,
       text: customText
@@ -80,8 +80,8 @@ export default function ProgressOverlayDemo() {
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
         通用全屏进度遮罩的独立演示：毛玻璃面板 + 旋转圆环（不确定态）/ 百分比
         条（确定态）。任务先停 1.5 秒无进度（spinner），随后流式推进到 100%
-        （进度条）。excel-exporter 2.8.0 起的 <code>overlay</code> 选项由本包
-        驱动，默认开启。
+        （进度条）。excel-exporter 2.8.0 起的 <code>overlay</code> 选项默认
+        开启，本演示经 <code>/overlay</code> 子路径直接驱动同一实现。
       </Typography.Paragraph>
 
       <Card>

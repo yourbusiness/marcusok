@@ -21,7 +21,7 @@
 pnpm add @marcusok/excel-preview
 ```
 
-唯一运行时依赖是同 scope 的 `@marcusok/xlsx-core`（共享引擎层）：同页使用两个 @marcusok 表格包时主线程只加载一份引擎与一份 WASM。详见 [快速上手](/zh/packages/excel-preview/guide/01-quick-start)。
+一条安装命令即得全部：解析引擎（modern-xlsx）在构建期打包进本包 `dist`，WASM 二进制通过本包自己的 `exports` 映射分发。详见 [快速上手](/zh/packages/excel-preview/guide/01-quick-start)。
 
 ## 最小示例
 

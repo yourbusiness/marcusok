@@ -2,15 +2,18 @@
 import { computed, onUnmounted, ref } from "vue";
 import { useData } from "vitepress";
 import type {
-  ProgressOverlayHandle,
-  ProgressOverlayOptions,
-} from "@marcusok/progress-overlay";
+  ExportOverlayHandle,
+  OverlayOptions,
+} from "@marcusok/excel-exporter/overlay";
 
 /**
- * Live demo for @marcusok/progress-overlay (registry: demo: "OverlayDemo").
+ * Live demo for the progress overlay built into @marcusok/excel-exporter
+ * (markdown embeds <OverlayDemo /> directly; play.md keeps a slot for it).
  *
- * 演示刻意不使用任何业务词汇：本包与 Excel 无关，文案全部由调用方给出
- * （包内默认文案是中文的"请稍候"，英文站必须自带 text 覆盖）。
+ * 演示刻意不使用任何业务词汇：遮罩能力与 Excel 无关，文案全部由调用方给出
+ * （默认文案是中文的"请稍候"，英文站必须自带 text 覆盖）。经
+ * `@marcusok/excel-exporter/overlay` 子路径驱动（遮罩已随导出包一体提供，
+ * 不再单独发布 npm 包）。
  *
  * 任务分两段，正是两个状态的对照：
  *   前 1.5s 无进度 → 不确定态（旋转圆环 + hint）
@@ -19,7 +22,7 @@ import type {
 const { lang } = useData();
 const isEn = computed(() => lang.value === "en-US");
 
-type ThemeChoice = NonNullable<ProgressOverlayOptions["theme"]>;
+type ThemeChoice = NonNullable<OverlayOptions["theme"]>;
 const themes: ThemeChoice[] = ["auto", "light", "dark"];
 
 const theme = ref<ThemeChoice>("auto");
@@ -29,7 +32,7 @@ const lastRun = ref<string | null>(null);
 
 // 卸载兜底：SPA 导航离开后任务可能仍在跑，句柄持有的遮罩会留在页面上；
 // 同时置 null 避免回调触碰已卸载组件的响应式状态。
-const handle = ref<ProgressOverlayHandle | null>(null);
+const handle = ref<ExportOverlayHandle | null>(null);
 const disposed = ref(false);
 onUnmounted(() => {
   disposed.value = true;
@@ -86,10 +89,11 @@ async function run() {
   lastRun.value = null;
   const startedAt = performance.now();
   try {
-    // 动态 import：与 ExportDemo / PreviewDemo 同一模式，遮罩包只在首次
-    // 点击演示时加载。
-    const { showProgressOverlay } = await import("@marcusok/progress-overlay");
-    const overlay = showProgressOverlay({
+    // 动态 import：与 ExportDemo / PreviewDemo 同一模式，遮罩实现只在首次
+    // 点击演示时加载（经导出包的 /overlay 子路径，即消费方可用的公开路径）。
+    const { showExportOverlay } =
+      await import("@marcusok/excel-exporter/overlay");
+    const overlay = showExportOverlay({
       delayMs: delayed.value ? 200 : 0,
       theme: theme.value,
       text: t.value.text,

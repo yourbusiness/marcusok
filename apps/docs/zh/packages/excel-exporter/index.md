@@ -21,7 +21,7 @@
 pnpm add @marcusok/excel-exporter
 ```
 
-两个同 scope 运行时依赖：`@marcusok/xlsx-core`（共享引擎层，导出引擎本体在构建期打包于其中）与 `@marcusok/progress-overlay`（共享遮罩 UI 层，2.8.0 起）：WASM / worker 资产在打包器与 Node 中均自动定位（自托管场景才需要 `configureWasm`），详见 [快速开始](/zh/guide/01-getting-started)。
+一条安装命令即得全部：导出引擎（modern-xlsx JS 胶水 + fflate）与进度遮罩 UI 都在构建期打包进本包 `dist`，WASM / worker 资产在打包器与 Node 中均自动定位（自托管场景才需要 `configureWasm`），详见 [快速开始](/zh/guide/01-getting-started)。
 
 ## 快速上手
 
@@ -59,7 +59,7 @@ await exportExcel({
 ## 版本与依赖
 
 - 当前版本：构建时从工作区 `package.json` 读取（单一数据源；文档站不查询 npm registry）
-- 运行时依赖：`@marcusok/xlsx-core`（共享引擎层——modern-xlsx 引擎 JS 胶水与 fflate 在构建期打包进核心层，WASM 二进制通过核心层的 `exports` 暴露）与 `@marcusok/progress-overlay`（共享遮罩 UI 层，2.8.0 起）
+- 运行时依赖：`modern-xlsx`——**仅类型**声明，让发布的 `.d.ts` 里的外部类型导入可解析；引擎本体（及遮罩 UI）在构建期打包进本包 `dist`，WASM 二进制通过本包自己的 `exports` 映射分发
 - 环境：Node >= 22；浏览器需支持 WebAssembly
 
 > 性能数字为本机实测（真实 Chrome，6 列混合类型），详见 [性能参考](/zh/packages/excel-exporter/guide/07-performance)。

@@ -65,8 +65,8 @@ function getOrCreateWorker(): Worker | null {
     return null;
   }
   // 预览的 worker URL 走独立字段 parseWorkerUrl，不读导出包的 workerUrl：
-  // 共享 loader（core 单例）服务同页多个业务包，单字段会让两包互拿对方的
-  // worker 脚本（预览会拉起 export worker）。
+  // loader 源码由两个业务包共用（各自打包一份单例），单字段会让两包互拿
+  // 对方的 worker 脚本（预览会拉起 export worker）。
   const { parseWorkerUrl } = getWasmLoader().getOptions();
   // 提升到变量再构造（与 excel-exporter 同因）：内联 new URL 字面量会让
   // 消费方 bundler 把 worker 当入口重新打包（Vite 5 下直接失败）；提升后

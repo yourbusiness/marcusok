@@ -66,13 +66,14 @@ docs site for the full [limits list](https://yourbusiness.github.io/marcusok/).
 ## Assets
 
 The WASM binary (1.9MB, gzip ≈ 650KB) and the self-contained parse worker
-resolve automatically in bundlers and Node. Pages using several @marcusok
-spreadsheet packages share one engine instance and one WASM binary on the main
-thread through `@marcusok/xlsx-core` (the single runtime dependency).
+ship with this package and resolve automatically in bundlers and Node — the
+engine is bundled into this package's `dist` at build time, so each @marcusok
+spreadsheet package carries its own copy (identical binaries, usually
+deduplicated as an asset by content-hash naming and the HTTP cache).
 Self-hosted copies use the same `configureWasm({ wasmUrl, parseWorkerUrl })`
-call as the exporter (the parse worker has its own `parseWorkerUrl` field —
-the shared loader serves several @marcusok packages and their workers are
-different scripts).
+call shape as the exporter (the parse worker has its own `parseWorkerUrl`
+field — each package's worker is a different script, so one field could not
+serve both).
 
 ## Documentation
 

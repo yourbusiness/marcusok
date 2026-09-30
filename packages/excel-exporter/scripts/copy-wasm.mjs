@@ -1,11 +1,14 @@
 /**
- * Post-build step: forward modern-xlsx's WASM binary into this package's dist.
+ * Post-build step: ship modern-xlsx's WASM binary in this package's dist.
  *
- * modern-xlsx's "exports" map omits its wasm subpaths, so consumer bundlers
- * (Vite, webpack) reject deep imports like `modern-xlsx/dist/modern-xlsx.wasm?url`.
- * Re-publishing the binary under our own exports map makes
- * `@marcusok/excel-exporter/dist/modern-xlsx.wasm?url` resolvable, which is the
- * zero-plugin asset path documented in the README.
+ * The engine layer (xlsx-core, with modern-xlsx bundled in) is bundled INTO
+ * this package's dist, so the loader's default URL (new URL("./modern-xlsx.wasm",
+ * import.meta.url)) resolves into this dist — this copy IS the primary binary
+ * location. It also covers self-hosting: modern-xlsx's "exports" map omits its
+ * wasm subpaths, so consumer bundlers (Vite, webpack) reject deep imports like
+ * `modern-xlsx/dist/modern-xlsx.wasm?url`; re-publishing the binary under our
+ * own exports map keeps `@marcusok/excel-exporter/dist/modern-xlsx.wasm?url`
+ * resolvable (the zero-plugin asset path documented in the README).
  *
  * Runs after `tsup` via the main config's onSuccess hook (see tsup.config.ts),
  * covering both the one-shot "build" script and every "dev" watch rebuild —

@@ -73,7 +73,7 @@ v1 有意如此，且每种情况有各自的错误码：旧版 `.xls`（BIFF8�
 
 不会。解析在 Web Worker 内完成（实测 10 万行 × 10 列约 1.5s），渲染只挂载视口内的单元格，因此页面响应性与文件大小无关。但仍有两个真实上限：整个文件会在 worker 内一次性读入内存（数百 MB 的文件会先撞上内存上限）；表格是一个很高的容器元素，Firefox / Safari 在约 89 万行后无法继续滚动（Chrome 约 167 万行）。细节见[范围与限制](/zh/packages/excel-preview/guide/04-limits)。
 
-## 进度遮罩（`@marcusok/progress-overlay`）
+## 进度遮罩（导出包的 `overlay` 选项）
 
 ### 很快结束的任务没有出现遮罩
 
@@ -84,7 +84,9 @@ v1 有意如此，且每种情况有各自的错误码：旧版 `.xls`（BIFF8�
 默认 `delayMs: 200` 时，长阻塞会"饿死"这次显示——延迟到期时主线程正忙，遮罩始终没能绘制。正确做法是提前挂载，并在阻塞调用前让出一帧：
 
 ```ts
-const overlay = showProgressOverlay({ delayMs: 0 });
+import { nextPaint, showExportOverlay } from "@marcusok/excel-exporter/overlay";
+
+const overlay = showExportOverlay({ delayMs: 0 });
 try {
   await nextPaint(); // 先让浏览器把遮罩画出来
   heavySyncWork();
@@ -93,7 +95,7 @@ try {
 }
 ```
 
-`nextPaint()` 由同包导出。详见[阻塞主线程](/zh/packages/progress-overlay/guide/01-usage)。
+`nextPaint()` 与 `showExportOverlay()` 都由 `@marcusok/excel-exporter` 的 `/overlay` 子路径导出。详见[阻塞主线程](/zh/packages/excel-exporter/guide/11-overlay#主线程阻塞)。
 
 ### 两个任务同时运行，显示的是谁的文案？
 
@@ -103,16 +105,16 @@ try {
 
 能。没有 `document` 时调用返回一个空操作句柄，因此同一处调用在两种环境下都成立——不需要分支判断，也不需要 `typeof window`。
 
-## 引擎层（`@marcusok/xlsx-core`）
+## 引擎层（内置于两个包）
 
-### 我需要自己装它吗？
+### 有需要单独安装的引擎包吗？
 
-不需要。`@marcusok/xlsx-core` 会作为两个文档包的依赖自动装上，而且两个包都**再导出**了它的 `configureWasm` / `getWasmLoader`——所以即便要自托管 WASM 二进制，也不必把它加进你自己的依赖。只有当你直接在引擎上自建读写（自己的读取器、写入器或渲染器）时，才需要显式安装。
+没有。引擎集成（WASM 加载器 + 对 modern-xlsx 的稳定再导出面）是仓库私有的内部层，构建期整体打进各业务包的 `dist`。两个包都**再导出**了它的 `configureWasm` / `getWasmLoader`——即便要自托管 WASM 二进制，也不必往你自己的依赖里加任何东西。
 
 ### `modern-xlsx` 要求 `engines.node >= 24`，会影响我的应用吗？
 
-不会。引擎运行时在构建期已被**打进** `xlsx-core` 的 `dist/`，所以消费方拉到的外部运行时依赖为零，永远看不到那个版本范围。`xlsx-core` 自身要求 Node `>= 22`，浏览器侧需要支持 WebAssembly。其 manifest 里那条 `modern-xlsx` 依赖，只是为了 TypeScript 消费方能解析再导出的类型。
+不会。引擎运行时在构建期已被**打进**各业务包的 `dist/`，消费方不会执行任何上游 modern-xlsx 代码。两个业务包自身要求 Node `>= 22`，浏览器侧需要支持 WebAssembly。manifest 里那条精确钉版的 `modern-xlsx` 依赖，只是为了 TypeScript 消费方能解析再导出的类型——运行时不加载它的任何代码。
 
-### 一个 bundle 里出现了两份该包
+### 导出包与预览包同在一页
 
-那就意味着两个引擎实例、两份加载器状态——单实例保证本质上是"模块实例唯一"的保证。两个业务包在发布清单里都精确锁定 `@marcusok/xlsx-core` 版本，因此正常情况只会有一份；冲突通常源自你在自己的 manifest 里手工锁了引擎版本。查某个包锁的是哪版：`npm view @marcusok/excel-exporter dependencies`，版本规则见[包关系与选型](/zh/guide/03-package-relationships)。
+各包各持一份内置引擎，因此该页面天然就是两个引擎实例、两份加载器状态——从其中一个包调 `configureWasm` 不会配置另一个包的 loader。WASM 的网络传输通常会被去重（同一份二进制、内容 hash 资产、HTTP 缓存）；内存开销真实存在，但只有两包真的同页运行时才需要在意。完整说明见[包关系与选型](/zh/guide/03-package-relationships)。

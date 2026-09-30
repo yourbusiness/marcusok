@@ -21,7 +21,7 @@ Read-only xlsx preview in the browser, built on the same WASM engine as [@marcus
 pnpm add @marcusok/excel-preview
 ```
 
-One same-scope dependency (`@marcusok/xlsx-core`, the shared engine layer): pages using both @marcusok spreadsheet packages load one engine instance and one WASM binary on the main thread. See [Quick Start](/packages/excel-preview/guide/01-quick-start).
+That single install brings everything: the parsing engine (modern-xlsx) is bundled into this package's `dist` at build time and the WASM binary ships under its own `exports` map. See [Quick Start](/packages/excel-preview/guide/01-quick-start).
 
 ## Quick example
 

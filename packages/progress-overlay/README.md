@@ -1,11 +1,17 @@
-# @marcusok/progress-overlay
+# @marcusok/progress-overlay（仓库私有包）
 
-A framework-agnostic full-screen progress overlay: an animated spinner while work length is unknown, a slim percentage bar once real progress arrives. Glass panel, light/dark themes, zero dependencies, zero framework code — the shared UI layer behind `@marcusok/excel-exporter` (enabled there by default), usable standalone for any long-running task.
+> **私有内部包**：不再发布到 npm（1.0.0 后停发并废弃）。它是
+> [@marcusok/excel-exporter](https://www.npmjs.com/package/@marcusok/excel-exporter)
+> 的构建期依赖：构建时整体打进导出包的 `dist`。消费方的公开取用路径是
+> `@marcusok/excel-exporter/overlay` 子路径（`showExportOverlay` /
+> `nextPaint`，见该包 README）。本 README 是内部实现文档。
+
+A framework-agnostic full-screen progress overlay: an animated spinner while work length is unknown, a slim percentage bar once real progress arrives. Glass panel, light/dark themes, zero dependencies, zero framework code — the UI layer behind `@marcusok/excel-exporter`'s `overlay` option (enabled there by default), drivable for any long-running task through the exporter's `/overlay` subpath.
 
 ```ts
-import { showProgressOverlay } from "@marcusok/progress-overlay";
+import { showExportOverlay } from "@marcusok/excel-exporter/overlay";
 
-const overlay = showProgressOverlay({
+const overlay = showExportOverlay({
   text: {
     title: "Generating report",
     phases: { building: "Building workbook…", downloading: "Downloading…" },

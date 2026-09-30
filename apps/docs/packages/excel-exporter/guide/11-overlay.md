@@ -1,6 +1,6 @@
 # Progress Overlay
 
-Since 2.8.0 every export shows an **optional-by-configuration** full-screen overlay by default — no extra import, no wrapper function. Set `overlay: false` to turn it off entirely; pass an options object to customize it. The overlay itself lives in a separate shared package, [@marcusok/progress-overlay](/packages/progress-overlay/); this guide covers how the exporter drives it.
+Since 2.8.0 every export shows an **optional-by-configuration** full-screen overlay by default — no extra import, no wrapper function. Set `overlay: false` to turn it off entirely; pass an options object to customize it. The overlay UI is bundled into this package (it grew out of a standalone package before 3.0; the generic entry now lives on the `/overlay` subpath); this guide covers how the exporter drives it.
 
 ```ts
 import { exportExcel } from "@marcusok/excel-exporter";
@@ -19,11 +19,11 @@ The overlay appears after a short delay, blocks page interaction, and is removed
 
 ## Option values
 
-| Value                    | Behaviour                                                                                                                                                                                                                                                                                                |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| omitted / `true`         | Overlay with the default export texts (default since 2.8.0).                                                                                                                                                                                                                                             |
-| `false`                  | No overlay at all: nothing is mounted, no extra frame is yielded, callbacks run exactly as before the feature existed.                                                                                                                                                                                   |
-| `ProgressOverlayOptions` | Customize: texts, `delayMs`, theme, `blockInteraction`, … (see the [shared package](/packages/progress-overlay/guide/01-usage)). Custom texts are **merged** with the export defaults — overriding `text.title` keeps the built-in stage labels, so phase keys like `building` never render as raw keys. |
+| Value                    | Behaviour                                                                                                                                                                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| omitted / `true`         | Overlay with the default export texts (default since 2.8.0).                                                                                                                                                                                                                         |
+| `false`                  | No overlay at all: nothing is mounted, no extra frame is yielded, callbacks run exactly as before the feature existed.                                                                                                                                                               |
+| `ProgressOverlayOptions` | Customize: texts, `delayMs`, theme, `blockInteraction`, … (all fields are listed in the option block below). Custom texts are **merged** with the export defaults — overriding `text.title` keeps the built-in stage labels, so phase keys like `building` never render as raw keys. |
 
 ```ts
 await exportExcel({
@@ -82,12 +82,12 @@ Either way, the spinner keeps spinning during a block (it is a CSS transform ani
 
 ## Driving the overlay yourself
 
-For a custom flow around the low-level entry points, drive [@marcusok/progress-overlay](/packages/progress-overlay/) directly — the exporter's overlay option is exactly this protocol with export-flavored texts:
+For a custom flow around the low-level entry points, drive the overlay directly through the `/overlay` subpath — the exporter's overlay option is exactly this protocol with export-flavored texts:
 
 ```ts
-import { showProgressOverlay } from "@marcusok/progress-overlay";
+import { showExportOverlay } from "@marcusok/excel-exporter/overlay";
 
-const overlay = showProgressOverlay({
+const overlay = showExportOverlay({
   text: { title: "正在导出 Excel", phases: { building: "正在构建工作簿…" } },
 });
 try {
@@ -100,11 +100,11 @@ try {
 
 ## Legacy subpath
 
-`@marcusok/excel-exporter/overlay` (pre-2.8) still exists for compatibility: `exportExcelWithOverlay(options, overlay?)` is now a thin wrapper equivalent to `exportExcel({ ...options, overlay })`, and `showExportOverlay` forwards to the shared package. Note the text shape changed with the move: the old flat fields (`text.building`, `text.downloading`, …) are now a `text.phases` map, and the handle methods are `setProgress` / `setPhase(key)` instead of `handleProgress` / `handlePhase`.
+`@marcusok/excel-exporter/overlay` (pre-2.8) still exists, and since the overlay no longer ships as a separate package it is the supported way to drive the overlay outside an export: `exportExcelWithOverlay(options, overlay?)` is a thin wrapper equivalent to `exportExcel({ ...options, overlay })`, `showExportOverlay` is the generic overlay entry, and `nextPaint` is exported alongside it for the mount-then-yield pattern (see [Blocking the main thread](#blocking-the-main-thread)). Note the text shape changed back when the feature moved into the library: the old flat fields (`text.building`, `text.downloading`, …) are now a `text.phases` map, and the handle methods are `setProgress` / `setPhase(key)` instead of `handleProgress` / `handlePhase`.
 
 ## Concurrency
 
-Overlays share one DOM node, reference-counted: concurrent exports render into the same overlay (last writer wins) and it is removed when the last one closes. `exportTable`/`exportExcel` are safe to call concurrently; nothing leaks between runs. The rendered content (title, hint, label, progress) always belongs to the most recent `show` / progress / phase event's caller. See the [shared package's concurrency notes](/packages/progress-overlay/guide/01-usage#concurrency) for the full semantics.
+Overlays share one DOM node, reference-counted: concurrent exports render into the same overlay (last writer wins) and it is removed when the last one closes. `exportTable`/`exportExcel` are safe to call concurrently; nothing leaks between runs. The rendered content (title, hint, label, progress) always belongs to the most recent `show` / progress / phase event's caller.
 
 ## Node and SSR
 
@@ -118,6 +118,6 @@ Note that blocking is implemented at the pointer level, and the overlay delibera
 
 ## See also
 
-- [@marcusok/progress-overlay](/packages/progress-overlay/) — the shared overlay package this option drives (options table, blocking-thread trade-offs, concurrency semantics).
+- [Driving the overlay yourself](#driving-the-overlay-yourself) — the `/overlay` subpath entry, for non-export flows.
 - [Progress and phase callbacks](./10-advanced#progress-and-phase-callbacks) — the underlying `onProgress` / `onPhase` contract.
 - [Worker and stream modes](./06-worker-stream) — which route a given row count takes.

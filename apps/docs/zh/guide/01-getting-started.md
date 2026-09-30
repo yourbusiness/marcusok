@@ -1,21 +1,17 @@
 # 快速开始
 
-MarcusOK 共发布四个包、分属三个大类——它们之间的关系见 [生态介绍](/zh/guide/)。本文先把最先要决定的事说清楚（该装哪个包），再用其中最常用的那个带你跑通第一次导出。
+MarcusOK 共发布两个包、分属两个大类——它们之间的关系见 [生态介绍](/zh/guide/)。本文先把最先要决定的事说清楚（该装哪个包），再用其中最常用的那个带你跑通第一次导出。
 
 运行环境要求：Node `>= 22`。示例命令使用 pnpm，用 npm / yarn 安装等价（`pnpm >= 9` 只是本仓库自身的开发环境要求，与消费方无关）。
 
 ## 该装哪个包？
 
-| 我要做的事                                    | 安装                         | 从这里开始                                                      |
-| --------------------------------------------- | ---------------------------- | --------------------------------------------------------------- |
-| 把数据导出成可下载的 `.xlsx`                  | `@marcusok/excel-exporter`   | 下方的[导出演练](#_2-第一个导出)                                |
-| 只读预览用户上传的 `.xlsx` / `.xlsm` / `.csv` | `@marcusok/excel-preview`    | [预览快速开始](/zh/packages/excel-preview/guide/01-quick-start) |
-| 给与 Excel 无关的耗时任务套上同款进度遮罩     | `@marcusok/progress-overlay` | [遮罩用法](/zh/packages/progress-overlay/guide/01-usage)        |
-| 直接在 modern-xlsx 引擎上自建读写             | `@marcusok/xlsx-core`        | [加载器指南](/zh/packages/xlsx-core/guide/01-loader)            |
+| 我要做的事                                    | 安装                       | 从这里开始                                                      |
+| --------------------------------------------- | -------------------------- | --------------------------------------------------------------- |
+| 把数据导出成可下载的 `.xlsx`                  | `@marcusok/excel-exporter` | 下方的[导出演练](#_2-第一个导出)                                |
+| 只读预览用户上传的 `.xlsx` / `.xlsm` / `.csv` | `@marcusok/excel-preview`  | [预览快速开始](/zh/packages/excel-preview/guide/01-quick-start) |
 
-下文演练走 `@marcusok/excel-exporter`；其余包的快速开始见上表链接。
-
-其中两行在实际使用中是例外：`@marcusok/xlsx-core` 与 `@marcusok/progress-overlay` 通常**由两个文档包自动装上**（作为它们的依赖），只有你想单独使用时才需要显式安装。完整对比——依赖图、运行时哪些共享、版本如何对应——见[包关系与选型](/zh/guide/03-package-relationships)。
+下文演练走 `@marcusok/excel-exporter`；预览包的快速开始见上表链接。两件曾以独立包形式提供的事：进度遮罩经导出包的 `/overlay` 子路径取用（见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)）；独立的引擎包已不存在——两个业务包各自内置引擎并再导出其加载器。完整对比——依赖图、运行时各自内置什么、版本如何对应——见[包关系与选型](/zh/guide/03-package-relationships)。
 
 ## 1. 安装
 
@@ -23,7 +19,7 @@ MarcusOK 共发布四个包、分属三个大类——它们之间的关系见 [
 pnpm add @marcusok/excel-exporter
 ```
 
-这就是全部——两个同 scope 运行时依赖：`@marcusok/xlsx-core`（**共享引擎层**，导出引擎 modern-xlsx JS 胶水 + fflate 已在构建期打包进核心层，WASM 二进制通过核心层的 `exports` 暴露）与 `@marcusok/progress-overlay`（**共享遮罩 UI 层**，2.8.0 起）。既没有需要额外接线的引擎包，也不会被上游的 engines 声明影响安装。
+这就是全部——没有需要额外操心的同 scope 运行时依赖：导出引擎（modern-xlsx JS 胶水 + fflate）与进度遮罩 UI 都在构建期打包进本包 `dist`，WASM 二进制通过本包自己的 `exports` 映射分发。既没有需要额外接线的引擎包，也不会被上游的 engines 声明影响安装。
 
 ## 2. 第一个导出
 
@@ -72,7 +68,7 @@ await exportExcel({
 
 浏览器中运行会自动触发下载，文件名缺省 `.xlsx` 后缀时自动补全。`download: false` 时只返回 Blob，便于自托管上传等场景。
 
-无需在 `main.ts` 接线、无需打包器插件：随包发布的资产（共享层 `@marcusok/xlsx-core` 的 `modern-xlsx.wasm` 与本包的 `export.worker.js`）默认自动定位——打包器通过标准 `new URL(资产, import.meta.url)` 模式把它们发射为 hash 资产，Node 直接从磁盘读取 wasm。Node / SSR 环境同样零配置（详见 [Node/SSR](/zh/packages/excel-exporter/guide/09-node-ssr)）。只有自托管 / CDN 托管副本的场景才需要 [`configureWasm`](/zh/packages/excel-exporter/guide/02-installation)。
+无需在 `main.ts` 接线、无需打包器插件：随包发布的资产（本包自己的 `modern-xlsx.wasm` 与 `export.worker.js`）默认自动定位——打包器通过标准 `new URL(资产, import.meta.url)` 模式把它们发射为 hash 资产，Node 直接从磁盘读取 wasm。Node / SSR 环境同样零配置（详见 [Node/SSR](/zh/packages/excel-exporter/guide/09-node-ssr)）。只有自托管 / CDN 托管副本的场景才需要 [`configureWasm`](/zh/packages/excel-exporter/guide/02-installation)。
 
 ## 3. 下一步
 

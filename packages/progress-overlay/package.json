@@ -1,5 +1,6 @@
 {
   "name": "@marcusok/progress-overlay",
+  "private": true,
   "version": "1.0.0",
   "type": "module",
   "description": "Framework-agnostic full-screen progress overlay: spinner for indeterminate work, percentage bar for streamed progress, glass panel with light/dark themes. Shared UI layer for @marcusok packages.",

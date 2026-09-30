@@ -1,5 +1,6 @@
 {
   "name": "@marcusok/xlsx-core",
+  "private": true,
   "version": "1.0.1",
   "type": "module",
   "description": "Shared modern-xlsx engine layer for the @marcusok spreadsheet packages: WASM loading, asset distribution and a stable re-export surface.",

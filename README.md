@@ -1,15 +1,15 @@
 # marcusok
 
-A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Packages are organized in three categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow), **Document preview** (rendering documents in the browser — a read-only xlsx preview is available today) and **Shared** (the capability layer both are built on). The two app-facing categories share one engine through [`@marcusok/xlsx-core`](./packages/xlsx-core).
+A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Two packages are published, organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — a read-only xlsx preview is available today). The capability layers they are built on — the modern-xlsx engine ([`xlsx-core`](./packages/xlsx-core)) and the progress overlay UI ([`progress-overlay`](./packages/progress-overlay)) — are private workspace packages bundled into the published packages' dist at build time.
 
 ## Packages
 
-| Package                                                     | Category | Description                                                                                                                |
-| ----------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](./packages/excel-exporter)     | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)           |
-| [`@marcusok/excel-preview`](./packages/excel-preview)       | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery)        |
-| [`@marcusok/xlsx-core`](./packages/xlsx-core)               | Shared   | The repo's single modern-xlsx engine layer: WASM loading, asset distribution, stable re-export surface                     |
-| [`@marcusok/progress-overlay`](./packages/progress-overlay) | Shared   | Framework-agnostic progress overlay (spinner / percentage bar, glass panel, themes) behind the exporter's `overlay` option |
+| Package                                                     | Category | Description                                                                                                                       |
+| ----------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](./packages/excel-exporter)     | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)                  |
+| [`@marcusok/excel-preview`](./packages/excel-preview)       | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery)               |
+| [`xlsx-core`](./packages/xlsx-core) (private)               | —        | The repo's single modern-xlsx engine layer (WASM loading, asset distribution, stable re-export surface); bundled into both        |
+| [`progress-overlay`](./packages/progress-overlay) (private) | —        | Framework-agnostic progress overlay (spinner / percentage bar, glass panel, themes); bundled into the exporter's `overlay` option |
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ pnpm lint        # ESLint
 pnpm typecheck   # TypeScript type checking
 ```
 
-Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages themselves only need Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 dependency (a real `dependencies` entry of `@marcusok/xlsx-core` — kept for consumer-side d.ts resolution, and bundled into that package's dist at build time; the two app-facing packages carry it only as a devDependency) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected — the app-facing export package carries two same-scope runtime dependencies (`@marcusok/xlsx-core`, the shared engine layer; `@marcusok/progress-overlay`, the shared overlay UI, since 2.8.0).
+Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages themselves only need Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 dependency (a real `dependencies` entry of both published packages — kept for consumer-side d.ts resolution only, while the engine itself is bundled into their dist at build time) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected at runtime — nothing from modern-xlsx loads, and the published packages are self-contained (each carries the engine and its WASM binary inside its own dist).
 
 ## Tooling
 
@@ -46,10 +46,10 @@ marcusok/
 │   └── play/                   # Local integration sandbox (React 19 + antd 6, private app)
 ├── packages/                   # Shared packages (each: src/ with __tests__/,
 │                               # dist/ from tsup; scales horizontally)
-│   ├── excel-exporter/         # Export: Excel export core
-│   ├── excel-preview/          # Preview: read-only xlsx preview
-│   ├── progress-overlay/       # Shared: progress overlay UI (exporter's overlay option)
-│   └── xlsx-core/              # Shared: modern-xlsx engine layer
+│   ├── excel-exporter/         # Export: Excel export core (published)
+│   ├── excel-preview/          # Preview: read-only xlsx preview (published)
+│   ├── progress-overlay/       # Private: progress overlay UI (bundled into exporter)
+│   └── xlsx-core/              # Private: modern-xlsx engine layer (bundled into both)
 ├── docs/                       # Design documents (Chinese) — intentionally
 │                               # untracked (.gitignore), local-only
 │   ├── excel-export-design.md  # Excel export core design doc (~250k chars, the main one)

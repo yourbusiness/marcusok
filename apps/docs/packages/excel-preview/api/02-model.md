@@ -200,7 +200,7 @@ CSS has no native diagonal, so `diagonal` is drawn as a thin linear-gradient lay
 
 ### Alignment (`PreviewXf.alignment`)
 
-The type is `AlignmentData | null`, re-exported unchanged from `@marcusok/xlsx-core` (the parser does not re-declare it). `null` means the file set no alignment, so the renderer's by-type General rule applies. The engine type declares six fields, but **the renderer consumes five of them**:
+The type is `AlignmentData | null`, re-exported unchanged from the bundled engine layer (the parser does not re-declare it). `null` means the file set no alignment, so the renderer's by-type General rule applies. The engine type declares six fields, but **the renderer consumes five of them**:
 
 | Field          | Type                                                                                                               | Consumed | Renderer behavior                                                                                                                                                                                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

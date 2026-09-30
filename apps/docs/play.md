@@ -27,16 +27,12 @@ Drop an `.xlsx` / `.xlsm` / `.csv` file on the panel: the parse runs in a Web Wo
 
 Full usage docs: [excel-preview](/packages/excel-preview/).
 
-## Progress overlay — `@marcusok/progress-overlay`
+## Progress overlay — built into `@marcusok/excel-exporter`
 
-The overlay the exporter shows during an export, driven here directly for a task that has nothing to do with Excel. The simulated task reports no progress for its first 1.5 seconds — that is the indeterminate spinner — then streams progress and switches to the percentage bar. It is the same two-state panel, on the same shared component.
+The overlay the exporter shows during an export, driven here directly (through the `/overlay` subpath) for a task that has nothing to do with Excel. The simulated task reports no progress for its first 1.5 seconds — that is the indeterminate spinner — then streams progress and switches to the percentage bar. It is the same two-state panel, on the same implementation the `overlay` option uses.
 
 <ClientOnly>
-  <PackageDemo dir="progress-overlay" />
+  <OverlayDemo />
 </ClientOnly>
 
-Full usage docs: [progress-overlay](/packages/progress-overlay/).
-
-## Engine layer — `@marcusok/xlsx-core`
-
-No live demo here: `xlsx-core` is a headless layer — the WASM loader plus a stable re-export surface over modern-xlsx — and renders nothing on its own. The two panels above already exercise it: both business packages share the single engine instance and the single WASM binary this package loads. See [xlsx-core](/packages/xlsx-core/) for the loader, the exports map, and when to use it directly.
+Full usage docs: [Progress overlay guide](/packages/excel-exporter/guide/11-overlay).

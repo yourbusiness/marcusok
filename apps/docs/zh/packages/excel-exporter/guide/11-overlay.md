@@ -1,6 +1,6 @@
 # 进度遮罩
 
-2.8.0 起，每次导出**默认**显示可配置的全屏遮罩——无需额外 import、无需包装函数。`overlay: false` 完全关闭；传配置对象则定制。遮罩本体位于独立的共享包 [@marcusok/progress-overlay](/zh/packages/progress-overlay/)，本页讲导出包如何驱动它。
+2.8.0 起，每次导出**默认**显示可配置的全屏遮罩——无需额外 import、无需包装函数。`overlay: false` 完全关闭；传配置对象则定制。遮罩 UI 已内置于本包（3.0 之前曾以独立包分发，通用入口现移至 `/overlay` 子路径），本页讲导出包如何驱动它。
 
 ```ts
 import { exportExcel } from "@marcusok/excel-exporter";
@@ -19,11 +19,11 @@ const result = await exportExcel({
 
 ## 取值
 
-| 值                       | 行为                                                                                                                                                                                                                             |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 缺省 / `true`            | 默认导出文案的遮罩（2.8.0 起的默认行为）。                                                                                                                                                                                       |
-| `false`                  | 完全没有遮罩：不挂载、不多让帧，回调行为与该特性出现之前完全一致。                                                                                                                                                               |
-| `ProgressOverlayOptions` | 定制：文案、`delayMs`、主题、`blockInteraction` 等（见[共享包文档](/zh/packages/progress-overlay/guide/01-usage)）。定制文案与导出默认**合并**——覆盖 `text.title` 时内置阶段文案仍在，`building` 这类阶段 key 不会显示成裸 key。 |
+| 值                       | 行为                                                                                                                                                                                     |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 缺省 / `true`            | 默认导出文案的遮罩（2.8.0 起的默认行为）。                                                                                                                                               |
+| `false`                  | 完全没有遮罩：不挂载、不多让帧，回调行为与该特性出现之前完全一致。                                                                                                                       |
+| `ProgressOverlayOptions` | 定制：文案、`delayMs`、主题、`blockInteraction` 等（全部字段见下方选项块）。定制文案与导出默认**合并**——覆盖 `text.title` 时内置阶段文案仍在，`building` 这类阶段 key 不会显示成裸 key。 |
 
 ```ts
 await exportExcel({
@@ -81,12 +81,12 @@ await exportExcel({
 
 ## 自己驱动遮罩
 
-围绕底层入口的自定义流程，直接驱动 [@marcusok/progress-overlay](/zh/packages/progress-overlay/)——导出包的 overlay 选项就是这套协议加导出语义文案：
+围绕底层入口的自定义流程，经 `/overlay` 子路径直接驱动遮罩——导出包的 overlay 选项就是这套协议加导出语义文案：
 
 ```ts
-import { showProgressOverlay } from "@marcusok/progress-overlay";
+import { showExportOverlay } from "@marcusok/excel-exporter/overlay";
 
-const overlay = showProgressOverlay({
+const overlay = showExportOverlay({
   text: { title: "正在导出 Excel", phases: { building: "正在构建工作簿…" } },
 });
 try {
@@ -99,11 +99,11 @@ try {
 
 ## 历史子路径
 
-`@marcusok/excel-exporter/overlay`（2.8 之前）为兼容保留：`exportExcelWithOverlay(options, overlay?)` 现在是等价于 `exportExcel({ ...options, overlay })` 的薄封装，`showExportOverlay` 转发到共享包。注意随迁移文案结构有变：旧的平铺字段（`text.building`、`text.downloading`……）改成了 `text.phases` 表，句柄方法是 `setProgress` / `setPhase(key)`（不再是 `handleProgress` / `handlePhase`）。
+`@marcusok/excel-exporter/overlay`（2.8 之前的历史入口）继续存在，且在遮罩不再单独发包之后，它就是导出流程之外驱动遮罩的正式途径：`exportExcelWithOverlay(options, overlay?)` 是等价于 `exportExcel({ ...options, overlay })` 的薄封装，`showExportOverlay` 是通用遮罩入口，`nextPaint` 也随之一并导出（用于[主线程阻塞](#主线程阻塞)中的先挂载再让帧写法）。注意随当年迁移文案结构有变：旧的平铺字段（`text.building`、`text.downloading`……）改成了 `text.phases` 表，句柄方法是 `setProgress` / `setPhase(key)`（不再是 `handleProgress` / `handlePhase`）。
 
 ## 并发
 
-遮罩共用一个 DOM 节点并做引用计数：并发导出渲染进同一个遮罩（最后更新者为准），最后一个关闭时才移除。并发调用 `exportTable` / `exportExcel` 是安全的，多次运行之间不会互相残留。渲染内容（标题、提示、文案、进度）始终属于最近一次 show / progress / phase 事件的调用方。完整语义见[共享包的并发说明](/zh/packages/progress-overlay/guide/01-usage#并发)。
+遮罩共用一个 DOM 节点并做引用计数：并发导出渲染进同一个遮罩（最后更新者为准），最后一个关闭时才移除。并发调用 `exportTable` / `exportExcel` 是安全的，多次运行之间不会互相残留。渲染内容（标题、提示、文案、进度）始终属于最近一次 show / progress / phase 事件的调用方。
 
 ## Node 与 SSR
 
@@ -117,6 +117,6 @@ try {
 
 ## 相关内容
 
-- [@marcusok/progress-overlay](/zh/packages/progress-overlay/)——本选项驱动的共享遮罩包（配置表、阻塞线程取舍、并发语义）。
+- [自己驱动遮罩](#自己驱动遮罩)——`/overlay` 子路径入口，用于导出之外的流程。
 - [进度与阶段回调](./10-advanced#进度与阶段回调)——底层的 `onProgress` / `onPhase` 契约。
 - [Worker 与 stream 模式](./06-worker-stream)——给定行数会走哪条路由。

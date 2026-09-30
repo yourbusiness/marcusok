@@ -2,15 +2,16 @@
  * `@marcusok/excel-exporter/overlay` 子路径：历史兼容层。
  *
  * 自 2.8.0 起遮罩已并入主入口（`exportExcel` 默认开启，`overlay: false`
- * 关闭，`overlay: {...}` 定制），能力本体抽到独立包
- * `@marcusok/progress-overlay`（导出/预览等业务包共用的 UI 层）。
+ * 关闭，`overlay: {...}` 定制），能力本体位于仓库私有包
+ * `@marcusok/progress-overlay`（构建期打进本包 dist，不再单独发布 npm
+ * ——想单独驱动遮罩的消费方也从本子路径取用）。
  *
  * 本文件只保留两件事：
  * - {@link exportExcelWithOverlay}：旧签名的薄封装，等价于
  *   `exportExcel({ ...options, overlay })`；新代码直接用主入口的 `overlay`
  *   选项即可。
  * - {@link showExportOverlay}：手接线场景（自定义流程自己驱动遮罩）转发到
- *   公共包。注意公共包的进度协议是 `setProgress` / `setPhase(key)`，
+ *   底层遮罩。注意遮罩的进度协议是 `setProgress` / `setPhase(key)`，
  *   文案结构是 `text.phases`（阶段 key → 文案表），旧的
  *   `handlePhase(phase)` 直连与 `text.building` 平铺字段不再提供。
  */
@@ -27,8 +28,11 @@ export type {
   ProgressOverlayOptions as OverlayOptions,
   ProgressOverlayTextOptions as OverlayTextOptions,
 } from "@marcusok/progress-overlay";
+// nextPaint 随子路径一并导出：progress-overlay 私有化后，这是消费方拿到
+// "先让遮罩绘制一帧再进长阻塞段"工具的唯一公开入口（主入口未导出它）。
+export { nextPaint } from "@marcusok/progress-overlay";
 
-/** 手接线场景：转发到公共包（导出语义的默认文案由主入口接线时合并）。 */
+/** 手接线场景：转发到底层遮罩（导出语义的默认文案由主入口接线时合并）。 */
 export const showExportOverlay = showProgressOverlay;
 
 /**

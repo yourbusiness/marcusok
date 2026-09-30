@@ -77,10 +77,10 @@ const workbook = await parseWorkbookBytes(bytes, { password: "…" });
 
 ## 其他导出
 
-| 导出              | 说明                                                                                                                                                      |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `formatCellValue` | 渲染器同源的单元格格式化器（见[数据模型](/zh/packages/excel-preview/api/02-model)）                                                                       |
-| `configureWasm`   | 资源自托管配置（见[资源与自托管](/zh/packages/excel-preview/guide/02-assets)）                                                                            |
-| `getWasmLoader`   | 共享的 `WasmLoader` 单例——与 `@marcusok/xlsx-core` 导出的是同一对象。就绪状态用 `isReady` / `supported` 读取，配置用 `getOptions()`（状态机本身是私有的） |
+| 导出              | 说明                                                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `formatCellValue` | 渲染器同源的单元格格式化器（见[数据模型](/zh/packages/excel-preview/api/02-model)）                                                              |
+| `configureWasm`   | 资源自托管配置（见[资源与自托管](/zh/packages/excel-preview/guide/02-assets)）                                                                   |
+| `getWasmLoader`   | 本包的 `WasmLoader` 单例（来自打包进本包 `dist` 的引擎层）。就绪状态用 `isReady` / `supported` 读取，配置用 `getOptions()`（状态机本身是私有的） |
 
-`configureWasm` / `getWasmLoader` 是 `@marcusok/xlsx-core` 的再导出：从任一包导入，配置的都是同一个共享 loader。
+`configureWasm` / `getWasmLoader` 来自打包进本包的引擎层：各 @marcusok 业务包各持一份副本与各自的 loader 实例——用哪个包就配置哪个。

@@ -27,16 +27,12 @@
 
 完整用法见 [excel-preview 文档](/zh/packages/excel-preview/)。
 
-## 进度遮罩 —— `@marcusok/progress-overlay`
+## 进度遮罩 —— 内置于 `@marcusok/excel-exporter`
 
-导出过程中看到的那个遮罩，这里不经任何业务包直接驱动，任务与 Excel 无关。模拟任务前 1.5 秒不上报进度——那就是不确定态的旋转圆环；随后流式推进并切换为百分比条。两态渲染的是同一个共享组件、同一个毛玻璃面板。
+导出过程中看到的那个遮罩，这里经 `/overlay` 子路径直接驱动，任务与 Excel 无关。模拟任务前 1.5 秒不上报进度——那就是不确定态的旋转圆环；随后流式推进并切换为百分比条。两态渲染的是同一个实现、同一个毛玻璃面板，与 `overlay` 选项同源。
 
 <ClientOnly>
-  <PackageDemo dir="progress-overlay" />
+  <OverlayDemo />
 </ClientOnly>
 
-完整用法见 [progress-overlay 文档](/zh/packages/progress-overlay/)。
-
-## 引擎层 —— `@marcusok/xlsx-core`
-
-这个包没有在线演示：`xlsx-core` 是无界面的引擎层——WASM 加载器加上对 modern-xlsx 的稳定再导出面——本身不渲染任何东西。上面两个面板已经在用它：两个业务包共用本包加载的同一个引擎实例与同一份 WASM 二进制。加载器、exports 映射与"何时直接用"见 [xlsx-core 文档](/zh/packages/xlsx-core/)。
+完整用法见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)。

@@ -75,11 +75,11 @@ Everything below comes from the main entry. Grouped by what you reach for it for
 
 ### WASM loader
 
-`getWasmLoader()` returns the shared `WasmLoader` instance. Observe it through the `isReady` / `supported` getters and `getOptions()` — the `LoadState` machine (`idle` / `loading` / `ready` / `error`) is private state, not a readable field. Both it and `configureWasm` [above](#configurewasm) are re-exports of [`@marcusok/xlsx-core`](/packages/xlsx-core/), the engine layer the exporter and the preview share; that package's [loader guide](/packages/xlsx-core/guide/01-loader) covers the state machine, `ensureLoaded()` and `defaultWasmUrl()` in full.
+`getWasmLoader()` returns this package's `WasmLoader` singleton. Observe it through the `isReady` / `supported` getters and `getOptions()` — the `LoadState` machine (`idle` / `loading` / `ready` / `error`) is private state, not a readable field. Both it and `configureWasm` [above](#configurewasm) are re-exports of the internal engine layer bundled into this package's `dist` (the same layer `@marcusok/excel-preview` bundles for itself — each package has its own loader instance).
 
 ### Overlay
 
-`ProgressOverlayOptions` / `ProgressOverlayTextOptions` / `ProgressOverlayHandle` are re-exported so the `overlay` option can be typed without a second import. The overlay itself is implemented by [`@marcusok/progress-overlay`](/packages/progress-overlay/); see the [Progress Overlay guide](/packages/excel-exporter/guide/11-overlay).
+`ProgressOverlayOptions` / `ProgressOverlayTextOptions` / `ProgressOverlayHandle` are re-exported so the `overlay` option can be typed without a second import. The overlay itself is bundled into this package; see the [Progress Overlay guide](/packages/excel-exporter/guide/11-overlay).
 
 ### Subpaths
 
@@ -102,4 +102,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> This page covers the commonly used stable API. The main entry additionally re-exports the `format-utils` helpers tabulated above, `BorderStyle` and the other engine types from `@marcusok/xlsx-core`; `src/index.ts` is the exhaustive list.
+> This page covers the commonly used stable API. The main entry additionally re-exports the `format-utils` helpers tabulated above, `BorderStyle` and the other engine types from the bundled engine layer; `src/index.ts` is the exhaustive list.

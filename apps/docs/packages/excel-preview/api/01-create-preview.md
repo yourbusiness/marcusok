@@ -77,10 +77,10 @@ Throws an `Error` with a `.code` property (same codes as above) on failure. See 
 
 ## Other exports
 
-| Export            | What it is                                                                                                                                                                                      |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `formatCellValue` | The cell formatter the renderer itself uses (see [model types](/packages/excel-preview/api/02-model))                                                                                           |
-| `configureWasm`   | Asset self-hosting config (see [assets](/packages/excel-preview/guide/02-assets))                                                                                                               |
-| `getWasmLoader`   | The shared `WasmLoader` singleton — the same object `@marcusok/xlsx-core` exports. Read readiness via `isReady` / `supported`, options via `getOptions()` (the state machine itself is private) |
+| Export            | What it is                                                                                                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `formatCellValue` | The cell formatter the renderer itself uses (see [model types](/packages/excel-preview/api/02-model))                                                                                          |
+| `configureWasm`   | Asset self-hosting config (see [assets](/packages/excel-preview/guide/02-assets))                                                                                                              |
+| `getWasmLoader`   | This package's `WasmLoader` singleton (the engine layer bundled into its `dist`). Read readiness via `isReady` / `supported`, options via `getOptions()` (the state machine itself is private) |
 
-`configureWasm` / `getWasmLoader` are re-exports of `@marcusok/xlsx-core`: importing them from either package configures the same shared loader.
+`configureWasm` / `getWasmLoader` come from the engine layer bundled into this package: each @marcusok business package carries its own copy and its own loader instance — configure the one you use.

@@ -22,7 +22,7 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 pnpm add @marcusok/excel-exporter
 ```
 
-That is the entire setup. The package ships with **two same-scope runtime dependencies** — `@marcusok/xlsx-core`, the shared modern-xlsx engine layer used by every @marcusok spreadsheet package (a page using several of them loads one engine instance and one WASM binary), and `@marcusok/progress-overlay`, the shared progress-overlay UI behind the `overlay` option (since 2.8.0). The engine itself (modern-xlsx JS glue + fflate) is bundled in at build time (inside the core layer), and the 1.9MB `modern-xlsx.wasm` binary ships under the core package's `exports` map (`@marcusok/xlsx-core/dist/modern-xlsx.wasm`), so the binary always matches the JS glue. No engine package to wire in `main.ts`, no fallback package, and upstream `engines` ranges stay inert at runtime (the pinned type-resolution dependency declared by the core layer is only checked by installers that enable engine-strict). Bundler config is needed in exactly one case — Vite's dev server (see [How assets resolve](#how-assets-resolve-zero-configuration) below).
+That is the entire setup. The package is **self-contained at runtime**: the export engine (modern-xlsx JS glue + fflate) and the progress-overlay UI behind the `overlay` option are bundled into this package's `dist` at build time, and the 1.9MB `modern-xlsx.wasm` binary ships under this package's own `exports` map (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`), so the binary always matches the JS glue. No engine package to wire in `main.ts`, no fallback package, and upstream `engines` ranges stay inert at runtime (the package's only `dependencies` entry is the pinned `modern-xlsx` — a types-only declaration for `.d.ts` resolution, checked only by installers that enable engine-strict). Bundler config is needed in exactly one case — Vite's dev server (see [How assets resolve](#how-assets-resolve-zero-configuration) below).
 
 ## Usage
 
@@ -96,15 +96,15 @@ configureWasm({
 
 > Worker scripts are same-origin only: a browser rejects a cross-origin worker script at `Worker` construction, so a raw CDN URL for `workerUrl` never loads and exports fall back to the main-thread/stream routes with console warnings. Serve the worker from your own origin (local copy or reverse proxy); only the WASM binary can come from a plain CDN.
 
-Bundlers with asset imports can also wire the files explicitly (the pre-2.0 recommended setup — still fully supported):
+Bundlers with asset imports can also wire the files explicitly (still fully supported):
 
 ```ts
-import wasmUrl from "@marcusok/xlsx-core/dist/modern-xlsx.wasm?url";
+import wasmUrl from "@marcusok/excel-exporter/dist/modern-xlsx.wasm?url";
 import workerUrl from "@marcusok/excel-exporter/dist/export.worker.js?url";
 configureWasm({ wasmUrl, workerUrl });
 ```
 
-> The `@marcusok/excel-exporter/dist/modern-xlsx.wasm` path still resolves (the identical binary is forwarded there for compatibility) but is deprecated — prefer the `@marcusok/xlsx-core` path above.
+> Before 3.0 the engine shipped in a separate `@marcusok/xlsx-core` package and that package's path was the canonical one; the package is no longer published and the binary now ships here.
 
 Without a bundler (plain `<script type="module">`), copy the two files out of this package's `dist/` into a static directory and point `configureWasm` at them.
 
@@ -235,7 +235,7 @@ await exportExcel({
 });
 ```
 
-The overlay appends to (never replaces) your existing `onProgress` / `onPhase` callbacks, blocks page interaction while shown, and is removed when the export settles — on success and on failure alike. It is a no-op in Node/SSR. Only the Fast stream path emits intermediate progress, so Workbook routes render the spinner instead of a percentage; `delayMs` keeps fast exports from flashing an overlay at all. The overlay itself lives in the shared package [`@marcusok/progress-overlay`](https://www.npmjs.com/package/@marcusok/progress-overlay) (also usable standalone). See the [Progress Overlay guide](https://yourbusiness.github.io/marcusok/packages/excel-exporter/guide/11-overlay) for the route-by-route behaviour, the blocking-thread trade-offs, and driving the handle yourself.
+The overlay appends to (never replaces) your existing `onProgress` / `onPhase` callbacks, blocks page interaction while shown, and is removed when the export settles — on success and on failure alike. It is a no-op in Node/SSR. Only the Fast stream path emits intermediate progress, so Workbook routes render the spinner instead of a percentage; `delayMs` keeps fast exports from flashing an overlay at all. The overlay UI is bundled into this package; for non-export flows, drive it through the `@marcusok/excel-exporter/overlay` subpath (below). See the [Progress Overlay guide](https://yourbusiness.github.io/marcusok/packages/excel-exporter/guide/11-overlay) for the route-by-route behaviour, the blocking-thread trade-offs, and driving the handle yourself.
 
 ## API
 
@@ -251,14 +251,14 @@ The overlay appends to (never replaces) your existing `onProgress` / `onPhase` c
 - `BaseCellStyle` — the frozen library-level base style (horizontal + vertical `center`) that sits at the bottom of every cell's style resolution; exported so callers can reference/reuse it. Any field you declare (`dataStyle` / `headerStyle` / column styles) overrides the corresponding field; Excel's native left/right alignment comes back with an explicit `alignment.horizontal`.
 - `headerStyle` — supported on both `SheetConfig` and `ColumnConfig` for styling header cells.
 - `overlay` (an `exportExcel` option, since 2.8.0) — `boolean | ProgressOverlayOptions`, on by default; `false` disables the overlay with zero overhead. Types are re-exported from the main entry.
-- `exportExcelWithOverlay(options, overlayOptions?)` / `showExportOverlay(overlayOptions)` (`@marcusok/excel-exporter/overlay`, legacy subpath) — compatibility layer kept for pre-2.8 call sites: the first is now equivalent to `exportExcel({ ...options, overlay })`, the second forwards to `@marcusok/progress-overlay` (handle methods `setProgress` / `setPhase`, texts via `text.phases`).
+- `exportExcelWithOverlay(options, overlayOptions?)` / `showExportOverlay(overlayOptions)` / `nextPaint()` (`@marcusok/excel-exporter/overlay` subpath) — the pre-2.8 compatibility surface plus the generic overlay entry: the first is equivalent to `exportExcel({ ...options, overlay })`, the second is the standalone overlay show function (handle methods `setProgress` / `setPhase`, texts via `text.phases`), and `nextPaint()` supports the mount-then-yield pattern before long blocking spans.
 - `exportInWorker` / `terminateWorker` (`@marcusok/excel-exporter/worker-utils`, source entry `src/worker-exporter.ts`) — manual Worker lifecycle control.
 
 ## Node Usage
 
 Node has no Web Worker, so auto routing degrades to main (<50k rows) or stream (>=50k rows) on the main thread.
 
-**No boilerplate needed.** With nothing configured, the engine reads the shipped `modern-xlsx.wasm` from disk (in `@marcusok/xlsx-core`'s `dist/`, resolved relative to the installed package, pnpm-symlink-safe) and initializes it synchronously (`initWasmSync`) on first use — there is nothing to call and nothing to copy.
+**No boilerplate needed.** With nothing configured, the engine reads the shipped `modern-xlsx.wasm` from disk (in this package's own `dist/`, resolved relative to the installed package, pnpm-symlink-safe) and initializes it synchronously (`initWasmSync`) on first use — there is nothing to call and nothing to copy.
 
 To control initialization timing yourself (e.g. move the one-off synchronous read+compile to startup instead of the first request), await the loader once at boot:
 
@@ -273,7 +273,7 @@ Alternatively, `configureWasm({ wasmUrl })` with an HTTP(S) URL works too (fetch
 
 - **50k-row cutover**: `STREAM_THRESHOLD=50_000` (branch `>=`); below 50k rows uses Workbook (full styling), 50k and above uses Fast stream.
 - **Worker threshold at 20,000 rows**: below 20k rows uses main (10k×6 columns measures ~120ms in a browser); 20k and above uses a Worker to avoid long main-thread blocking.
-- **Two same-scope dependencies**: the engine (modern-xlsx glue, fflate) is bundled at build time inside the shared `@marcusok/xlsx-core` layer and the wasm binary ships under that package's `exports` map — upstream `engines` ranges stay inert at runtime, and multiple @marcusok packages share one engine instance. The overlay UI (`@marcusok/progress-overlay`, since 2.8.0) is likewise shared with future @marcusok packages.
+- **Self-contained dist**: the engine (modern-xlsx glue, fflate) and the overlay UI are bundled into this package's `dist` at build time, and the wasm binary ships under this package's `exports` map — upstream `engines` ranges stay inert at runtime and there is no engine package for consumers to install. The trade-off: a page using several @marcusok spreadsheet packages carries one bundled engine copy per package (identical binaries, usually deduplicated as an asset by content-hash naming and the HTTP cache); each package's self-contained worker always carried its own copy anyway.
 - **Self-contained worker**: `dist/export.worker.js` is a single ESM file with zero imports. Bundlers emit it verbatim as an asset (the default `new URL` resolution), so a chunked worker whose sibling imports are not tracked can never 404 in production builds.
 - **ESM-only**: this package provides no CJS build.
 - **Worker-compatible format**: functions cannot cross structured clone. The browser Worker path (including stream executed inside a Worker) accepts only `FormatSpec`, and `exportInWorker` strips function formats; Node's stream runs on the main thread, so functions are fine there.

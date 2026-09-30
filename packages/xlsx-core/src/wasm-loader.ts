@@ -4,11 +4,12 @@ export type LoadState = "idle" | "loading" | "ready" | "error";
 
 export interface LoaderOptions {
   /**
-   * WASM URL. Defaults to the binary shipped next to this package's entry
-   * (`dist/modern-xlsx.wasm`): bundlers that support the `new URL(asset,
-   * import.meta.url)` pattern (Vite, webpack 5, Rollup) rewrite it to a hashed
-   * asset automatically, and Node locates it through `node_modules`. Override
-   * only for self-hosted copies, a CDN, or bundlers without asset-URL support.
+   * WASM URL. Defaults to the binary shipped next to the entry this loader
+   * is bundled into (the business packages' `dist/modern-xlsx.wasm`):
+   * bundlers that support the `new URL(asset, import.meta.url)` pattern
+   * (Vite, webpack 5, Rollup) rewrite it to a hashed asset automatically,
+   * and Node locates it through `node_modules`. Override only for
+   * self-hosted copies, a CDN, or bundlers without asset-URL support.
    */
   wasmUrl?: string | URL;
   /**
@@ -16,10 +17,11 @@ export interface LoaderOptions {
    * to the self-contained worker shipped next to that package's entry — the
    * same bundler rewrite applies. Override for self-hosted copies.
    *
-   * Consumed by the exporter only. The shared loader serves several @marcusok
-   * packages on one page, and each package's worker is a different script — a
-   * single field would cross-wire them (the preview would spawn the export
-   * worker). @marcusok/excel-preview reads `parseWorkerUrl` instead.
+   * Consumed by the exporter only. This loader's source is shared by both
+   * business packages (each bundles its own copy at build time), and each
+   * package's worker is a different script — a single field would
+   * cross-wire them (the preview would spawn the export worker).
+   * @marcusok/excel-preview reads `parseWorkerUrl` instead.
    */
   workerUrl?: string | URL;
   /**
@@ -46,10 +48,11 @@ export interface LoaderOptions {
 }
 
 /**
- * Default WASM location: the binary this package ships next to its entry.
- * Kept as a `new URL(<literal>, import.meta.url)` expression — the exact form
- * Vite's `vite:asset-import-meta-url` / webpack 5 match to emit a hashed
- * asset at build time, and the natural relative location in Node.
+ * Default WASM location: the binary shipped next to the entry this loader is
+ * bundled into (each business package re-ships it in its own dist). Kept as a
+ * `new URL(<literal>, import.meta.url)` expression — the exact form Vite's
+ * `vite:asset-import-meta-url` / webpack 5 match to emit a hashed asset at
+ * build time, and the natural relative location in Node.
  */
 export function defaultWasmUrl(): URL {
   return new URL("./modern-xlsx.wasm", import.meta.url);
@@ -203,7 +206,8 @@ export class WasmLoader {
    * nothing to call, nothing to copy.
    *
    * Resolution order within this method:
-   *  1. `./modern-xlsx.wasm` next to the published entry (dist/).
+   *  1. `./modern-xlsx.wasm` next to the bundled entry (the business
+   *     packages' dist/, which re-ship the binary).
    *  2. `../dist/modern-xlsx.wasm` — the binary's location when this module
    *     runs from src/ (repo tests, source-aliased monorepo consumers).
    *

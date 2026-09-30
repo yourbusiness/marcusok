@@ -2,15 +2,17 @@ import { defineConfig, type Options } from "tsup";
 import { rewriteWasmBgUrl, dropNodeFsPromises } from "./src/tsup-plugins";
 
 // Two configs:
-//  - Main entry bundles the engine IN (modern-xlsx). The package has zero
-//    runtime dependencies: consumers install one package, are immune to
-//    modern-xlsx's engines.node>=24 declaration (this package redeclares
-//    >=22), and the wasm binary always ships with the matching JS glue (the
-//    exports map re-publishes it). Consuming packages keep THIS package
-//    external in their main builds, so the engine loads once per page.
-//  - The ./tsup subpath exposes the esbuild plugins other packages' tsup
-//    configs reuse when bundling their self-contained workers. It must run
-//    on Node (imports node:fs), hence its own platform.
+//  - Main entry bundles the engine IN (modern-xlsx). This package is a
+//    private workspace layer (no longer published): the business packages
+//    bundle its dist into their own builds (noExternal), so their consumers
+//    are immune to modern-xlsx's engines.node>=24 declaration and the wasm
+//    binary always ships with the matching JS glue next to the bundled
+//    entry. Within the repo, this dist is also the bundling source for the
+//    business packages' self-contained workers.
+//  - The ./tsup subpath exposes the esbuild plugins the business packages'
+//    tsup configs reuse (build-time only — it never ships to npm consumers
+//    any more, but the workspace devDependency keeps resolving it). It must
+//    run on Node (imports node:fs), hence its own platform.
 export default defineConfig([
   {
     esbuildPlugins: [rewriteWasmBgUrl, dropNodeFsPromises],

@@ -73,7 +73,7 @@ Formula cells render their **cached** value — the same convention as SheetJS a
 
 No. Parsing runs in a Web Worker (100k × 10 cells measured at ~1.5s) and the renderer mounts viewport cells only, so the tab stays responsive regardless of the file's size. Two real limits remain: the whole file is read into memory inside the worker (multi-hundred-MB files hit memory limits before anything else), and the grid is one tall container element, so Firefox / Safari stop scrolling past ~890k rows (~1.67M in Chrome). Details in [Scope & Limits](/packages/excel-preview/guide/04-limits).
 
-## Progress overlay (`@marcusok/progress-overlay`)
+## Progress overlay (exporter's `overlay` option)
 
 ### The overlay never appears for a task that finishes quickly
 
@@ -84,7 +84,9 @@ That is `delayMs`, which defaults to 200ms: a task that finishes sooner never sh
 With the default `delayMs: 200`, a long blocking span starves the reveal — the delay expires while the thread is busy, so the overlay never paints. Mount it up front and yield a frame before the blocking call:
 
 ```ts
-const overlay = showProgressOverlay({ delayMs: 0 });
+import { nextPaint, showExportOverlay } from "@marcusok/excel-exporter/overlay";
+
+const overlay = showExportOverlay({ delayMs: 0 });
 try {
   await nextPaint(); // let the browser paint the overlay first
   heavySyncWork();
@@ -93,7 +95,7 @@ try {
 }
 ```
 
-`nextPaint()` is exported from the same package. See [Blocking the main thread](/packages/progress-overlay/guide/01-usage).
+`nextPaint()` and `showExportOverlay()` are both exported from the `/overlay` subpath of `@marcusok/excel-exporter`. See [Blocking the main thread](/packages/excel-exporter/guide/11-overlay#blocking-the-main-thread).
 
 ### Two tasks run at once — whose texts are shown?
 
@@ -103,16 +105,16 @@ Concurrent tasks share one reference-counted DOM node, and the last writer wins:
 
 Yes. Without a `document` the call returns a no-op handle, so the same call site works in both environments — no branching, no `typeof window` check.
 
-## Engine layer (`@marcusok/xlsx-core`)
+## Engine layer (bundled inside both packages)
 
-### Do I have to install it?
+### Is there a separate engine package to install?
 
-No. `@marcusok/xlsx-core` is installed for you as a dependency of both document packages, and both of them **re-export** its `configureWasm` / `getWasmLoader` — so even self-hosting the WASM binary does not require adding it to your own manifest. Install it explicitly only when you build on the engine directly (your own reader, writer or renderer).
+No. The engine integration (WASM loader plus a stable surface over modern-xlsx) is a private internal layer, bundled into each business package's `dist` at build time. Both packages **re-export** its `configureWasm` / `getWasmLoader`, so even self-hosting the WASM binary never requires adding anything to your own manifest.
 
 ### Does `modern-xlsx`'s `engines.node >= 24` affect my app?
 
-No. The engine runtime is bundled **into** `xlsx-core`'s `dist/` at build time, so consumers pull in zero external runtime dependencies and never see that range. `xlsx-core` itself requires Node `>= 22`, and browsers need WebAssembly support. The pinned `modern-xlsx` entry in its manifest exists purely so TypeScript consumers can resolve the re-exported types.
+No. The engine runtime is bundled **into** each package's `dist/` at build time, so consumers never execute upstream modern-xlsx code. Both business packages require Node `>= 22`, and browsers need WebAssembly support. The pinned `modern-xlsx` entry in their manifests exists purely so TypeScript consumers can resolve re-exported types — nothing from it loads at runtime.
 
-### Two copies of the package in one bundle
+### The exporter and the preview on one page
 
-Then you have two engines and two loader states — the single-instance guarantee is a module-instance guarantee. Both business packages pin an exact `@marcusok/xlsx-core` version in their published manifests, so one copy is the normal case; a hand-pinned engine in your own manifest is what creates the conflict. Check what a package pins with `npm view @marcusok/excel-exporter dependencies`, and see [Package Relationships & Selection](/guide/03-package-relationships) for the version rules.
+Each package carries its own bundled engine copy, so that page has two engine instances and two loader states by design — `configureWasm` from one package does not configure the other's loader. The WASM transfer is usually deduplicated (identical binary, content-hash assets, HTTP cache); the memory cost is real but only matters when both packages actually run on one page. See [Package Relationships & Selection](/guide/03-package-relationships) for the full picture.

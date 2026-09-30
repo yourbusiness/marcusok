@@ -10,7 +10,7 @@ registerDemo({
   menuLabel: "遮罩演示",
   group: GROUP,
   description:
-    "独立演示 @marcusok/progress-overlay：不确定态旋转圆环 → 流式进度百分比条的切换、主题/文案定制、delayMs 门控。excel-exporter 的 overlay 选项即由它驱动。",
+    "直接驱动 excel-exporter 内置的通用进度遮罩（/overlay 子路径）：不确定态旋转圆环 → 流式进度百分比条的切换、主题/文案定制、delayMs 门控。exportExcel 的 overlay 选项即同一实现。",
   async load() {
     return import("./basic.demo.js");
   },

@@ -1,11 +1,12 @@
 /**
- * Post-build step: forward modern-xlsx's WASM binary into this package's dist.
+ * Post-build step: ship modern-xlsx's WASM binary in this package's dist.
  *
- * The parse worker receives an explicit wasm URL from the main thread (core's
- * shipped binary) in the normal path; this local copy is the fallback for the
+ * The engine layer (xlsx-core, with modern-xlsx bundled in) is bundled INTO
+ * this package's dist, so the main-thread loader's default URL resolves here
+ * (primary location). The parse worker additionally falls back to the
  * rewritten relative URL inside the bundled worker glue (see
- * @marcusok/xlsx-core/tsup rewriteWasmBgUrl) and the self-hosted asset path
- * (`@marcusok/excel-preview/dist/modern-xlsx.wasm?url`).
+ * @marcusok/xlsx-core/tsup rewriteWasmBgUrl), and self-hosting uses
+ * `@marcusok/excel-preview/dist/modern-xlsx.wasm?url`.
  *
  * Runs via the main config's onSuccess hook so watch rebuilds re-copy it too
  * (clean:true wipes dist on watch start — same lesson as excel-exporter 2.1.5).

@@ -21,7 +21,7 @@ An Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/moder
 pnpm add @marcusok/excel-exporter
 ```
 
-Two same-scope dependencies (`@marcusok/xlsx-core`, the shared engine layer with the export engine bundled in at build time; `@marcusok/progress-overlay`, the shared overlay UI since 2.8.0): the WASM / worker assets resolve automatically in bundlers and in Node — `configureWasm` is only needed for self-hosted copies. See [Getting Started](/guide/01-getting-started).
+That single install brings everything: the export engine (modern-xlsx JS glue + fflate) and the progress overlay UI are bundled into this package's `dist` at build time, and the WASM / worker assets resolve automatically in bundlers and in Node — `configureWasm` is only needed for self-hosted copies. See [Getting Started](/guide/01-getting-started).
 
 ## Quick example
 
@@ -59,7 +59,7 @@ await exportExcel({
 ## Version & dependencies
 
 - Version: read from the workspace `package.json` at build time (single source of truth; this site never queries the npm registry)
-- Runtime dependencies: `@marcusok/xlsx-core` (the shared engine layer — the modern-xlsx engine JS glue and fflate are bundled at build time inside the core layer, and the WASM binary ships under the core package's `exports` map) and `@marcusok/progress-overlay` (the shared overlay UI, since 2.8.0)
+- Runtime dependencies: `modern-xlsx` — a types-only entry so published `.d.ts` files resolve external type imports; the engine itself (and the overlay UI) are bundled into this package's `dist` at build time, and the WASM binary ships under this package's own `exports` map
 - Environment: Node >= 22; browsers need WebAssembly support
 
 > Performance numbers are local measurements (real Chrome, 6 mixed-type columns). See [Performance](/packages/excel-exporter/guide/07-performance).
