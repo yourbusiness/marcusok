@@ -40,9 +40,6 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "keywords": [
     "overlay",
     "progress",

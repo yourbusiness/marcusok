@@ -1,11 +1,12 @@
 /**
- * Post-build step: forward modern-xlsx's WASM binary into this package's dist.
+ * Post-build step: ship modern-xlsx's WASM binary in this package's dist.
  *
- * modern-xlsx's "exports" map omits its wasm subpaths, so consumer bundlers
- * (Vite, webpack) reject deep imports like `modern-xlsx/dist/modern-xlsx.wasm?url`.
- * Re-publishing the binary under our own exports map makes
- * `@marcusok/xlsx-core/dist/modern-xlsx.wasm?url` resolvable, which is the
- * zero-plugin asset path (the loader's default URL points at it too).
+ * 本包已私有化（不再发布 npm），dist 里这份二进制的消费者都在仓内：业务包
+ * tsup 把本包 dist 的 JS 胶水打进各自产物后，由各自的 copy-wasm 把二进制
+ * 转发进业务包 dist（对外唯一的分发面）；play 的 src 联调链路
+ * （srcAssetOverrides 重写）与本包的 Node 集成测试（wasm-loader 默认 URL）
+ * 直接读本目录下这份。曾经的 `@marcusok/xlsx-core/dist/modern-xlsx.wasm`
+ * 对外自托管路径已随私有化废弃（exports 条目一并移除）。
  *
  * Runs after `tsup` via the main config's onSuccess hook (see tsup.config.ts),
  * covering both the one-shot "build" script and every "dev" watch rebuild —

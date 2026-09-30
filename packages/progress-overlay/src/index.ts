@@ -1,13 +1,15 @@
 /**
- * @marcusok/progress-overlay
+ * @marcusok/progress-overlay（仓库私有包，不再发布 npm）
  *
- * 通用全屏进度遮罩：@marcusok 各业务包（excel-exporter 及未来的导出/预览
- * 包）共用的 UI 层，也可独立使用。零运行时依赖，纯 DOM + 一次注入的样式。
+ * 通用全屏进度遮罩：excel-exporter `overlay` 选项的底层 UI 层，构建期整体
+ * 打进其 dist。外部无法（也不应）单独安装本包——手接线场景的公开取用
+ * 路径是 `@marcusok/excel-exporter/overlay` 子路径。零运行时依赖，
+ * 纯 DOM + 一次注入的样式。
  *
  * ```ts
- * import { showProgressOverlay } from "@marcusok/progress-overlay";
+ * import { showExportOverlay } from "@marcusok/excel-exporter/overlay";
  *
- * const overlay = showProgressOverlay({
+ * const overlay = showExportOverlay({
  *   text: {
  *     title: "正在导出",
  *     phases: { building: "构建中…", downloading: "下载中…" },

@@ -25,7 +25,6 @@
       "import": "./dist/tsup.js",
       "default": "./dist/tsup.js"
     },
-    "./dist/modern-xlsx.wasm": "./dist/modern-xlsx.wasm",
     "./package.json": "./package.json"
   },
   "files": [
@@ -43,9 +42,6 @@
     "test": "vitest run",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "dependencies": {
     "modern-xlsx": "1.2.0"
