@@ -14,6 +14,10 @@ import type { CellStyle } from "./types";
  * 与 dataStyle 的区别：dataStyle 是调用方可配可覆盖的「业务基底」，本常量是
  * 库的默认底线；两者都在最底层，dataStyle 覆盖它。
  *
+ * 生效范围：仅走 Workbook 构建的路径（main / worker）。stream 路径（≥50k
+ * 行或降级导出）无样式能力，本基底随之失效——默认居中在数据跨过 50k 阈值
+ * 时会突变回 Excel 原生对齐（README 与文档站 05-styles 均按此口径说明）。
+ *
  * 冻结：本常量是导出的公共对象，而 mergeStyles(base, undefined) 会**原样返回
  * base 引用**——不冻结的话，调用方一次就地修改就会改变所有后续导出的观感。
  */
