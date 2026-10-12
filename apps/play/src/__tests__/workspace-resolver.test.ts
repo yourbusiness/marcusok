@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -156,7 +157,14 @@ describe("resolvePkgDir", () => {
           },
         }),
       );
-      expect(resolvePkgDir("stub-pkg", base)).toBe(pkgDir);
+      // macOS 的 os.tmpdir 可能落在符号链接后面（turbo 环境下 /tmp →
+      // /private/tmp，直跑时 /var/folders → /private/var/folders），而
+      // require.resolve 内部做 realpath 规范化——字符串全等在 macOS 上必败
+      // （Linux CI 无此符号链接，一直未暴露）。两侧 realpathSync 后比较，
+      // 断言的是解析语义而非路径拼写。
+      expect(realpathSync(resolvePkgDir("stub-pkg", base))).toBe(
+        realpathSync(pkgDir),
+      );
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

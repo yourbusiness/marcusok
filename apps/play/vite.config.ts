@@ -10,6 +10,7 @@ import {
   srcCandidatesFromDistTarget,
   type SourcePackage,
 } from "./src/vite/workspace-resolver.ts";
+import { rewriteAssetLiterals } from "./src/vite/src-asset-overrides.ts";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 // play 是应用，位于 apps/ 下；workspace 业务包统一在仓库根的 packages/
@@ -117,25 +118,30 @@ const mainAliases = sourcePackages.map(({ name, dir }) => ({
 // via `new URL(<literal>, import.meta.url)`, relative to the published dist
 // entry — the assets sit in dist/, next to the entry. The aliases above point
 // the main entry at src/, so those literals resolve into src/ where the files
-// do not exist. Vite's asset and worker plugins resolve relative URLs on disk
-// themselves (path.resolve + tryFsResolve, not through the plugin container),
-// and the worker build then fails outright (UNRESOLVED_ENTRY). A transform is
-// the one mechanism that applies on every path: rewrite the literals to
-// ../dist/<file>, which exists on disk for build-time resolution, resolves
-// correctly against the served module URL in dev, and matches the same
-// ../dist fallback the package's own Node auto-init uses in src mode.
-const srcAssetOverrides: { dir: string; files: string[] }[] = [
+// do not exist. A transform rewrites each literal into an injected
+// `<pkg>/dist/<file>?url` import — dev resolves it through marcusok-resolver
+// to the on-disk package file (served same-origin), build emits it via the
+// standard ?url asset pipeline (see src-asset-overrides.ts for why the
+// previous `../dist/<file>` relative rewrite was replaced).
+const srcAssetOverrides: {
+  pkg: string;
+  dir: string;
+  files: string[];
+}[] = [
   {
+    pkg: "@marcusok/excel-exporter",
     dir: resolve(packagesDir, "excel-exporter"),
-    files: ["modern-xlsx.wasm", "export.worker.js"],
+    files: ["export.worker.js"],
   },
   // wasm 字面量随 WasmLoader 迁入 core（excel-preview 与 exporter 共用）；
   // 预览包另有自包含 parse worker。
   {
+    pkg: "@marcusok/xlsx-core",
     dir: resolve(packagesDir, "xlsx-core"),
     files: ["modern-xlsx.wasm"],
   },
   {
+    pkg: "@marcusok/excel-preview",
     dir: resolve(packagesDir, "excel-preview"),
     files: ["parse.worker.js"],
   },
@@ -152,14 +158,8 @@ const srcAssetOverridePlugin: Plugin = {
       norm(id).startsWith(`${norm(resolve(dir, "src"))}/`),
     );
     if (!override) return null;
-    let rewritten = code;
-    for (const file of override.files) {
-      rewritten = rewritten.replaceAll(
-        `new URL("./${file}", import.meta.url)`,
-        `new URL("../dist/${file}", import.meta.url)`,
-      );
-    }
-    return rewritten === code ? null : { code: rewritten, map: null };
+    const rewritten = rewriteAssetLiterals(code, override.pkg, override.files);
+    return rewritten === null ? null : { code: rewritten, map: null };
   },
 };
 
