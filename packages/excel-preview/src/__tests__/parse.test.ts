@@ -13,6 +13,7 @@ import {
   colName,
   date1904Bytes,
   encryptedBytes,
+  entityStylesBytes,
   fakeOle2Bytes,
   richTextBytes,
   sampleWorkbookBytes,
@@ -422,6 +423,36 @@ describe("自闭合样式元素（真实 Excel 产物形态的 id 对齐）", ()
       kind: "solid",
       fgColor: "#ffff00",
     });
+  });
+});
+
+describe("实体解码健壮性（恶意字符引用不得逃出覆盖层）", () => {
+  it("超范围十进制实体（>0x10FFFF）替换为 U+FFFD，端到端解析不失败", async () => {
+    const bytes = entityStylesBytes("&#1114112;");
+    // 覆盖层本身不抛（此前 RangeError 从这里逃出 try 只包 unzip 的保护圈）；
+    // U+FFFD 不是数字，numVal 落回 null 兜底
+    const { overlay } = buildStylesOverlay(bytes);
+    expect(overlay?.fonts[0]?.size).toBeNull();
+    // 端到端：整份文件照常解析成功，而不是 UNKNOWN 失败
+    const r = await parseOnMainThread({ bytes });
+    expect(r.ok).toBe(true);
+  });
+
+  it("代理区实体（孤立 surrogate）替换为 U+FFFD，解析不失败", async () => {
+    const r = await parseOnMainThread({ bytes: entityStylesBytes("&#xD800;") });
+    expect(r.ok).toBe(true);
+  });
+
+  it("十六进制实体（XML CharRef 的 &#x 形态）按规范解码", () => {
+    // &#x31; = "1"：若不解码，Number("&#x31;") 为 NaN、size 应为 null
+    const { overlay } = buildStylesOverlay(entityStylesBytes("&#x31;"));
+    expect(overlay?.fonts[0]?.size).toBe(1);
+  });
+
+  it("合法十进制实体照常解码（回归确认）", () => {
+    // 两个 &#50; 拼出 "22"：验证多实体连写与既有十进制路径
+    const { overlay } = buildStylesOverlay(entityStylesBytes("&#50;&#50;"));
+    expect(overlay?.fonts[0]?.size).toBe(22);
   });
 });
 

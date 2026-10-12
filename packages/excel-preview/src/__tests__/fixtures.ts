@@ -179,6 +179,27 @@ export function selfClosedStylesBytes(): Uint8Array {
   });
 }
 
+/**
+ * 恶意/畸形数字字符引用样本：font 的 sz val 携带指定实体文本（sz 走
+ * parseAttrs → decodeXmlEntities，正是超范围实体 &#1114112; 曾把 RangeError
+ * 逃逸成整份解析失败的路径；name val 的提取不经实体解码，载体选 sz）。
+ * 解码结果可经 overlay.fonts[0].size 数值断言，锁定"替换 U+FFFD / 按规范
+ * 解码、解析照常成功"的修复行为。
+ */
+export function entityStylesBytes(entity: string): Uint8Array {
+  // 结构对齐 selfClosedStylesBytes（自闭合 border#0 + 单 xf），仅 sz val 异化
+  const styles = `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="${entity}"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>`;
+  return buildXlsx({
+    sheets: [
+      {
+        name: "BE",
+        xml: `<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row>`,
+      },
+    ],
+    styles,
+  });
+}
+
 /** sharedStrings 富文本样本。 */
 export function richTextBytes(): Uint8Array {
   return buildXlsx({

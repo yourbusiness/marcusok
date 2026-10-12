@@ -120,14 +120,29 @@ function parseAttrs(tag: string): Record<string, string> {
   return attrs;
 }
 
-/** 最小 XML 实体解码（颜色值不含实体，formatCode 可能含 &quot;）。 */
+/**
+ * 最小 XML 实体解码（颜色值不含实体，formatCode 可能含 &quot;）。
+ *
+ * 数字字符引用按 XML 规范 CharRef 的两种形态（十进制 &#65; / 十六进制
+ * &#x41;）解码；码点超出 Unicode 上限（0x10FFFF）时 fromCodePoint 抛
+ * RangeError，孤立代理区（0xD800-0xDFFF）虽不抛但产出的字符进后续
+ * CSS/DOM 序列化不稳（XML 1.0 的 Char 产生式本就排除两者）——都替换为
+ * U+FFFD。覆盖层是尽力而为的增强（见文件头"任何异常吞掉、返回降级
+ * 形态"），本函数不得成为逃逸源：实测 &#1114112; 曾把整份解析打成
+ * UNKNOWN 失败而非降级。
+ */
 function decodeXmlEntities(s: string): string {
   return s
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&#(?:(\d+)|x([0-9A-Fa-f]+));/g, (_, dec: string, hex: string) => {
+      const code = hex !== undefined ? parseInt(hex, 16) : Number(dec);
+      return code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+        ? "�"
+        : String.fromCodePoint(code);
+    })
     .replace(/&amp;/g, "&");
 }
 
