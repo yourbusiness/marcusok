@@ -259,7 +259,7 @@ item 布局的细节：
 
 拒绝双轴是刻意的：两根轴时不存在单一的表格形状，静默取第一根轴只会把另一根轴的系列报成一条令人费解的「长度不匹配」。
 
-注意类目布局对数据点的限制**仍然允许标量**，包括像 `[5]` 这样的单元素数组（只有长度 ≥ 2 且全为数字的数组才算坐标对）。可靠的经验法则是：类目轴下的系列数据必须是扁平标量。
+注意类目布局的数据点**只接受标量**（`number`、`string`、`null`）。任何数组都会被拒绝——包括 ECharts 柱状图常见的 `[5]` 单元素写法（只有长度 ≥ 2 且全为数字的数组才算坐标对，而在类目轴下它同样被拒绝，不会被当作标量）。`[5]` 这类数据请先拍平成 `5` 再导出。可靠的经验法则是：类目轴下的系列数据必须是扁平标量。
 
 ### layout：wide 与 long
 
@@ -359,4 +359,4 @@ result.error; // Error: [excel-exporter] ECharts dataset mode is not supported .
 
 这与 `exportExcel` 一致——主入口本就以 `{ success: false, error }` 上报自身失败：转换错误只是发生在进入 `exportExcel` **之前**，于是封装把它们捕获并包装成同一种形态。因此同一份坏输入，无论走便捷封装还是手工拼 `ExportOptions`，失败形态都相同。
 
-还需注意 `success: false` 也可能来自兜底路径——判断时请看 `result.error`（以及 `result.engine` / `result.mode`），不要假定用了某个特定引擎。另见 [ExportResult](/zh/packages/excel-exporter/api/01-export-excel#exportresult)。
+还需注意：**仅凭 `result.error` 不能断定导出失败**——经无样式快速流兜底**成功**的导出返回的是 `success: true` 且**带有** `error`（内容为降级原因，如 `Fallback: styles stripped (fast stream)`），正因如此降级率可以被程序化监控。请先看 `success`，再读 `error` / `engine` / `mode` 了解文件实际由哪条路径产出，不要假定特定引擎。另见 [ExportResult](/zh/packages/excel-exporter/api/01-export-excel#exportresult)。

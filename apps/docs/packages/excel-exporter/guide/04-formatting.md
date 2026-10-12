@@ -4,13 +4,13 @@ Column `format` can be a structured **FormatSpec** (thread-safe; works on all pa
 
 ## FormatSpec
 
-| Type       | Options                                 | Example                                                        | Description                                                                                                                  |
-| ---------- | --------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `enum`     | `map`, `fallback?`                      | `{ type: "enum", map: { paid: "Paid" }, fallback: "Unknown" }` | Maps raw values to labels; unmapped values use `fallback` or pass through; missing values (null/blank) render as empty cells |
-| `date`     | `pattern?` (default `yyyy-MM-dd`)       | `{ type: "date" }`                                             | Converts to an Excel date serial and auto-injects `numFormat`                                                                |
-| `datetime` | `pattern?` (default `yyyy-MM-dd HH:mm`) | `{ type: "datetime" }`                                         | Same, with time                                                                                                              |
-| `number`   | `decimals?` (default 0), `thousands?`   | `{ type: "number", decimals: 2, thousands: true }`             | Numeric semantics; the Workbook path keeps full precision rendered via `numFormat`                                           |
-| `padding`  | `fill`, `length`, `align?` (left/right) | `{ type: "padding", fill: "0", length: 6, align: "left" }`     | Pads to a fixed length (IDs, codes)                                                                                          |
+| Type       | Options                                 | Example                                                        | Description                                                                                                                           |
+| ---------- | --------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `enum`     | `map`, `fallback?`                      | `{ type: "enum", map: { paid: "Paid" }, fallback: "Unknown" }` | Maps raw values to labels; unmapped values use `fallback` or pass through; missing values (null/blank) render as empty cells          |
+| `date`     | `pattern?` (default `yyyy-MM-dd`)       | `{ type: "date" }`                                             | Converts to an Excel date serial and auto-injects `numFormat`                                                                         |
+| `datetime` | `pattern?` (default `yyyy-MM-dd HH:mm`) | `{ type: "datetime" }`                                         | Same, with time                                                                                                                       |
+| `number`   | `decimals?` (default 0), `thousands?`   | `{ type: "number", decimals: 2, thousands: true }`             | Numeric semantics; the Workbook path keeps full precision rendered via `numFormat`; missing values (null/blank) render as empty cells |
+| `padding`  | `fill`, `length`, `align?` (left/right) | `{ type: "padding", fill: "0", length: 6, align: "left" }`     | Pads to a fixed length (IDs, codes)                                                                                                   |
 
 ```ts
 columns: [
@@ -65,6 +65,8 @@ Behavior differs slightly between paths — always set `decimals` explicitly:
 - **Workbook path** (main / worker+workbook): full precision is preserved; display decimals come from the auto-injected `numFormat`;
 - **Stream path** (≥ 50,000 rows): no `numFormat` support; `decimals` are baked into the stored value (`9999.99` → `10000`);
 - So **without explicit `decimals` (default 0), the stored cell value can differ between paths** — explicit `decimals` is the main way to guarantee cross-threshold consistency.
+- **Cross-path `thousands`**: the separator is visible only on the Workbook path (rendered via the auto-injected `#,##0` `numFormat`); the stream path (≥ 50,000 rows / degraded exports) keeps the cell a **number** with no visible separators — baking separators into the value would turn data cells into text and break downstream calculations.
+- **Missing values render as empty cells** on every path, for `number` and `padding` columns and `enum` alike: `null`/`undefined` and blank/whitespace-only strings (the most common missing-value shape from databases, forms and CSV imports) never become `0`, a padded `"00000"`, or the `enum` `fallback`.
 
 ## Dates
 

@@ -9,7 +9,7 @@
 | [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback |
 | [`@marcusok/excel-preview`](/packages/excel-preview/)   | Preview  | stable | Read-only xlsx preview: worker parsing + virtual scrolling, styles/merges/freeze/number formats restored     |
 
-Two more capability layers exist in the repo as **private internal packages** — the modern-xlsx engine layer (`xlsx-core`: WASM loading, asset distribution, stable re-export surface) and the progress overlay UI (`progress-overlay`, behind the exporter's `overlay` option). They are bundled into the published packages' `dist` at build time and are intentionally not on npm: installing a business package brings everything it needs.
+Two more capability layers exist in the repo as **private internal packages** — the modern-xlsx engine layer (`xlsx-core`: WASM loading, asset distribution, stable re-export surface) and the progress overlay UI (`progress-overlay`, behind the exporter's `overlay` option). They are bundled into the business packages' `dist` at build time (the engine layer into both packages, the overlay into the exporter only) and are intentionally not on npm: installing a business package brings everything it needs.
 
 ## Engineering conventions
 
@@ -32,4 +32,4 @@ Common capability layers (engine, overlay UI) stay private inside the repo and s
 
 Both published packages are documented on this site, so the [package count on the home page](/guide/#current-packages) matches the table above. For which package a given task needs — and what each bundles under the hood — see [Package Relationships & Selection](./03-package-relationships).
 
-When a new package ships, register it in `apps/docs/.vitepress/registry.ts` with its category (`export` / `preview` / `shared`) and add its docs; it automatically appears in the navigation, sidebar and home cards.
+When a new package ships, three steps put it on this site: add it to `apps/docs/package.json` dependencies (the registry imports each package's `package.json` for its version — the build fails without the dependency), create its pages under `apps/docs/packages/<dir>/`, and register it in `apps/docs/.vitepress/registry.ts` with its category (`export` / `preview` / `shared`); it then automatically appears in the navigation, sidebar and home cards.

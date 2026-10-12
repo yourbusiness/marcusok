@@ -29,15 +29,19 @@ pnpm add @marcusok/excel-exporter
 
 ### 可选：`configureWasm`
 
-默认定位无法生效的场景（CDN 自托管、Service Worker 环境、不支持资产 URL 的打包器）或需要调加载超时的场景，用 `configureWasm` 覆盖：
+默认定位无法生效的场景（自托管副本——WASM 走 CDN、worker 放自己源上、Service Worker 环境、不支持资产 URL 的打包器）或需要调加载超时的场景，用 `configureWasm` 覆盖：
 
 ```ts
 import { configureWasm } from "@marcusok/excel-exporter";
 
 configureWasm({
   // 两项都可选，只覆盖需要的
+  // WASM 二进制放哪里都行——同源或普通 CDN 均可
   wasmUrl: "https://cdn.example.com/modern-xlsx.wasm",
-  workerUrl: "https://cdn.example.com/export.worker.js",
+  // worker 脚本必须同源：浏览器在 Worker 构造时就会拒绝跨域脚本，
+  // 直接填 CDN URL 永远加载不出来——worker 导出会带着 console 警告
+  // 降级到主线程路径。请从自己的源提供（本地副本或反向代理）。
+  workerUrl: "/assets/export.worker.js",
 });
 ```
 
@@ -51,15 +55,17 @@ configureWasm({ wasmUrl, workerUrl });
 
 > 3.0 之前，wasm 的规范路径是 `@marcusok/xlsx-core/dist/modern-xlsx.wasm`（引擎曾以独立包分发）。该包已不再发布，二进制现随本包分发，上面的路径即规范路径。
 
-| 参数              | 类型            | 默认值             | 说明                                             |
-| ----------------- | --------------- | ------------------ | ------------------------------------------------ |
-| `wasmUrl`         | `string \| URL` | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                          |
-| `workerUrl`       | `string \| URL` | 随包发布的 worker  | 覆盖为自托管 / CDN 副本                          |
-| `timeoutMs`       | `number`        | `10_000`           | 单次加载超时                                     |
-| `maxRetries`      | `number`        | `3`                | 最大尝试次数；失败后按 300ms、600ms 指数退避等待 |
-| `workerTimeoutMs` | `number`        | `120_000`          | Worker 导出超时；超时导出会终止共享 worker       |
+| 参数              | 类型            | 默认值             | 说明                                                                                                           |
+| ----------------- | --------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `wasmUrl`         | `string \| URL` | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                                                                                        |
+| `workerUrl`       | `string \| URL` | 随包发布的 worker  | 覆盖为**同源**自托管副本——跨域 URL 在 `Worker` 构造时即被浏览器拒绝，普通 CDN 在这里不可用                     |
+| `timeoutMs`       | `number`        | `10_000`           | 单次加载超时                                                                                                   |
+| `maxRetries`      | `number`        | `3`                | 最大尝试次数；失败后按 300ms、600ms 指数退避等待                                                               |
+| `workerTimeoutMs` | `number`        | `120_000`          | Worker 导出超时；超时导出会终止共享 worker。必须保持 > 0——没有"禁用"取值：`0`/负数意味着"立即超时"而非"不超时" |
 
 `configureWasm` 是合并语义：仅当 `wasmUrl` 变化时才重置已加载（或加载中）的 WASM 实例，只改超时/重试不会造成重复初始化；若此前加载失败（error 态），任意 `configureWasm` 调用都会清除错误态，下次导出按新配置重试。
+
+> URL 变更**不会**热替换已在运行的实例。WASM 成功加载之后，新 `wasmUrl` 只在新 JS realm 生效（刷新页面，或 `terminateWorker()` 之后新创建的 worker——modern-xlsx 的 `initWasm` 幂等、首次成功初始化胜出）；该限制适用时 loader 会打印 console 警告。`workerUrl` 同理：共享 Worker 只在创建时读一次脚本 URL，之后的变更只能到达 `terminateWorker()` 之后新建的 worker（任何 `workerUrl` 变更都会告警）。
 
 ### Vite 开发服务器：预构建注意事项
 

@@ -2,17 +2,17 @@
 
 ## SheetConfig
 
-| 字段           | 类型                            | 必填 | 说明                                                                     |
-| -------------- | ------------------------------- | ---- | ------------------------------------------------------------------------ |
-| `name`         | `string`                        | 是   | 工作表名：非空、≤ 31 字符，不含 `: \ / ? * [ ]`，且不得以单引号开头/结尾 |
-| `columns`      | `ColumnConfig[]`                | 是   | 列定义                                                                   |
-| `data`         | `Record<string, unknown>[]`     | 是   | 行数据                                                                   |
-| `headerStyle?` | `CellStyle`                     | —    | 表头行默认样式，可被列级 `headerStyle` 覆盖                              |
-| `dataStyle?`   | `CellStyle`                     | —    | 全部数据单元格的基底样式，列级 `style` 逐字段深合并覆盖（见样式指南）    |
-| `indexColumn?` | `boolean \| IndexColumnOptions` | —    | 注入最左侧序号列；`true` 即全部默认值。已有 merges 自动右移一列          |
-| `freezeRows?`  | `number`                        | —    | 冻结前 N 行表头；校验为非负整数                                          |
-| `merges?`      | `MergeRange[]`                  | —    | 合并单元格（相对数据区定位）                                             |
-| `autoFilter?`  | `boolean`                       | —    | 表头自动筛选                                                             |
+| 字段           | 类型                            | 必填 | 说明                                                                                                                                                                 |
+| -------------- | ------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`         | `string`                        | 是   | 工作表名：非空、≤ 31 字符，不含 `: \ / ? * [ ]`，且不得以单引号开头/结尾。`sheets` 内查重**不区分大小写**（Excel 自身规则——`Sheet1` 与 `SHEET1` 视为同名，会被拒绝） |
+| `columns`      | `ColumnConfig[]`                | 是   | 列定义                                                                                                                                                               |
+| `data`         | `Record<string, unknown>[]`     | 是   | 行数据                                                                                                                                                               |
+| `headerStyle?` | `CellStyle`                     | —    | 表头行默认样式，可被列级 `headerStyle` 覆盖                                                                                                                          |
+| `dataStyle?`   | `CellStyle`                     | —    | 全部数据单元格的基底样式，列级 `style` 逐字段深合并覆盖（见样式指南）                                                                                                |
+| `indexColumn?` | `boolean \| IndexColumnOptions` | —    | 注入最左侧序号列；`true` 即全部默认值。已有 merges 自动右移一列                                                                                                      |
+| `freezeRows?`  | `number`                        | —    | 冻结前 N 行表头；校验为非负整数                                                                                                                                      |
+| `merges?`      | `MergeRange[]`                  | —    | 合并单元格（相对数据区定位）                                                                                                                                         |
+| `autoFilter?`  | `boolean`                       | —    | 表头自动筛选                                                                                                                                                         |
 
 ## ColumnConfig
 
@@ -55,6 +55,8 @@
 | `rowspan` | `number` | 行跨度                     |
 | `colspan` | `number` | 列跨度                     |
 
+校验在导出前置执行、所有路径口径一致，报错会指明具体是哪个 merge：四个值必须为整数；`row`/`col` ≥ 0 且 `rowspan`/`colspan` ≥ 1；`col + colspan` 不得超过该表的叶子列数、`row + rowspan` 不得超过数据行数（表头行不在这套坐标系里）；各 range 之间不得重叠（它们整体位于表头区之下，不会与自动生成的表头合并冲突）。`merges` 传非数组同样会被拒绝。
+
 ## CellStyle
 
 | 字段         | 类型                                                   | 说明                                                                            |
@@ -64,6 +66,8 @@
 | `alignment?` | `{ horizontal?, vertical?, wrapText?, textRotation? }` | 对齐（textRotation 0–180）                                                      |
 | `border?`    | `{ top?, bottom?, left?, right? }`                     | 边框，每边 `{ style: BorderStyle, color? }`——取值见 [BorderStyle](#borderstyle) |
 | `numFormat?` | `string`                                               | Excel 数字格式码                                                                |
+
+样式字段在导出前置校验——非法值以 `{ success: false }` 失败并给出定位到具体表/列的报错，而不是拖到后面变成晦涩的引擎错误或降级导出：颜色必须为 6 位 RGB hex（`"FF0000"`；`"red"` 与 `"#FF0000"` 都会被拒）；`border.*.style` 必须是上文 `BorderStyle` 之一；`font.size` 必须为有限正数；`alignment.textRotation` 必须是 0–180 的**整数**（`45.5` 会被拒绝而非四舍五入）。校验覆盖表级、列级（含分组列被忽略的样式）与 `indexColumn` 样式的全部出现点。
 
 ## BorderStyle
 

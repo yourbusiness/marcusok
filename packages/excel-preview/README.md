@@ -20,8 +20,11 @@ preview.setSheet("Sheet2"); // by name or index
 preview.destroy();
 ```
 
-That is the entire setup. Node/SSR (no Worker global) runs the same pipeline on
-the main thread with no code change. `onParsed` fires after the first render
+That is the entire setup. Parsing runs in a Web Worker in the browser; the
+same pipeline runs on the main thread with no code change whenever no worker
+is usable — Node/SSR (no Worker **or** no `window` global), or a worker that
+failed to construct/load (a permanent fallback for the session; see the assets
+guide). `onParsed` fires after the first render
 and again after every `setSheet`/tab switch (`duration.parse` reuses the first
 parse's timing; `duration.total`, by contrast, keeps counting from the initial
 load, so use `duration.render` for a switch's own cost).

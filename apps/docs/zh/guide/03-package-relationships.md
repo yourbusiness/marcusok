@@ -9,7 +9,7 @@
 | [`@marcusok/excel-exporter`](/zh/packages/excel-exporter/) | 导出 | 业务数据 → `.xlsx` 下载：样式、格式化、worker/流式路由与多级降级兜底 | `modern-xlsx`（仅类型；引擎本体已打包） |
 | [`@marcusok/excel-preview`](/zh/packages/excel-preview/)   | 预览 | 只读渲染 `.xlsx` / `.xlsm` / `.csv`：worker 解析 + 虚拟滚动          | `modern-xlsx`（仅类型；引擎本体已打包） |
 
-每个包在运行期自包含。它们脚下的两个能力层——modern-xlsx 引擎层（仓库内部名 `xlsx-core`：WASM 加载器 + 稳定再导出面）与进度遮罩 UI（内部名 `progress-overlay`）——是**仓库私有包**：构建期整体打进业务包的 `dist`，不发布到 npm。你只需要安装要用的那个包，也没有共享包的版本要对齐。
+每个包在运行期自包含。它们脚下的两个能力层——modern-xlsx 引擎层（仓库内部名 `xlsx-core`：WASM 加载器 + 稳定再导出面）与进度遮罩 UI（内部名 `progress-overlay`）——是**仓库私有包**：构建期打进业务包的 `dist`（引擎层打进两个包，遮罩只打进导出包，见下表），不发布到 npm。你只需要安装要用的那个包，也没有共享包的版本要对齐。
 
 两点值得记住：
 
@@ -65,7 +65,7 @@ configurePreviewWasm({ wasmUrl, parseWorkerUrl }); // 预览包的 loader + pars
 
 - **2.8.0 起**，每次导出默认显示遮罩。无需额外 import、无需包装函数。
 - `overlay` 字段声明在 `ExportOptions` 上，三种取值——缺省/`true`（默认导出文案）、`false`（完全关闭：不挂载、不多让一帧）、或选项对象（定制文案、`delayMs`、主题等）。三者及自定义文案的合并语义见[进度遮罩](/zh/packages/excel-exporter/guide/11-overlay#取值)，本页不再重复。
-- **该字段只存在于 `ExportOptions`。** `TableExportOptions` 与 `EChartsExportOptions` 未声明它，转换器也不转发，因此两个便捷入口无法定制或关闭遮罩：它们始终按默认（开启）运行，想关只能走主入口。见[表格与 ECharts → 与 exportExcel 的关系](/zh/packages/excel-exporter/api/05-table-and-echarts#与-exportexcel-的关系)。
+- **该字段在全部三个入口都生效。** 3.0.3 起 `TableExportOptions` 与 `EChartsExportOptions` 也声明了 `overlay`，两个转换器都会转发给 `exportExcel`——三个入口定制或关闭遮罩的方式完全一致。见[表格与 ECharts → 与 exportExcel 的关系](/zh/packages/excel-exporter/api/05-table-and-echarts#与-exportexcel-的关系)。
 - **给非 Excel 任务驱动同一遮罩。** 遮罩已内置于导出包，公开路径是 `@marcusok/excel-exporter/overlay` 子路径——导出通用的遮罩入口 `showExportOverlay`（与 Excel 无关）及句柄类型。文档示例见[进度遮罩 → 自己驱动遮罩](/zh/packages/excel-exporter/guide/11-overlay#自己驱动遮罩)。
 
 ## 版本、发布与兼容性

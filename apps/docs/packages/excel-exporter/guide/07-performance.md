@@ -23,6 +23,6 @@ Numbers below come from local measurements (real Chrome, 6 mixed-type columns). 
 ## Optimization tips
 
 - Stay on `mode: "auto"`; never force `main` for large files;
-- Keep styled exports under 50k rows; for larger data accept degraded styling or split sheets;
+- Keep styled exports under 50k rows **per call** — `auto` routes on the total across all sheets of one call, so splitting into more sheets of the same call does not help; for larger data accept degraded styling or split into multiple `exportExcel` calls (one file each);
 - **Set `decimals` explicitly** on `number` columns for consistent stored values across paths (Workbook/Stream/fallback);
 - Run large server-side exports in background tasks.

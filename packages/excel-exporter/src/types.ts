@@ -152,15 +152,16 @@ export interface ColumnConfig {
    * difference is intentional — do not rely on visible separators above the
    * 50k threshold.
    *
-   * Missing values in numeric-ish specs: `null`/`undefined` (and blank/whitespace-only
-   * strings — the most common missing-value shape coming out of databases, forms
-   * and CSV imports; `Number("") === 0` would silently turn them into a meaningful
-   * `0`) render as empty cells on every path in `{ type: "number" }` columns.
-   * `{ type: "padding" }` likewise leaves them empty instead of padding the empty
-   * string into a fake-looking `"00000"`. `{ type: "enum" }` maps them like any
-   * other value: `null`/`undefined` and `""` through the `""` key, a whitespace
-   * string through its own literal text (hit your `fallback` unless that key is
-   * mapped).
+   * Missing values: `null`/`undefined` (and blank/whitespace-only strings —
+   * the most common missing-value shape coming out of databases, forms and CSV
+   * imports; `Number("") === 0` would silently turn them into a meaningful `0`)
+   * render as empty cells on every path, in every spec type: `{ type: "number" }`
+   * columns, `{ type: "padding" }` (which would otherwise pad the empty string
+   * into a fake-looking `"00000"`), and `{ type: "enum" }` alike — the enum
+   * spec does not consult `map` or fall to `fallback` for them; a configured
+   * `fallback` is for present-but-unmapped values, not for data holes (filling
+   * holes with business-meaningful fake text is exactly what the missing-value
+   * guard prevents — see applyFormat's enum branch).
    */
   format?:
     | FormatSpec

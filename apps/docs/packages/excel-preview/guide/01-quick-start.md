@@ -16,7 +16,7 @@ const preview = createPreview(el, {
 preview.destroy();
 ```
 
-That's the entire setup. Parsing happens in a Web Worker by default; in Node/SSR (no Worker global) the same pipeline runs on the main thread — no code change.
+That's the entire setup. Parsing happens in a Web Worker by default; the same pipeline runs on the main thread — no code change — whenever no worker is usable: Node/SSR (no Worker **or** no `window` global), or a worker that failed to construct/load (a cross-origin script URL, a 404 — the fallback is then permanent for the session; see [Assets & Self-hosting](/packages/excel-preview/guide/02-assets)).
 
 ## Options you will actually use
 

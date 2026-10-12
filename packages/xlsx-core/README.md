@@ -16,9 +16,22 @@
 - **资产分发** —— WASM 二进制随 `dist/` 分发；业务包各自把它再转发进
   自己的 `dist`（`@marcusok/excel-exporter/dist/modern-xlsx.wasm` 等路径
   即由此而来）。
-- **稳定的再导出面** —— 各业务包共用的 modern-xlsx API（`readBuffer`、
-  `formatCellRich`、日期序列工具、引用工具、类型化错误）。引擎运行时
-  已打包进本包 `dist`。
+- **稳定的再导出面** —— 各业务包共用的 modern-xlsx API，完整清单见
+  `src/index.ts`：
+  - 引擎运行时：`Workbook`、`readBuffer`、`initWasm` / `initWasmSync`、
+    `sheetAddAoa`、`formatCell` / `formatCellRich` / `getBuiltinFormat` /
+    `loadFormatTable` / `isDateFormatId` / `isDateFormatCode`；
+  - 引用与日期工具：`encodeCellRef` / `decodeCellRef` / `encodeRange` /
+    `decodeRange` / `columnToLetter` / `letterToColumn`，
+    `serialToDate` / `dateToSerial`；
+  - 类型化错误：`ModernXlsxError` 与错误码常量 `LEGACY_FORMAT` /
+    `UNRECOGNIZED_FORMAT` / `PASSWORD_PROTECTED` / `WASM_INIT_FAILED`；
+  - 加载器一侧：`WasmLoader` 类、`defaultWasmUrl`，类型 `LoaderOptions`
+    （`wasmUrl` / `workerUrl` / `parseWorkerUrl` / `timeoutMs` 默认 10s /
+    `maxRetries` 默认 3 / `workerTimeoutMs` 默认 120s 且必须为正——
+    0/负数是「立即超时」而非禁用）与 `LoadState`；另按名再导出约 25 个
+    modern-xlsx 类型（`Worksheet`、`CellData`、`FontData`、`AlignmentData`
+    等）。引擎运行时已打包进本包 `dist`。
 - **tsup esbuild 插件** —— `@marcusok/xlsx-core/tsup` 暴露两个插件
   （wasm-glue URL 重写、剔除 Node-only 的 `node:fs/promises`），业务包
   的 tsup 配置复用（构建期 devDependency，不进运行时）。

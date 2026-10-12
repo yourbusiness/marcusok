@@ -16,7 +16,7 @@ const preview = createPreview(el, {
 preview.destroy();
 ```
 
-这就是全部接入。浏览器内解析默认走 Web Worker；Node/SSR（无 Worker 全局）同一条管线自动在主线程跑——业务代码零改动。
+这就是全部接入。浏览器内解析默认走 Web Worker；只要 worker 不可用，同一条管线就自动在主线程跑——业务代码零改动。触发条件：Node/SSR（无 Worker **或**无 `window` 全局），或 worker 构造/加载失败（跨域脚本 URL、404 等——该会话内永久回退，见[资产与自托管](/zh/packages/excel-preview/guide/02-assets)）。
 
 ## 常用选项
 

@@ -4,13 +4,13 @@
 
 ## FormatSpec
 
-| 类型       | 参数                                     | 示例                                                          | 说明                                                                          |
-| ---------- | ---------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `enum`     | `map`、`fallback?`                       | `{ type: "enum", map: { paid: "已支付" }, fallback: "未知" }` | 枚举值映射；未命中且无 fallback 时原样输出；缺失值（null/空白）渲染为空单元格 |
-| `date`     | `pattern?`（默认 `yyyy-MM-dd`）          | `{ type: "date" }`                                            | 转 Excel 日期序列并自动注入 `numFormat`                                       |
-| `datetime` | `pattern?`（默认 `yyyy-MM-dd HH:mm`）    | `{ type: "datetime" }`                                        | 同上，带时间                                                                  |
-| `number`   | `decimals?`（默认 0）、`thousands?`      | `{ type: "number", decimals: 2, thousands: true }`            | 数字语义：Workbook 路径保留完整精度，经 `numFormat` 渲染                      |
-| `padding`  | `fill`、`length`、`align?`（left/right） | `{ type: "padding", fill: "0", length: 6, align: "left" }`    | 左/右补全到固定长度（如工号）                                                 |
+| 类型       | 参数                                     | 示例                                                          | 说明                                                                                        |
+| ---------- | ---------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `enum`     | `map`、`fallback?`                       | `{ type: "enum", map: { paid: "已支付" }, fallback: "未知" }` | 枚举值映射；未命中且无 fallback 时原样输出；缺失值（null/空白）渲染为空单元格               |
+| `date`     | `pattern?`（默认 `yyyy-MM-dd`）          | `{ type: "date" }`                                            | 转 Excel 日期序列并自动注入 `numFormat`                                                     |
+| `datetime` | `pattern?`（默认 `yyyy-MM-dd HH:mm`）    | `{ type: "datetime" }`                                        | 同上，带时间                                                                                |
+| `number`   | `decimals?`（默认 0）、`thousands?`      | `{ type: "number", decimals: 2, thousands: true }`            | 数字语义：Workbook 路径保留完整精度，经 `numFormat` 渲染；缺失值（null/空白）渲染为空单元格 |
+| `padding`  | `fill`、`length`、`align?`（left/right） | `{ type: "padding", fill: "0", length: 6, align: "left" }`    | 左/右补全到固定长度（如工号）                                                               |
 
 ```ts
 columns: [
@@ -65,6 +65,8 @@ columns: [
 - **Workbook 路径**（main / worker+workbook）：`number` 保留完整精度，显示小数由自动注入的 `numFormat` 控制；
 - **Stream 路径**（≥ 50,000 行）：没有 `numFormat` 支持，会把 `decimals` 烧进存储值（如 `9999.99` → `10000`）；
 - 因此**不声明 `decimals`（默认 0）时，两种路径存进单元格的值可能不同**；跨阈值一致性是显式声明 `decimals` 的最重要理由。
+- **`thousands` 的跨路径差异**：千分位只在 Workbook 路径可见（经自动注入的 `#,##0` `numFormat` 渲染）；Stream 路径（≥ 50,000 行 / 降级导出）保持单元格为**数字**、不显示分隔符——把分隔符烧入值会把数据单元格变成文本、破坏下游计算。
+- **缺失值在所有路径渲染为空单元格**，`number`、`padding` 与 `enum` 一视同仁：`null`/`undefined` 与空串/纯空白串（数据库、表单、CSV 导入中最常见的缺失值形态）绝不会变成 `0`、`"00000"` 或 `enum` 的 `fallback`。
 
 ## 日期值
 

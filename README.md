@@ -1,6 +1,6 @@
 # marcusok
 
-A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Two packages are published, organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — a read-only xlsx preview is available today). The capability layers they are built on — the modern-xlsx engine ([`xlsx-core`](./packages/xlsx-core)) and the progress overlay UI ([`progress-overlay`](./packages/progress-overlay)) — are private workspace packages bundled into the published packages' dist at build time.
+A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Two packages are published, organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — a read-only xlsx preview is available today). The capability layers they are built on — the modern-xlsx engine ([`xlsx-core`](./packages/xlsx-core)) and the progress overlay UI ([`progress-overlay`](./packages/progress-overlay)) — are private workspace packages bundled into the published packages' dist at build time (the engine layer into both packages, the overlay into the exporter only; see the table below).
 
 ## Packages
 
@@ -72,7 +72,7 @@ marcusok/
 3. Reuse the repo-root `tsconfig.base.json` and `eslint.config.mjs` for cross-package shared config (there is no `packages/_shared/` yet; extract one when a real need arises).
 4. Turborepo's `^build` dependency graph handles build order automatically; new packages require no CI/CD changes.
 5. Changesets releases each package independently — nothing blocks anything else.
-6. Declare the package's category (`export` / `preview` / `shared`) in the docs registry (`apps/docs/.vitepress/registry.ts`) so the docs site groups it correctly; categories live only in that registry, not in the directory layout.
+6. To put the package on the docs site: add it to `apps/docs/package.json` dependencies first (the registry imports each package's `package.json` for its version — the build fails without the dependency), create its pages under `apps/docs/packages/<dir>/`, then declare its category (`export` / `preview` / `shared`) in the docs registry (`apps/docs/.vitepress/registry.ts`) so the site groups it correctly; categories live only in that registry, not in the directory layout.
 
 ## Release Process
 

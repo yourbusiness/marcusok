@@ -10,27 +10,33 @@ exportExcel(options: ExportOptions): Promise<ExportResult>
 
 ## ExportOptions
 
-| 字段         | 类型                                               | 必填 | 说明                                                                                                                                                                        |
-| ------------ | -------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sheets`     | `SheetConfig[]`                                    | 是   | 工作表配置，至少一个                                                                                                                                                        |
-| `filename`   | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                                                                                                                                 |
-| `mode`       | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`，按行数自动路由                                                                                                                                               |
-| `onProgress` | `(progress: number) => void`                       | —    | 0 → 1；首尾 0 与 1 由 `exportExcel` 在所有路径各上报一次（含流式兜底与最终失败的导出）；分段进度仅 stream 路径有（每 1000 行上报一次）                                      |
-| `onPhase`    | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                                                                                                                      |
-| `download`   | `boolean`                                          | —    | 默认 `true` 触发浏览器下载；`false` 只返回 Blob                                                                                                                             |
-| `overlay`    | `boolean \| ProgressOverlayOptions`                | —    | 2.8.0 起**默认开启**。`false` 完全关闭全屏进度遮罩；传选项对象可自定义文案、延迟与主题。Node/SSR 下为空操作。见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay) |
+| 字段         | 类型                                               | 必填 | 说明                                                                                                                                                                                                                                                                              |
+| ------------ | -------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sheets`     | `SheetConfig[]`                                    | 是   | 工作表配置，至少一个                                                                                                                                                                                                                                                              |
+| `filename`   | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                                                                                                                                                                                                                                       |
+| `mode`       | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`，按行数自动路由。该字段有枚举校验：传入其它值（如 `"Main"`）会以 `{ success: false }` 前置失败，而不是被静默当作 `auto`                                                                                                                                             |
+| `onProgress` | `(progress: number) => void`                       | —    | 0 → 1；首尾 0 与 1 由 `exportExcel` 在所有路径各上报一次（含流式兜底与最终失败的导出）；分段进度仅 stream 路径有（每 1000 行上报一次）                                                                                                                                            |
+| `onPhase`    | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时，在阶段**结束时**触发——上报规则见下文                                                                                                                                                                                                      |
+| `download`   | `boolean`                                          | —    | 默认 `true` 触发浏览器下载；`false` 只返回 Blob                                                                                                                                                                                                                                   |
+| `overlay`    | `boolean \| ProgressOverlayOptions`                | —    | 2.8.0 起**默认开启**。`false` 完全关闭全屏进度遮罩；传选项对象可定制——`delayMs`、`minVisibleMs`、`fadeOutMs`、`zIndex`、`container`、`blockInteraction`、`theme`、`text`（完整字段表见指南）。Node/SSR 下为空操作。见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay) |
+
+阶段上报规则（`onPhase`）：
+
+- **`init`**——WASM 初始化。主线程路径度量 `loader.ensureLoaded()`；worker 路径只在 worker 真正（重新）初始化时上报——已缓存的 WASM 实例不上报。主线程的无 WASM 流式路径上报零时长的 `init`，保持阶段序列稳定；浏览器的 worker-stream 路径（worker 内跑流引擎）则完全不上报 `init`。
+- **`build`**——工作簿构建。每次**主线程**构建尝试各上报一个 `build`（在 `finally` 里，即使该次尝试抛错也上报——降级链中每次主线程尝试各有一个）。在 worker **内部**失败的尝试不上报 `build`；其失败只通过主线程重试的阶段与报错体现。
+- **`download`**——同步的浏览器下载触发；仅当 `download !== false` **且**存在 `document` 时上报（Node 下永不上报）。
 
 ## ExportResult
 
-| 字段        | 类型            | 说明                         |
-| ----------- | --------------- | ---------------------------- |
-| `success`   | `boolean`       | 是否成功                     |
-| `blob?`     | `Blob`          | 导出文件内容                 |
-| `engine?`   | `"modern-xlsx"` | 实际使用的引擎               |
-| `mode?`     | `ExportMode`    | 实际使用的模式               |
-| `duration?` | `number`        | 完整导出耗时（ms）           |
-| `rowCount?` | `number`        | 导出行数                     |
-| `error?`    | `Error`         | 失败原因（兜底路径也会返回） |
+| 字段        | 类型            | 说明                                                                                                                                                                                     |
+| ----------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `success`   | `boolean`       | 是否成功                                                                                                                                                                                 |
+| `blob?`     | `Blob`          | 导出文件内容                                                                                                                                                                             |
+| `engine?`   | `"modern-xlsx"` | 实际使用的引擎                                                                                                                                                                           |
+| `mode?`     | `ExportMode`    | 实际使用的模式                                                                                                                                                                           |
+| `duration?` | `number`        | 完整导出耗时（ms）。主线程路径度量整次导出；worker 路径在主线程从调用 `exportInWorker` 起量（含 postMessage 前序列化与 worker 往返）直到 Blob 构建完成，因此**宽于** worker 内纯构建耗时 |
+| `rowCount?` | `number`        | 导出行数                                                                                                                                                                                 |
+| `error?`    | `Error`         | `success` 为 `false` 时的失败原因。**同时**——与 `success: true` 一起——也会在经无样式快速流兜底**成功**的导出上设置，内容为降级原因；请先看 `success`：仅有 `error` 不代表导出失败        |
 
 ## configureWasm
 
@@ -40,13 +46,13 @@ configureWasm(options: LoaderOptions): void
 
 可选——资产默认定位到随包发布的位置（见[安装与配置](/zh/packages/excel-exporter/guide/02-installation)）。仅自托管副本、CDN、或不支持资产 URL 的打包器需要覆盖。
 
-| 字段              | 默认值             | 说明                                                    |
-| ----------------- | ------------------ | ------------------------------------------------------- |
-| `wasmUrl`         | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                                 |
-| `workerUrl`       | 随包发布的 worker  | 覆盖为自托管 / CDN 副本                                 |
-| `timeoutMs`       | `10_000`           | 单次加载超时                                            |
-| `maxRetries`      | `3`                | 最大加载尝试次数（默认共 3 次含首次，退避 300ms/600ms） |
-| `workerTimeoutMs` | `120_000`          | Worker 导出超时                                         |
+| 字段              | 默认值             | 说明                                                                                       |
+| ----------------- | ------------------ | ------------------------------------------------------------------------------------------ |
+| `wasmUrl`         | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                                                                    |
+| `workerUrl`       | 随包发布的 worker  | 覆盖为**同源**自托管副本——跨域 URL 在 `Worker` 构造时即被浏览器拒绝，普通 CDN 在这里不可用 |
+| `timeoutMs`       | `10_000`           | 单次加载超时                                                                               |
+| `maxRetries`      | `3`                | 最大加载尝试次数（默认共 3 次含首次，退避 300ms/600ms）                                    |
+| `workerTimeoutMs` | `120_000`          | Worker 导出超时。必须保持 > 0——没有「禁用」取值：`0`/负数意味着「立即超时」而非「不超时」  |
 
 ## 其他导出符号
 
@@ -62,16 +68,17 @@ configureWasm(options: LoaderOptions): void
 
 ### 样式与格式化工具
 
-| 导出                                                           | 签名                                                     | 说明                                                                                                  |
-| -------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `StylePresets` / `StylePresetName`                             | `StylePresets` 对象；类型名是它的键联合                  | 共 8 个预设：`header` `currency` `percent` `date` `datetime` `dataRow` `bordered` `danger`            |
-| `BaseCellStyle`                                                | `CellStyle`（已冻结）                                    | 库级基底样式，所有单元格样式都铺在它之上（见[样式指南](/zh/packages/excel-exporter/guide/05-styles)） |
-| `applyFormat(value, spec)`                                     | `(value: unknown, spec: FormatSpec) => string \| number` | 对单个值应用 `FormatSpec`                                                                             |
-| `numFormatForSpec(spec)`                                       | `(spec: FormatSpec) => string \| null`                   | 某个 `FormatSpec` 解析出的 Excel 数字格式代码                                                         |
-| `formatDateByPattern(value, pattern)`                          | `(value: unknown, pattern: string) => string`            | 按显式 pattern 格式化日期 / 日期时间                                                                  |
-| `displayValue(col, row)` / `resolveCellFormat(col, row)`       | `(col: ColumnConfig, row: Record<string, unknown>) => …` | 导出器写进单元格的值、以及解析出的格式——可复用于自研预览或导出前预检                                  |
-| `validateSheetName(name)` / `validateMerges(sheet, leafCount)` | 返回 `void`，非法输入抛错                                | `exportExcel` 自身执行的前置校验；可在不导出的情况下预检输入                                          |
-| `DEFAULT_DATE_PATTERN` / `DEFAULT_DATETIME_PATTERN`            | `"yyyy-MM-dd"` / `"yyyy-MM-dd HH:mm"`                    | 未显式给 `pattern` 时 `{ type: "date" }` / `{ type: "datetime" }` 的回退格式                          |
+| 导出                                                           | 签名                                                     | 说明                                                                                                                                                                |
+| -------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `StylePresets` / `StylePresetName`                             | `StylePresets` 对象；类型名是它的键联合                  | 共 8 个预设：`header` `currency` `percent` `date` `datetime` `dataRow` `bordered` `danger`                                                                          |
+| `BaseCellStyle`                                                | `CellStyle`（已冻结）                                    | 库级基底样式，所有单元格样式都铺在它之上（见[样式指南](/zh/packages/excel-exporter/guide/05-styles)）                                                               |
+| `applyFormat(value, spec)`                                     | `(value: unknown, spec: FormatSpec) => string \| number` | 对单个值应用 `FormatSpec`                                                                                                                                           |
+| `toStr(value)`                                                 | `(value: unknown) => string`                             | 导出器自己用于未格式化单元格的值字符串化：对象 → JSON（循环引用与怪异 `toJSON` 兜底为 `String()`）、`null`/`undefined` → `""`、Date → ISO、bigint/布尔 → `String()` |
+| `numFormatForSpec(spec)`                                       | `(spec: FormatSpec) => string \| null`                   | 某个 `FormatSpec` 解析出的 Excel 数字格式代码                                                                                                                       |
+| `formatDateByPattern(value, pattern)`                          | `(value: unknown, pattern: string) => string`            | 按显式 pattern 格式化日期 / 日期时间                                                                                                                                |
+| `displayValue(col, row)` / `resolveCellFormat(col, row)`       | `(col: ColumnConfig, row: Record<string, unknown>) => …` | 导出器写进单元格的值、以及解析出的格式——可复用于自研预览或导出前预检                                                                                                |
+| `validateSheetName(name)` / `validateMerges(sheet, leafCount)` | 返回 `void`，非法输入抛错                                | `exportExcel` 自身执行的前置校验；可在不导出的情况下预检输入                                                                                                        |
+| `DEFAULT_DATE_PATTERN` / `DEFAULT_DATETIME_PATTERN`            | `"yyyy-MM-dd"` / `"yyyy-MM-dd HH:mm"`                    | 未显式给 `pattern` 时 `{ type: "date" }` / `{ type: "datetime" }` 的回退格式                                                                                        |
 
 ### WASM 加载器
 

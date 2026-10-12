@@ -259,7 +259,7 @@ These are refused with an explicit error instead of producing a misleading table
 
 The dual-axis rejection is deliberate: with two axes there is no single table shape, and silently taking the first axis would report the other axis's series as a baffling length mismatch.
 
-Note that the category-layout datum rule still allows a _scalar_ datum, including a one-element array such as `[5]` (only an all-number array of length ≥ 2 counts as a coordinate pair). The reliable rule of thumb is: under a category axis, series data must be flat scalars.
+Note that the category-layout datum rule accepts **scalars only** (`number`, `string`, `null`). Any array is rejected — including the one-element `[5]` spelling ECharts bar charts commonly use (only an all-number array of length ≥ 2 counts as a coordinate pair, and under a category axis that is rejected as well rather than read as a scalar). Flatten `[5]`-style data to `5` before exporting. The reliable rule of thumb is: under a category axis, series data must be flat scalars.
 
 ### layout: wide vs long
 
@@ -359,4 +359,4 @@ result.error; // Error: [excel-exporter] ECharts dataset mode is not supported .
 
 This matches `exportExcel`, which already reports its own failures as `{ success: false, error }`: the conversion errors simply happen _before_ `exportExcel` is reached, so the wrappers catch them and wrap them in the same shape. The same bad input therefore fails identically whether it arrives through a convenience wrapper or through a hand-built `ExportOptions`.
 
-Note that `success: false` also covers the fallback path — check `result.error` (and `result.engine` / `result.mode`) rather than assuming a particular engine was used. See [ExportResult](/packages/excel-exporter/api/01-export-excel#exportresult).
+Note that `result.error` alone is not proof of failure: an export that succeeded via the style-less stream fallback returns `success: true` **with** an `error` carrying the degradation reason (e.g. `Fallback: styles stripped (fast stream)`), so degradation can be monitored programmatically. Check `success` first; then read `error` / `engine` / `mode` to learn how the file was actually produced rather than assuming a particular route. See [ExportResult](/packages/excel-exporter/api/01-export-excel#exportresult).

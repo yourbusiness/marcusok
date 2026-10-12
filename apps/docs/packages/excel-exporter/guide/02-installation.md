@@ -29,15 +29,20 @@ Resolution order:
 
 ### Optional: `configureWasm`
 
-An escape hatch for setups where the defaults cannot work — self-hosted copies on a CDN, Service Worker environments, bundlers without asset-URL support, or load-timeout tuning:
+An escape hatch for setups where the defaults cannot work — self-hosted copies (a CDN for the WASM binary, your own origin for the worker), Service Worker environments, bundlers without asset-URL support, or load-timeout tuning:
 
 ```ts
 import { configureWasm } from "@marcusok/excel-exporter";
 
 configureWasm({
   // Both optional; set only what you want to override.
+  // The WASM binary may come from anywhere — same origin or a plain CDN.
   wasmUrl: "https://cdn.example.com/modern-xlsx.wasm",
-  workerUrl: "https://cdn.example.com/export.worker.js",
+  // The worker script must be SAME-ORIGIN: a browser rejects a cross-origin
+  // worker script at Worker construction, so a raw CDN URL here never loads —
+  // worker exports fall back to the main-thread routes with console warnings.
+  // Serve it from your own origin (a local copy or a reverse proxy).
+  workerUrl: "/assets/export.worker.js",
 });
 ```
 
@@ -51,15 +56,17 @@ configureWasm({ wasmUrl, workerUrl });
 
 > Before 3.0, the canonical wasm path was `@marcusok/xlsx-core/dist/modern-xlsx.wasm` (the engine shipped as a separate package). That package is no longer published; the binary now ships with this package and the path above is the canonical one.
 
-| Option            | Type            | Default                 | Description                                                            |
-| ----------------- | --------------- | ----------------------- | ---------------------------------------------------------------------- |
-| `wasmUrl`         | `string \| URL` | the shipped `.wasm`     | Override for a self-hosted / CDN copy                                  |
-| `workerUrl`       | `string \| URL` | the shipped worker file | Override for a self-hosted / CDN copy                                  |
-| `timeoutMs`       | `number`        | `10_000`                | Per-attempt load timeout                                               |
-| `maxRetries`      | `number`        | `3`                     | Max attempts; failed attempts wait 300ms, then 600ms                   |
-| `workerTimeoutMs` | `number`        | `120_000`               | Worker export timeout; a timed-out export terminates the shared worker |
+| Option            | Type            | Default                 | Description                                                                                                                                                                  |
+| ----------------- | --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wasmUrl`         | `string \| URL` | the shipped `.wasm`     | Override for a self-hosted / CDN copy                                                                                                                                        |
+| `workerUrl`       | `string \| URL` | the shipped worker file | Override for a **same-origin** self-hosted copy — a cross-origin URL is rejected at `Worker` construction, so a plain CDN does not work here                                 |
+| `timeoutMs`       | `number`        | `10_000`                | Per-attempt load timeout                                                                                                                                                     |
+| `maxRetries`      | `number`        | `3`                     | Max attempts; failed attempts wait 300ms, then 600ms                                                                                                                         |
+| `workerTimeoutMs` | `number`        | `120_000`               | Worker export timeout; a timed-out export terminates the shared worker. Keep it > 0 — there is no disable value: `0`/negative means "time out immediately", not "no timeout" |
 
 `configureWasm` merges options: only a changed `wasmUrl` resets an already-loaded (or mid-load) WASM instance; changing timeouts/retries alone never causes re-initialization. If a previous load failed (error state), any `configureWasm` call clears the error so the next export retries with the new settings.
+
+> A URL change does **not** hot-swap an already-running instance. After a _successful_ WASM load, the new `wasmUrl` takes effect only in a fresh JS realm (a page reload, or a worker created after `terminateWorker()` — modern-xlsx's `initWasm` is idempotent and the first successful init wins); a console warning is printed when this applies. `workerUrl` is analogous: the shared Worker reads its script URL once at creation, so a later change only reaches a worker created after `terminateWorker()` (a warning is printed on any `workerUrl` change).
 
 ### Vite dev server: pre-bundling caveat
 

@@ -89,8 +89,11 @@ Both default to `new URL(<file>, import.meta.url)` relative to the package entry
 import { configureWasm } from "@marcusok/excel-exporter";
 configureWasm({
   // Both optional; set only what you want to override.
+  // The WASM binary may come from anywhere — same origin or a plain CDN.
   wasmUrl: "https://cdn.example.com/modern-xlsx.wasm",
-  workerUrl: "https://cdn.example.com/export.worker.js",
+  // The worker script must be SAME-ORIGIN (see the note below) — serve it
+  // from your own origin (a local copy or a reverse proxy).
+  workerUrl: "/assets/export.worker.js",
 });
 ```
 
@@ -139,7 +142,7 @@ columns: [
 
 Multi-level headers and merges (including header merges) work on all routes — main / worker / stream (including the style-less stream fallback). The stream path preserves merges but does not support styles.
 
-Invalid input fails identically on every route with `{ success: false, error }` instead of a corrupt workbook: `merges` must be integers (`row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1) staying within the data area and not overlapping each other; sheet names must be unique across `sheets`; `NaN`/`Infinity` in unformatted numeric columns are written as visible strings (illegal XML numbers would corrupt the file). Values are normalized identically on every route: without a `format`, plain objects are written as JSON strings, `Date`s as ISO strings and bigints as decimal strings, so a dataset crossing the 50k-row threshold keeps the same cell content.
+Invalid input fails identically on every route with `{ success: false, error }` instead of a corrupt workbook: `merges` must be integers (`row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1) staying within the data area and not overlapping each other; sheet names must be unique across `sheets` — **case-insensitively**, matching Excel's own rule (`Sheet1` and `SHEET1` clash); `NaN`/`Infinity` in unformatted numeric columns are written as visible strings (illegal XML numbers would corrupt the file). Values are normalized identically on every route: without a `format`, plain objects are written as JSON strings, `Date`s as ISO strings and bigints as decimal strings, so a dataset crossing the 50k-row threshold keeps the same cell content.
 
 ### Auto Routing
 
@@ -211,7 +214,7 @@ Number-spec cross-path notes (see `ColumnConfig.format` in [`src/types.ts`](./sr
 
 - Set `decimals` explicitly: the Workbook path stores full precision and renders decimals via `numFormat`, while the stream path (>= 50,000 rows / degraded exports) bakes decimals into the stored value.
 - `thousands: true` renders separators only on the Workbook path (`#,##0` numFormat). The stream path keeps the cell a number, so separators are not visible there — baking them into the value would turn data cells into text.
-- `null`/`undefined` values (and blank/whitespace-only strings — the most common missing-value shape from databases, forms and CSV imports; `Number("") === 0` would silently turn them into a meaningful `0`) render as empty cells on every path (never `0`). `padding` treats them the same way (empty cell, not a padded `"00000"`).
+- `null`/`undefined` values (and blank/whitespace-only strings — the most common missing-value shape from databases, forms and CSV imports; `Number("") === 0` would silently turn them into a meaningful `0`) render as empty cells on every path (never `0`). `padding` treats them the same way (empty cell, not a padded `"00000"`), and so does `enum`: an empty cell, never the `fallback` — missing values never reach `map`/`fallback` at all.
 
 ### Fallback
 
@@ -241,7 +244,7 @@ The overlay appends to (never replaces) your existing `onProgress` / `onPhase` c
 
 - `exportExcel(options)` — unified entry with auto routing.
 - `configureWasm(opts)` — optional overrides for `wasmUrl`/`workerUrl`/`timeoutMs`/`maxRetries`/`workerTimeoutMs` (see [How assets resolve](#how-assets-resolve-zero-configuration)). Note: changing `wasmUrl` after a _successful_ load does not reload WASM on a thread that already initialized it (modern-xlsx's `initWasm` is idempotent — first successful init wins); the new URL takes effect only in a fresh JS realm (page reload / a worker created after `terminateWorker()`), and a console warning is printed when this applies. Changing `workerUrl` has the analogous limitation: the shared Worker reads its script URL once at creation, so a later change only reaches a worker created after `terminateWorker()` (a warning is printed on any `workerUrl` change).
-- `onPhase(phase, durationMs)` (an `exportExcel` option) — per-phase timing callback: `init` (WASM init) / `build` (workbook build) / `download` (trigger download); reports elapsed milliseconds per phase — note that each real build attempt reports its own `build` phase, so a degradation chain (failed worker build → main-thread retry → stream fallback) reports one `build` per attempt (see `ExportPhase` in [`src/types.ts`](./src/types.ts)). Does not affect the `duration` in the returned result.
+- `onPhase(phase, durationMs)` (an `exportExcel` option) — per-phase timing callback: `init` (WASM init) / `build` (workbook build) / `download` (trigger download); reports elapsed milliseconds per phase — note that each **main-thread** build attempt reports its own `build` phase, so a degradation chain (failed worker build → main-thread retry → stream fallback) reports one `build` per main-thread attempt, while an attempt that fails _inside the worker_ reports no `build` at all (its failure surfaces through the retry) (see `ExportPhase` in [`src/types.ts`](./src/types.ts)). Does not affect the `duration` in the returned result.
 - `WorkbookBuilder` — batch builder (<50k rows, full styling). Does not expand `SheetConfig.indexColumn`; call `applyIndexColumn(sheet)` first.
 - `exportAsStream(sheets, onProgress?)` — large-file export (>=50k rows). Same caveat as `WorkbookBuilder` for `indexColumn`.
 - `applyIndexColumn(sheet)` / `INDEX_PROP` — expand `indexColumn` into the leading `__index__` column yourself (what `exportExcel` does internally), and the reserved prop name, for callers driving the two low-level entry points above.

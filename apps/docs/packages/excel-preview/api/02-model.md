@@ -30,7 +30,7 @@ interface PreviewRow {
   index: number; // 1-based
   height: number | null; // pt; null → default (15pt)
   hidden: boolean;
-  cells: PreviewCell[]; // sparse by column, ordered by col
+  cells: PreviewCell[]; // sparse by column; ascending col in practice (engine output order — the parse layer sorts rows but not cells, so do not rely on the order)
 }
 
 interface PreviewCell {
@@ -164,7 +164,7 @@ type PreviewFill =
 
 Gradient details worth knowing when re-implementing:
 
-- `position` is `0..1`. The parser fills in missing positions with an even spread (`i / (n - 1)`) and sorts the stops by position; a stop with no resolvable color falls back to `#000000`.
+- `position` is `0..1`. The parser fills in missing positions with an even spread (`i / (n - 1)`, with the single-stop case pinned to `0`) and sorts the stops by position; a stop with no resolvable color falls back to `#000000`.
 - `degree` follows ECMA-376: `0` = left→right, `90` = top→bottom. CSS `0deg` points up and `90deg` points right, hence the `+ 90` shift.
 - Gradient fills and diagonal borders both have to be emitted as `background-image`. Two separate declarations do not stack — the later one wins — so they must be combined into one comma-separated multi-layer declaration (diagonal on top).
 
@@ -201,7 +201,7 @@ CSS has no native diagonal, so `diagonal` is drawn as a thin linear-gradient lay
 
 ### Alignment (`PreviewXf.alignment`)
 
-The type is `AlignmentData | null`, re-exported unchanged from the bundled engine layer (the parser does not re-declare it). `null` means the file set no alignment, so the renderer's by-type General rule applies. The engine type declares six fields, but **the renderer consumes five of them**:
+The type is `AlignmentData | null` — the bundled engine layer's alignment struct, referenced as-is (the parser does not re-declare it; the field list is below). It is **not exported from this package**: `import type { AlignmentData } from "@marcusok/excel-preview"` does not resolve, so type the field from the table below when you need it in your own code. `null` means the file set no alignment, so the renderer's by-type General rule applies. The engine type declares six fields, but **the renderer consumes five of them**:
 
 | Field          | Type                                                                                                               | Consumed | Renderer behavior                                                                                                                                                                                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -281,11 +281,12 @@ Assuming you build your own DOM from this model, these are the properties that b
 
 1. **The model is sparse in both directions.** `rows` holds only rows that have content, a custom height or a hidden flag; `cells` holds only columns that have a value or a style. Iterate using the `index` / `col` fields, never an array position — rows are sorted by `index`, but the gaps are real.
 2. **Absent is not the same as "empty but styled".** A missing `(row, col)` pair is a blank cell with the default style: draw your grid background and grid lines, not a default-styled content box. A cell present with `value: null` is a formatted empty cell and must still render its fill and borders.
-3. **`rowCount` / `colCount` size the grid, not the arrays.** They include the extent of merges and `<col>` spans (see **Bounds** above), so they are the only correct source for the scrollable extent.
-4. **Numbers are strings.** Convert with `Number(value)`; never re-parse a display string. Keeping the raw string is what preserves precision that a `Number` round-trip could lose on the way out of the file.
-5. **Colors are already resolved CSS strings.** Use them verbatim — `#rrggbb` for explicit RGB, `rgba(...)` for themed colors carrying a tint. `null` means automatic: black for fonts and borders, nothing painted for fills.
-6. **`styleIndex: null` means the default style**, not `xfs[0]`. Skip the class and the xf lookup entirely, and format with `"General"`.
-7. **Compile styles once per workbook, not per cell.** The built-in renderer emits one CSS class per xf index and gives each cell just its class name; per-cell inline style objects would be recomputed on every virtual-scroll rebuild, while a class lookup is free and cacheable by the browser. Only the format-code color (from `FormattedValue.color`) needs an inline style.
-8. **Skip the cells a merge covers.** A merge is one entry anchored at its top-left; the covered pairs are absent from `rows`. Render the anchor box at the merged size (the sum of the spanned column widths and row heights) and let it cover the interior — including anchors whose top-left is just outside the viewport, so that a merged block crossing the viewport is drawn whole.
-9. **Hidden rows and columns keep their slot with size 0.** They still occupy their index in the coordinate space; dropping them from your prefix sums shifts every following row or column. A `<col hidden>` is a column of width 0, not a missing column.
-10. **Treat the model as read-only.** It arrives by structured clone from the worker and may be reused across renders; build your own lookup structures (for example a `Map` keyed by `row:col`) instead of mutating it.
+3. **Text spills over empty neighbours, like Excel.** A `string` / `formulaStr` value whose text exceeds the cell width overflows to the right until the first in-row blocker: a cell with content (`value` other than `null` / `""` — a style-only blank does **not** block, matching Excel where formatting alone never stops an overflow) or a column covered by a merge. The built-in renderer keeps the cell box at its own width (fills and borders do not leak) and clips the text with a `max-width` span; the spill also ends at the edge of the rendered range when no blocker is nearby, and rotated cells never spill. A custom renderer that clips everything to the cell box will look visibly tighter than Excel.
+4. **`rowCount` / `colCount` size the grid, not the arrays.** They include the extent of merges and `<col>` spans (see **Bounds** above), so they are the only correct source for the scrollable extent.
+5. **Numbers are strings.** Convert with `Number(value)`; never re-parse a display string. Keeping the raw string is what preserves precision that a `Number` round-trip could lose on the way out of the file.
+6. **Colors are already resolved CSS strings.** Use them verbatim — `#rrggbb` for explicit RGB, `rgba(...)` for themed colors carrying a tint. `null` means automatic: black for fonts and borders, nothing painted for fills.
+7. **`styleIndex: null` means the default style**, not `xfs[0]`. Skip the class and the xf lookup entirely, and format with `"General"`.
+8. **Compile styles once per workbook, not per cell.** The built-in renderer emits one CSS class per xf index and gives each cell just its class name; per-cell inline style objects would be recomputed on every virtual-scroll rebuild, while a class lookup is free and cacheable by the browser. Only the format-code color (from `FormattedValue.color`) needs an inline style.
+9. **Skip the cells a merge covers.** A merge is one entry anchored at its top-left; the covered pairs are absent from `rows`. Render the anchor box at the merged size (the sum of the spanned column widths and row heights) and let it cover the interior — including anchors whose top-left is just outside the viewport, so that a merged block crossing the viewport is drawn whole.
+10. **Hidden rows and columns keep their slot with size 0.** They still occupy their index in the coordinate space; dropping them from your prefix sums shifts every following row or column. A `<col hidden>` is a column of width 0, not a missing column.
+11. **Treat the model as read-only.** It arrives by structured clone from the worker and may be reused across renders; build your own lookup structures (for example a `Map` keyed by `row:col`) instead of mutating it.

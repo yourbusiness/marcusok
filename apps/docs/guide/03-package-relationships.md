@@ -9,7 +9,7 @@ The ecosystem publishes two packages across two categories (see [Ecosystem](/gui
 | [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | Data → `.xlsx` download: styling, formatting, worker/stream routing, fallbacks      | `modern-xlsx` (types only; the engine itself is bundled) |
 | [`@marcusok/excel-preview`](/packages/excel-preview/)   | Preview  | Read-only `.xlsx` / `.xlsm` / `.csv` rendering with worker parsing + virtual scroll | `modern-xlsx` (types only; the engine itself is bundled) |
 
-Each package is self-contained at runtime. The two capability layers they are built on — the modern-xlsx engine layer (internally `xlsx-core`, WASM loader plus a stable re-export surface) and the progress overlay UI (internally `progress-overlay`) — are **private workspace packages**: they are bundled into the business packages' `dist` at build time and are not published to npm. There is nothing to install beyond the package you use, and no shared-package versions to reconcile.
+Each package is self-contained at runtime. The two capability layers they are built on — the modern-xlsx engine layer (internally `xlsx-core`, WASM loader plus a stable re-export surface) and the progress overlay UI (internally `progress-overlay`) — are **private workspace packages**: they are bundled into the business packages' `dist` at build time (the engine layer into both packages, the overlay into the exporter only — see the table below) and are not published to npm. There is nothing to install beyond the package you use, and no shared-package versions to reconcile.
 
 Two consequences worth internalizing:
 
@@ -65,7 +65,7 @@ The engine integration — WASM loading (browser fetch / Node sync-init, timeout
 
 - Since **2.8.0**, every export shows the overlay by default. No extra import, no wrapper function.
 - The `overlay` field is declared on `ExportOptions` and has three states — omitted/`true` (default export texts), `false` (fully off: nothing mounted, no extra frame yielded), or an options object (customize texts, `delayMs`, theme, …). All three, including the merge semantics for custom texts, are documented in [Progress Overlay](/packages/excel-exporter/guide/11-overlay#option-values) — this page does not repeat them.
-- **The field exists on `ExportOptions` only.** `TableExportOptions` and `EChartsExportOptions` do not declare it, and their converters do not forward it, so the two convenience wrappers cannot customize or disable the overlay: it runs with its default (on) for them, and the main entry is the way to opt out. See [Table & ECharts → Relationship with exportExcel](/packages/excel-exporter/api/05-table-and-echarts#relationship-with-exportexcel).
+- **The field works on every entry.** Since 3.0.3, `TableExportOptions` and `EChartsExportOptions` declare `overlay` too, and both converters forward it to `exportExcel` — all three entries customize or disable the overlay identically. See [Table & ECharts → Relationship with exportExcel](/packages/excel-exporter/api/05-table-and-echarts#relationship-with-exportexcel).
 - **Driving the overlay for non-Excel work.** The overlay is bundled into the exporter, so the public path is the `@marcusok/excel-exporter/overlay` subpath — it exports `showExportOverlay` (the generic overlay entry, Excel-agnostic) plus the handle types. The docs pattern is in [Overlay → Driving the overlay yourself](/packages/excel-exporter/guide/11-overlay#driving-the-overlay-yourself).
 
 ## Versions, releases and compatibility

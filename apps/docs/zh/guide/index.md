@@ -9,7 +9,7 @@
 | [`@marcusok/excel-exporter`](/zh/packages/excel-exporter/) | 导出 | stable | Excel 导出核心库：modern-xlsx + Fast stream、完整样式、Worker 多线程、快速写入、流式降级兜底 |
 | [`@marcusok/excel-preview`](/zh/packages/excel-preview/)   | 预览 | stable | xlsx 只读预览：Worker 解析 + 虚拟滚动，样式/合并/冻结/数字格式还原                           |
 
-仓库里还有两个**私有内部包**作为能力层——modern-xlsx 引擎层（`xlsx-core`：WASM 加载、资产分发、稳定再导出）与进度遮罩 UI（`progress-overlay`，导出包 `overlay` 选项的底层）。它们在构建期整体打进发布包的 `dist`，有意不发布到 npm：安装业务包即得全部能力。
+仓库里还有两个**私有内部包**作为能力层——modern-xlsx 引擎层（`xlsx-core`：WASM 加载、资产分发、稳定再导出）与进度遮罩 UI（`progress-overlay`，导出包 `overlay` 选项的底层）。它们在构建期打进业务包的 `dist`（引擎层打进两个包，遮罩只打进导出包），有意不发布到 npm：安装业务包即得全部能力。
 
 ## 工程约定
 
@@ -32,4 +32,4 @@
 
 两个已发布包都已收录到本站，因此[首页统计的包数量](/zh/guide/#当前包)与上表一致。至于某个任务该用哪个包、它们各自内置了什么，见[包关系与选型](/zh/guide/03-package-relationships)。
 
-新包发布后，只需在文档站 `apps/docs/.vitepress/registry.ts` 登记一条记录（含所属分类：`export` / `preview` / `shared`）并补充对应文档，即可自动出现在本站在线文档中。
+新包发布后，三步即可上文档站：先把包加进 `apps/docs/package.json` 依赖（registry 会 import 各包的 `package.json` 取版本号——缺依赖会直接构建失败），再在 `apps/docs/packages/<目录>/` 下建文档页，最后在 `apps/docs/.vitepress/registry.ts` 登记一条记录（含所属分类：`export` / `preview` / `shared`）——之后它会自动出现在导航、侧边栏与首页卡片中。

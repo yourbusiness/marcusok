@@ -2,17 +2,17 @@
 
 ## SheetConfig
 
-| Field          | Type                            | Required | Description                                                                                              |
-| -------------- | ------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| `name`         | `string`                        | yes      | Non-empty, ≤ 31 chars, no `: \ / ? * [ ]`, no leading/trailing apostrophe                                |
-| `columns`      | `ColumnConfig[]`                | yes      | Column definitions                                                                                       |
-| `data`         | `Record<string, unknown>[]`     | yes      | Row data                                                                                                 |
-| `headerStyle?` | `CellStyle`                     | —        | Default header style; overridden by column-level `headerStyle`                                           |
-| `dataStyle?`   | `CellStyle`                     | —        | Base style for every data cell; column `style` deep-merges over it field by field (see the Styles guide) |
-| `indexColumn?` | `boolean \| IndexColumnOptions` | —        | Inject a leading row-number column; `true` = all defaults. Merges shift right automatically              |
-| `freezeRows?`  | `number`                        | —        | Freeze the first N header rows; validated as a non-negative integer                                      |
-| `merges?`      | `MergeRange[]`                  | —        | Merged cells (relative to the data area)                                                                 |
-| `autoFilter?`  | `boolean`                       | —        | Header auto filter                                                                                       |
+| Field          | Type                            | Required | Description                                                                                                                                                                                     |
+| -------------- | ------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`         | `string`                        | yes      | Non-empty, ≤ 31 chars, no `: \ / ? * [ ]`, no leading/trailing apostrophe. Uniqueness across `sheets` is **case-insensitive** (Excel's own rule — `Sheet1` and `SHEET1` clash and are rejected) |
+| `columns`      | `ColumnConfig[]`                | yes      | Column definitions                                                                                                                                                                              |
+| `data`         | `Record<string, unknown>[]`     | yes      | Row data                                                                                                                                                                                        |
+| `headerStyle?` | `CellStyle`                     | —        | Default header style; overridden by column-level `headerStyle`                                                                                                                                  |
+| `dataStyle?`   | `CellStyle`                     | —        | Base style for every data cell; column `style` deep-merges over it field by field (see the Styles guide)                                                                                        |
+| `indexColumn?` | `boolean \| IndexColumnOptions` | —        | Inject a leading row-number column; `true` = all defaults. Merges shift right automatically                                                                                                     |
+| `freezeRows?`  | `number`                        | —        | Freeze the first N header rows; validated as a non-negative integer                                                                                                                             |
+| `merges?`      | `MergeRange[]`                  | —        | Merged cells (relative to the data area)                                                                                                                                                        |
+| `autoFilter?`  | `boolean`                       | —        | Header auto filter                                                                                                                                                                              |
 
 ## ColumnConfig
 
@@ -55,6 +55,8 @@ The index column's values are generated from the row number and never read from 
 | `rowspan` | `number` | Row span                        |
 | `colspan` | `number` | Column span                     |
 
+Validation runs up front, identically on every path, with a message naming the offending merge: all four values must be integers; `row`/`col` ≥ 0 and `rowspan`/`colspan` ≥ 1; `col + colspan` must not exceed the sheet's leaf-column count and `row + rowspan` must not exceed its data-row count (header rows live outside this coordinate space); ranges must not overlap each other (they sit entirely below the header block, so they cannot collide with the generated header merges). A non-array `merges` is rejected as well.
+
 ## CellStyle
 
 | Field        | Type                                                   | Description                                                                      |
@@ -64,6 +66,8 @@ The index column's values are generated from the row number and never read from 
 | `alignment?` | `{ horizontal?, vertical?, wrapText?, textRotation? }` | Alignment (textRotation 0–180)                                                   |
 | `border?`    | `{ top?, bottom?, left?, right? }`                     | Borders, each `{ style: BorderStyle, color? }` — see [BorderStyle](#borderstyle) |
 | `numFormat?` | `string`                                               | Excel number format code                                                         |
+
+Style fields are validated up front — an invalid value fails the export with `{ success: false }` and a field-specific message (naming the sheet/column) instead of surfacing later as an opaque engine error or a degraded export: colors must be 6-digit RGB hex (`"FF0000"`; `"red"` and `"#FF0000"` are both rejected), `border.*.style` must be one of the `BorderStyle` names above, `font.size` a finite positive number, and `alignment.textRotation` an **integer** in 0–180 (`45.5` is rejected, not rounded). The checks cover sheet-level, column-level (group columns' ignored styles included) and `indexColumn` styles alike.
 
 ## BorderStyle
 
