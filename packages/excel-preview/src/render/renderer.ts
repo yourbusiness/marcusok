@@ -226,9 +226,14 @@ export class SheetRenderer {
     );
 
     if (typeof ResizeObserver !== "undefined") {
-      this.ro = new ResizeObserver(() => this.updateOverlays(true));
-      this.ro.observe(this.viewport);
-      this.destroyFns.push(() => this.ro?.disconnect());
+      // 重复 render（同实例换文件/重建渲染）时先断开上一个 RO：它观察的
+      // viewport 已被本方法拆下，不断开则持续持有游离节点直到 destroy。
+      this.ro?.disconnect();
+      // 断开闭包捕获局部实例而非 this.ro——后者在 destroy 时只断得掉最新一个。
+      const ro = new ResizeObserver(() => this.updateOverlays(true));
+      this.ro = ro;
+      ro.observe(this.viewport);
+      this.destroyFns.push(() => ro.disconnect());
     }
   }
 

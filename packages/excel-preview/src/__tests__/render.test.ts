@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SheetRenderer } from "../render/renderer";
 import {
   buildLayout,
@@ -353,6 +353,39 @@ describe("SheetRenderer", () => {
       document.body.contains(container.querySelector(".xpv-root") as Node),
     ).toBe(false);
     expect(document.querySelectorAll("style").length).toBe(0);
+  });
+
+  it("重复 render：旧 viewport 的 ResizeObserver 立即断开，不累积泄漏", async () => {
+    // buildDom 每次 render 重建 viewport 并新建 RO；旧 RO 若不断开，会持续
+    // 观察已拆下的旧节点直到 destroy——同实例反复 render（换文件/重建渲染）
+    // 一次泄漏一个 RO。
+    const instances: { disconnected: boolean }[] = [];
+    class FakeRO {
+      disconnected = false;
+      constructor(_cb: ResizeObserverCallback) {
+        instances.push(this);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {
+        this.disconnected = true;
+      }
+    }
+    vi.stubGlobal("ResizeObserver", FakeRO);
+    const r = new SheetRenderer(container);
+    try {
+      const model = await parse(sampleWorkbookBytes());
+      r.render(model, {});
+      r.render(model, {});
+      expect(instances.length).toBe(2);
+      expect(instances[0].disconnected).toBe(true);
+      expect(instances[1].disconnected).toBe(false);
+      r.destroy();
+      expect(instances[1].disconnected).toBe(true);
+    } finally {
+      r.destroy(); // 幂等：断言失败也不把 style 元素泄漏给后续测试
+      vi.unstubAllGlobals();
+    }
   });
 
   it("虚拟滚动窗口收敛（大文件不全量渲染）", async () => {
