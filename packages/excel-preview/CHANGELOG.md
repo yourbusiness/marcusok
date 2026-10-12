@@ -1,5 +1,11 @@
 # @marcusok/excel-preview
 
+## 2.0.7
+
+### Patch Changes
+
+- b971c17: Include CHANGELOG.md in the published npm package (files allowlist), matching @marcusok/excel-exporter so the changelog is readable on npm alongside the README.
+
 ## 2.0.6
 
 ### Patch Changes
