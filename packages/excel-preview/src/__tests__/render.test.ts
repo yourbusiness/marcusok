@@ -468,6 +468,52 @@ describe("SheetRenderer", () => {
     r.destroy();
   });
 
+  it("仅有样式的空格不阻挡文本溢出（Excel 截断只认有内容的格）", async () => {
+    // A 列长文本；B/C 为无值格子（B 带样式、C 空串），D 才有内容。Excel
+    // 语义：空单元格即使带格式也不截断溢出，上限应到 D 前缘（64×3）——
+    // 旧实现的阻挡判定用 rowMap.has(c)，把"仅有样式的空格"也算作 blocker，
+    // 上限被错误封到 B 前缘（64px）
+    const model = await parse(sampleWorkbookBytes());
+    model.sheets[0] = {
+      ...model.sheets[0],
+      rows: [
+        {
+          index: 1,
+          height: null,
+          hidden: false,
+          cells: [
+            {
+              col: 0,
+              type: "string",
+              value: "很长的溢出文本".repeat(6),
+              styleIndex: null,
+            },
+            // 仅有样式的空格（value null）与空串格：都不算有内容
+            { col: 1, type: "string", value: null, styleIndex: 0 },
+            { col: 2, type: "string", value: "", styleIndex: 0 },
+            { col: 3, type: "string", value: "blocker", styleIndex: null },
+          ],
+        },
+      ],
+      colSpans: [],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+    };
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const a1 = [...container.querySelectorAll(".xpv-cell")].find((c) =>
+      c.textContent?.includes("溢出"),
+    ) as HTMLElement;
+    expect(a1).toBeTruthy();
+    expect(a1.classList.contains("xpv-spill")).toBe(true);
+    const span = a1.querySelector("span") as HTMLElement;
+    const l = buildLayout(model.sheets[0]);
+    expect(span.style.maxWidth).toBe(`${l.colLeft[3] - l.colLeft[0]}px`);
+    expect(l.colLeft[3] - l.colLeft[0]).toBe(192); // 64×3，构造自检
+    r.destroy();
+  });
+
   it("冻结窗格分层存在", async () => {
     const model = await parse(sampleWorkbookBytes());
     const r = new SheetRenderer(container);

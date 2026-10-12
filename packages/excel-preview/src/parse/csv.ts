@@ -122,7 +122,9 @@ function decodeBytes(bytes: Uint8Array): string {
 function csvCellType(v: string): { type: "number" | "string"; value: string } {
   if (v === "") return { type: "string", value: "" };
   const n = Number(v);
-  if (Number.isFinite(n) && /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(v.trim())) {
+  // \.\d* 而非 \.\d+：尾点数字（"123."）在 Excel 中即数字 123，点后
+  // 允许无数字；前点（".5"）与多段数字（"1.2.3"）仍不匹配，留在文本类
+  if (Number.isFinite(n) && /^-?\d+(\.\d*)?([eE][+-]?\d+)?$/.test(v.trim())) {
     return { type: "number", value: v.trim() };
   }
   return { type: "string", value: v };

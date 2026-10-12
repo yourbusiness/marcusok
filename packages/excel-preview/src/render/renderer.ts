@@ -664,13 +664,21 @@ export class SheetRenderer {
    * 距离；无阻挡时到扫描终点。扫描以窗口右界 +1 为上限——溢出超出视口的
    * 部分本就会被 viewport 裁剪，无需扫到网格尽头（避免超宽行 O(总列数)
    * 的逐格扫描）。
+   *
+   * blocker 只认"有内容"的格：value 为 null/空串的格子即使带样式（模型
+   * 稀疏化会保留仅有样式的空格）也不是 Excel 语义上的截断点——Excel 中
+   * 空单元格无论有无格式都不阻挡溢出。被合并覆盖的格仍阻挡（合并区域是
+   * 实体内容）。
    */
   private spillLimitPx(col: number, row: number, colEnd: number): number {
     const l = this.layout!;
     const rowMap = this.rowIndex.get(row);
     const stop = Math.min(l.colCount, Math.max(colEnd + 1, col + 2));
     for (let c = col + 1; c < stop; c++) {
-      if (rowMap?.has(c) || l.coveredBy.has(`${row}:${c}`)) {
+      const blocker = rowMap?.get(c);
+      const hasContent =
+        blocker != null && blocker.value !== null && blocker.value !== "";
+      if (hasContent || l.coveredBy.has(`${row}:${c}`)) {
         return l.colLeft[c] - l.colLeft[col];
       }
     }

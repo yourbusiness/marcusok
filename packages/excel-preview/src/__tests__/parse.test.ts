@@ -614,6 +614,19 @@ describe("CSV 解析", () => {
     expect(cells[0]).toMatchObject({ type: "number", value: "1" });
     expect(cells[1]).toMatchObject({ type: "number", value: "2" });
   });
+  it("尾点数字按数字推断（Excel 口径，123. 即 123）", () => {
+    // Excel 输入栏里 "123." 视为数字 123；旧正则（\.\d+ 要求点后有数字）
+    // 把它留在文本类，数字列对齐/格式化全部失效
+    const wb = csvToWorkbook(strToU8("123.,4.5e2,6.\n"));
+    const cells = wb.sheets[0].rows[0].cells;
+    expect(cells[0]).toMatchObject({ type: "number", value: "123." });
+    expect(cells[1]).toMatchObject({ type: "number", value: "4.5e2" });
+    expect(cells[2]).toMatchObject({ type: "number", value: "6." });
+    // 非数字形态仍留在文本类
+    const wb2 = csvToWorkbook(strToU8("1.2.3,.,-\n"));
+    const cells2 = wb2.sheets[0].rows[0].cells;
+    for (const c of cells2) expect(c.type).toBe("string");
+  });
   it("GB18030 回退", () => {
     // "中文,测试" 的 GBK 编码（非法 UTF-8 序列）
     const gbk = new Uint8Array([
