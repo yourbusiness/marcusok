@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Node auto-init unit tests: modern-xlsx is mocked WITH initWasmSync so the
 // synchronous path is drivable, and node:fs is mocked so these tests never
 // touch the real 2MB binary (the real end-to-end init lives in
+// ../__tests__ of the consuming excel-exporter package,
 // wasm-node-auto-init.integration.test.ts). The wasm URL candidates are real
 // URLs derived from import.meta.url, so the path assertions below exercise
 // the actual resolution shape.
@@ -83,6 +84,30 @@ describe("WasmLoader Node auto-init (initWasmSync path)", () => {
     // standard initWasm run with the default URL.
     expect(initWasmMock).toHaveBeenCalledTimes(1);
     expect(String(initWasmMock.mock.calls[0][0])).toMatch(/modern-xlsx\.wasm$/);
+  });
+
+  it("logs the auto-init root cause before degrading (no silent swallow)", async () => {
+    // 降级路径在 Node 下走 fetch(file://…) 必然失败，最终报错只有误导性的
+    // "fetch failed"——ENOENT / CompileError（损坏、0 字节 wasm）等真实原因
+    // 只在 auto-init 的 catch 处可见，必须 warn 出来（禁止静默吞错红线）。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      initWasmSyncMock.mockImplementation(() => {
+        throw new Error(
+          "CompileError: BufferSource argument is empty (0-byte wasm)",
+        );
+      });
+      initWasmMock.mockResolvedValue(undefined);
+      const loader = new WasmLoader();
+
+      await loader.ensureLoaded();
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("CompileError: BufferSource argument is empty"),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("never auto-inits when a wasmUrl is configured", async () => {

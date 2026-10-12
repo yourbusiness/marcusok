@@ -11,8 +11,9 @@
  * Runs after `tsup` via the main config's onSuccess hook (see tsup.config.ts),
  * covering both the one-shot "build" script and every "dev" watch rebuild —
  * otherwise the clean:true wipe at watch startup leaves dist without the wasm
- * (Node auto-init / integration tests then fail). dist/modern-xlsx.wasm ships
- * with the package via the "files": ["dist"] entry.
+ * (Node auto-init / integration tests then fail). dist/modern-xlsx.wasm is
+ * consumed in-repo only (the package is private; the business packages
+ * bundle this dist — including the binary — into their own builds).
  *
  * (Migrated verbatim from excel-exporter — this package is now the engine
  * integration point, so the forwarding lives here.)

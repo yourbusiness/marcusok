@@ -244,10 +244,18 @@ export class WasmLoader {
       }
       initWasmSync(bytes);
       return true;
-    } catch {
+    } catch (e) {
       // Resolution/read/init failure (e.g. a consumer bundling for Node
       // without the package files on disk): fall through to initWasm,
       // which retries and degrades exactly as before this path existed.
+      // 根因必须留下痕迹（禁止静默吞错）：降级路径在 Node 下走
+      // fetch(file://…) 必然失败，最终报错只有误导性的 "fetch failed"——
+      // ENOENT / CompileError（wasm 损坏、0 字节）等真实原因只在此处可见。
+      console.warn(
+        `[xlsx-core] Node WASM auto-init failed, falling back to the standard initWasm path. Reason: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
       return false;
     }
   }
