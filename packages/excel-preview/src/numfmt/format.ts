@@ -849,14 +849,31 @@ export function formatCellValue(
   // Excel 显示舍入（15 位十进制 half-up，见 decimalRoundHalfUp）。百分比段
   // 的引擎内部还有 ×100，先折到显示域舍入再折回，"0.00%" + 0.12345 才能
   // 得到 Excel 的 "12.35%" 而非引擎按二进制舍出的 "12.34%"。
-  const decimals = coreDecimalPlaces(coreNum);
-  display = coreNum.includes("%")
-    ? decimalRoundHalfUp(display * 100, decimals) / 100
-    : decimalRoundHalfUp(display, decimals);
+  //
+  // 分数（含 "/"）与科学计数（含 "E"/"e"）两类 core 跳过预舍入：分数的
+  // coreDecimalPlaces 恒为 0（无小数点），会先把 1.25 舍成 1，而引擎本身
+  // 能正确输出 "1 1/4"；科学计数的舍入对象是**尾数**而非原值小数位，
+  // coreDecimalPlaces 数到 E 前截止，0.00012 + 0.00E+00 会被先舍成 0。
+  const isFractionCore = coreNum.includes("/");
+  const isSciCore = /e/i.test(coreNum);
+  if (!isFractionCore && !isSciCore) {
+    const decimals = coreDecimalPlaces(coreNum);
+    display = coreNum.includes("%")
+      ? decimalRoundHalfUp(display * 100, decimals) / 100
+      : decimalRoundHalfUp(display, decimals);
+  }
   const r = engineText(display, coreNum);
   const sign = signFromSingle ? "-" : "";
+  // 科学计数：引擎指数不补零且不带符号（1.23E+4 / 1.2E-4），Excel 显示口径
+  // 是指数至少两位且恒带符号（1.23E+04 / 1.20E-04）。工程计数法 ##0.0E+0 的
+  // 尾数归一（指数取 3 的倍数）引擎也不支持，此处仅对齐指数书写形态。
+  const text = isSciCore
+    ? r.text.replace(/E([+-]?)(\d+)$/i, (_m, s: string, d: string) =>
+        `E${s || "+"}${d.padStart(2, "0")}`.toUpperCase(),
+      )
+    : r.text;
   return {
-    text: sign + prefix + r.text + suffix,
+    text: sign + prefix + text + suffix,
     color: chosen.color ?? r.color,
   };
 }
