@@ -4,15 +4,15 @@ Cell display text goes through a compensation layer that fixes a set of engine d
 
 ## Builtin number formats: Excel's actual table
 
-ECMA-376 defines builtin id 14 as `mm-dd-yy`, but Excel renders it as `m/d/yyyy` (en-US). The engine returns the ECMA string, and its `loadFormatTable` override cannot win (the builtin table always takes lookup precedence — a structural property of the engine). The preview therefore carries its own **Excel-behavior table** for the locale-dependent ids — 0–22 and 37–49 (14 → `m/d/yyyy`, 18 → `h:mm AM/PM`, 46 → `[h]:mm:ss`, …) — and resolves ids to format _strings_ before formatting. Ids 23–36 (international-currency placeholders, rare in practice) keep the engine's ECMA strings instead of a hand-written behavior table.
+ECMA-376 defines builtin id 14 as `mm-dd-yy`, but Excel renders it as `m/d/yyyy` (en-US). The engine returns the ECMA string, and its `loadFormatTable` override cannot win (the builtin table always takes lookup precedence — a structural property of the engine). The preview therefore carries its own **Excel-behavior table** for the locale-dependent ids — 0–22 and 37–49 in en-US behavior (14 → `m/d/yyyy`, 18 → `h:mm AM/PM`, 46 → `[h]:mm:ss`, …) — and resolves ids to format _strings_ before formatting. The East-Asian groups 27–36 and 50–58 (only ever written by East-Asian-locale Excel/WPS — zh-CN files store `2025年1月21日` as `numFmtId=31`) are covered with zh-CN behavior strings; the engine's `getBuiltinFormat` returns `undefined` for them, so without the table those dates rendered as raw serials.
 
 ## Literal compensation in numeric sections
 
 The engine drops literal characters inside numeric sections: `¥#,##0.00` renders as `1,234.50` (currency gone), `#,##0.00;-#,##0.00` renders `1,234.50` for -1234.5 (sign gone), `"neg"0` renders `5` (quoted text gone). The layer extracts safe edge literals (quoted runs, escapes, currency symbols, `-`, `(`, `)`, spaces), hands the numeric core to the engine with the **absolute value**, and re-joins — which also restores Excel's exact sign semantics (a negative section without `-` shows no sign, exactly like Excel).
 
-Restored: currency prefixes/suffixes, units (`0.0" kg"`), text prefixes (`"Total: "@`), negative signs, accounting parentheses.
+Restored: currency prefixes/suffixes, units (`0.0" kg"`), text prefixes (`"Total: "@`), negative signs, accounting parentheses. Thousands-scaling commas (`#,##0,` → value ÷ 1000 per trailing comma, `0.0,,"M"` → `1.5M`) are divided out before the engine formats the value. Display rounding follows Excel's decimal semantics (15 significant digits, half-up — `2.675` with `0.00` shows `2.68`, where the engine's binary `toFixed` would show `2.67`). `[DBNum1/2/3]` digit-substitution modifiers are stripped so the numeric section still renders (full Chinese-numeral rendering is out of scope), and section-level `General` (`[Red]General`, WPS's `G/通用格式`) renders the value instead of the literal text.
 
-Approximated: literals interleaved _between_ digits (phone-style `000-0000`) and thousands-scaling commas (`#,##0,`) are still dropped; `_` width-padding and `*` fill are intentionally dropped.
+Approximated: literals interleaved _between_ digits (phone-style `000-0000`) are still dropped; `_` width-padding and `*` fill are intentionally dropped.
 
 ## Dates and times: fully self-implemented
 

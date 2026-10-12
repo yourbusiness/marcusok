@@ -271,3 +271,93 @@ describe("内置行为表", () => {
     expect(resolveFormatCode(9999, custom, () => undefined)).toBe("General");
   });
 });
+
+describe("内置东亚组 27-36 / 50-58（zh-CN 行为表，中文 Excel 产物）", () => {
+  it("关键 id 解析为 zh-CN 渲染串（引擎 getBuiltinFormat 实测返回 undefined）", () => {
+    expect(EXCEL_BUILTIN_FORMATS.get(31)).toBe('yyyy"年"m"月"d"日"');
+    expect(EXCEL_BUILTIN_FORMATS.get(27)).toBe('yyyy"年"m"月"');
+    expect(EXCEL_BUILTIN_FORMATS.get(50)).toBe("¥#,##0_);(¥#,##0)");
+    expect(EXCEL_BUILTIN_FORMATS.get(58)).toBe('m"月"d"日"');
+  });
+  it("id 31 渲染中文日期而非序列号（此前显示 45678）", () => {
+    expect(F("number", "45678.5", EXCEL_BUILTIN_FORMATS.get(31)!)).toBe(
+      "2025年1月21日",
+    );
+  });
+  it("id 50 渲染 ¥ 货币（会计括号负段）", () => {
+    expect(F("number", "1234.5", EXCEL_BUILTIN_FORMATS.get(50)!)).toBe(
+      "¥1,235",
+    );
+    expect(F("number", "-1234.5", EXCEL_BUILTIN_FORMATS.get(50)!)).toBe(
+      "(¥1,235)",
+    );
+  });
+  it('id 34/35 的"上午/下午"12 小时制', () => {
+    expect(F("number", "0.75", EXCEL_BUILTIN_FORMATS.get(34)!)).toBe(
+      "下午6时00分",
+    );
+    expect(F("number", "0.25", EXCEL_BUILTIN_FORMATS.get(35)!)).toBe(
+      "上午6时00分00秒",
+    );
+  });
+});
+
+describe("[DBNum] 数字替换修饰符（剥离，段保持数字段）", () => {
+  it("[DBNum2][$-804] 金额渲染阿拉伯数字而非乱码", () => {
+    // 此前 isDateSection 把关键字里的 D/m 误判成日期段，输出 "[18BNu52]#,##0.00"
+    expect(F("number", "1234.5", "[DBNum2][$-804]#,##0.00")).toBe("1,234.50");
+  });
+  it("[DBNum1] 同样剥离", () => {
+    expect(F("number", "1234.5", "[DBNum1][$-804]#,##0.00")).toBe("1,234.50");
+  });
+  it("未知括号关键字不再误判日期段（isDateSection 跳过方括号内容）", () => {
+    // [Foo] 按既有行为原样保留为字面量（与 DBNum 的显式剥离不同），此处
+    // 只锁定"不再被误判成日期段渲染乱码"
+    expect(F("number", "1234.5", "[Foo]#,##0.00")).toBe("[Foo]1,234.50");
+  });
+});
+
+describe("尾随逗号千位缩放（引擎不支持，补偿层实现）", () => {
+  it('"#,##0," 按 1e3 缩放（此前输出原值 1,234,567）', () => {
+    expect(F("number", "1234567", "#,##0,")).toBe("1,235");
+  });
+  it("'0.0,,\"M\"' 按 1e6 缩放", () => {
+    expect(F("number", "1500000", '0.0,,"M"')).toBe("1.5M");
+  });
+  it("缩放后的值同样走显示舍入", () => {
+    expect(F("number", "1234567", "#,##0.00,")).toBe("1,234.57");
+  });
+});
+
+describe("显示舍入：15 位十进制 half-up（Excel 口径）", () => {
+  it("二进制尾迹不再透传", () => {
+    expect(F("number", "2.675", "0.00")).toBe("2.68");
+    expect(F("number", "1.005", "0.00")).toBe("1.01");
+  });
+  it("负值 half-away（单段格式）", () => {
+    expect(F("number", "-2.675", "0.00")).toBe("-2.68");
+  });
+  it("无尾迹场景不回归", () => {
+    expect(F("number", "0.5", "0.00")).toBe("0.50");
+    expect(F("number", "2.674", "0.00")).toBe("2.67");
+  });
+  it("百分比段折到显示域（×100）后舍入", () => {
+    expect(F("number", "0.12345", "0.00%")).toBe("12.35%");
+  });
+  it("9.99 跨位进位", () => {
+    expect(F("number", "9.996", "0.00")).toBe("10.00");
+  });
+});
+
+describe("段级 General（全串判断覆盖不了的段内形态）", () => {
+  it("[Red]General 渲染数值并带色", () => {
+    expect(F("number", "123", "[Red]General")).toBe("123");
+    expect(C("number", "123", "[Red]General")).toBeTruthy();
+  });
+  it("General;-General 负段", () => {
+    expect(F("number", "-5", "General;-General")).toBe("-5");
+  });
+  it("WPS 本地化变体 G/通用格式", () => {
+    expect(F("number", "123.456", "G/通用格式")).toBe("123.456");
+  });
+});

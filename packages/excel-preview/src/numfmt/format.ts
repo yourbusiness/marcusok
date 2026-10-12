@@ -11,7 +11,13 @@
  *     mm:ss 会被当"月:秒"解析（0.25 → "12:00"，Dec 1899 的月份）；
  *  4. General 输出 16 位浮点尾迹（1/3 → "0.3333333333333333"），Excel 为
  *     15 位有效数字；
- *  5. formatCell/formatCellRich 对 null/undefined 码抛 TypeError。
+ *  5. 显示舍入按二进制值 toFixed（2.675 + "0.00" → "2.67"），Excel 按
+ *     15 位十进制表示 half-up（"2.68"）——数字段预舍入补偿；
+ *  6. 尾随逗号千位缩放不支持（"#,##0," 输出原值），数字段剥缩放逗号
+ *     并预除 10^3n 补偿；
+ *  7. formatCell/formatCellRich 对 null/undefined 码抛 TypeError；
+ *  8. 段内 General（[Red]General）与未知括号关键字（[DBNum2]）无段级
+ *     语义，整段按字面量/误判日期渲染。
  *
  * 补偿策略：
  *  - 数字段拆出"可安全回注的字面前缀/后缀"（引号串、转义符、非记号字符），
@@ -114,6 +120,13 @@ function parseSection(raw: string): Section {
         // 路径处理（此前整段原样保留，预览会显示出 "[$-409]" 字样）。
         const display = inner.slice(1, inner.indexOf("-", 1));
         code += display ? `"${display}"` : "";
+      } else if (/^DBNum[1-3]$/i.test(inner)) {
+        // [DBNum1/2/3]：数字替换修饰符（中文大写/小写数字等），段仍是数字段
+        // ——Excel 不把它当日期记号。整段中文数字渲染不在本层范围，剥离
+        // 修饰符（不写入 code）让数字照常渲染：此前整段原样保留进 code，
+        // isDateSection 会把关键字里的 D/m 误判成日期段，[DBNum2][$-804]
+        // #,##0.00 渲染成 "[18BNu52]#,##0.00" 一类乱码。常与其连用的
+        // [$-804] 走上方分支。
       } else {
         // 未知括号（如某些方言的本地化关键字）：原样保留交引擎
         code += raw.slice(i, end + 1);
@@ -304,6 +317,13 @@ function scanDateTokens(code: string): (DateTokens | string)[] {
       i += 5;
       continue;
     }
+    // 中文 12 小时制标记（zh 内置 34/35：'上午/下午h"时"mm"分"'）。必须先于
+    // 普通字符分支匹配——首字符"上"不是日期记号，晚一步就会被逐字拆散。
+    if (code.startsWith("上午/下午", i)) {
+      out.push({ tok: "上午/下午", isMinute: false });
+      i += "上午/下午".length;
+      continue;
+    }
     if (code.slice(i).toUpperCase().startsWith("A/P")) {
       out.push({ tok: "A/P", isMinute: false });
       i += 3;
@@ -363,6 +383,7 @@ export function formatDateSection(
     tokens.some(
       (t) => typeof t !== "string" && t.tok.toUpperCase() === "AM/PM",
     ) ||
+    tokens.some((t) => typeof t !== "string" && t.tok === "上午/下午") ||
     tokens.some((t) => typeof t !== "string" && t.tok.toUpperCase() === "A/P");
   const pad = (n: number, w = 2) => String(n).padStart(w, "0");
 
@@ -430,6 +451,8 @@ export function formatDateSection(
       out += len >= 2 ? pad(second) : String(second);
     } else if (tok.toUpperCase() === "AM/PM") {
       out += hour24 < 12 ? "AM" : "PM";
+    } else if (tok === "上午/下午") {
+      out += hour24 < 12 ? "上午" : "下午";
     } else if (tok.toUpperCase() === "A/P") {
       out += hour24 < 12 ? "A" : "P";
     } else {
@@ -441,6 +464,7 @@ export function formatDateSection(
 function isDateSection(code: string): boolean {
   let inQuote = false;
   let escaped = false;
+  let inBracket = false;
   for (const ch of code) {
     if (escaped) {
       escaped = false;
@@ -455,7 +479,17 @@ function isDateSection(code: string): boolean {
       continue;
     }
     if (inQuote) continue;
-    if ("ymdhs".includes(ch.toLowerCase()) && /[a-z]/i.test(ch)) return true;
+    // 方括号关键字（颜色/条件/[$-409]/[DBNum]/方言关键字）里的字母不是
+    // 日期记号——parseSection 已剥已知关键字，未知的原样留在 code 里，不
+    // 跳过就会把 [DBNum2] 里的 D/m 误判成日期段（乱码根因之一）。
+    if (ch === "[") inBracket = true;
+    else if (ch === "]") inBracket = false;
+    else if (
+      !inBracket &&
+      "ymdhs".includes(ch.toLowerCase()) &&
+      /[a-z]/i.test(ch)
+    )
+      return true;
   }
   return false;
 }
@@ -578,6 +612,51 @@ function sciNotation(s: string): string {
 
 function plainNotation(s: string): string {
   return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+}
+
+/**
+ * 数字段 core 声明的小数显示位（"." 后连续 0/# 占位符个数，E 前截止）。
+ * 0 与 # 都参与舍入精度（"0.0#" 显示最多 2 位）。
+ */
+function coreDecimalPlaces(core: string): number {
+  const m = /\.([0#]*)/.exec(core);
+  return m ? m[1].length : 0;
+}
+
+/**
+ * Excel 口径的显示舍入：先取 15 位有效十进制表示，再按 d 位 half-up
+ * （away from zero——调用方已取绝对值）做**十进制字符串**舍入。
+ *
+ * 引擎按二进制值 toFixed：2.675 的双精度是 2.674999…，"0.00" 渲染成
+ * "2.67"，而 Excel 显示 "2.68"（它对 15 位十进制表示舍入）。预舍入到
+ * 最近浮点后交引擎，引擎的 toFixed 恰好落在十进制正确的结果上。
+ *
+ * 指数形态（|v|>=1e21 或 <1e-7）与整数形态（无小数可舍）原样返回——
+ * 两者都远离小数显示边界，引擎既有行为不劣化。
+ */
+function decimalRoundHalfUp(v: number, d: number): number {
+  if (v === 0 || !Number.isFinite(v)) return v;
+  const p = v.toPrecision(15);
+  if (p.includes("e") || p.includes("E")) return v;
+  const dot = p.indexOf(".");
+  if (dot === -1 || p.length - dot - 1 <= d) return v;
+  const keep = p.slice(0, dot + 1 + d);
+  // 字典序比较对 '0'-'9' 即数值序
+  if (p[dot + 1 + d] < "5") return Number(keep);
+  // half-up 进位按字符串做：浮点算术（如 +1e-d）在 9.99 一类边界同样带
+  // 二进制误差，逐位进位（含 999→1000 跨位）才是十进制精确的
+  const digits = keep.replace(".", "").split("");
+  let i = digits.length - 1;
+  for (; i >= 0; i--) {
+    if (digits[i] === "9") {
+      digits[i] = "0";
+      continue;
+    }
+    digits[i] = String(Number(digits[i]) + 1);
+    break;
+  }
+  if (i < 0) digits.unshift("1");
+  return Number(digits.join("")) / 10 ** d;
 }
 
 /** Excel General：15 位有效数字、去尾零；超宽量级用科学计数（近似）。 */
@@ -719,6 +798,15 @@ export function formatCellValue(
     if (t !== null) return { text: t, color: chosen.color ?? undefined };
   }
 
+  // 段级 General：[Red]General / General;-General / WPS 的 "G/通用格式"
+  // （本地化 General）。全串判断（函数开头）覆盖不了段内形态，此前这些段
+  // 按纯字面量渲染，单元格显示出 "General"/"G/通用格式" 字样而非数值。
+  // 负段的 "-General" 写法允许前导负号：数值的正负由 generalNumber 输出，
+  // 段上再拼负号会变成 "--5"。
+  if (/^-?general$/i.test(chosen.code) || chosen.code === "G/通用格式") {
+    return { text: generalNumber(n), color: chosen.color ?? undefined };
+  }
+
   // 零值走零段：实测引擎对零段字面量无损，整段直交（非日期形态）
   if (
     n === 0 &&
@@ -746,7 +834,26 @@ export function formatCellValue(
   if (!core) {
     return { text: prefix + suffix, color: chosen.color ?? undefined };
   }
-  const r = engineText(Math.abs(n), core);
+  // 尾随逗号千位缩放（"#,##0," / '0.0,,"M"'）：数字占位符之后且位于段尾
+  // 的每个 "," 把数值除以 1000（Excel 语义）。分组逗号（#,##0 中间的）不在
+  // 段尾、不受影响。引擎不支持缩放（实测按原值输出，数值差 10^3n 倍），
+  // 先剥缩放逗号、按缩放后的值交引擎。
+  let coreNum = core;
+  let scale = 0;
+  while (coreNum.length > 1 && coreNum.endsWith(",")) {
+    scale++;
+    coreNum = coreNum.slice(0, -1);
+  }
+  let display = Math.abs(n);
+  if (scale > 0) display = display / 1000 ** scale;
+  // Excel 显示舍入（15 位十进制 half-up，见 decimalRoundHalfUp）。百分比段
+  // 的引擎内部还有 ×100，先折到显示域舍入再折回，"0.00%" + 0.12345 才能
+  // 得到 Excel 的 "12.35%" 而非引擎按二进制舍出的 "12.34%"。
+  const decimals = coreDecimalPlaces(coreNum);
+  display = coreNum.includes("%")
+    ? decimalRoundHalfUp(display * 100, decimals) / 100
+    : decimalRoundHalfUp(display, decimals);
+  const r = engineText(display, coreNum);
   const sign = signFromSingle ? "-" : "";
   return {
     text: sign + prefix + r.text + suffix,
