@@ -22,6 +22,21 @@ describe("applyFormat", () => {
     expect(applyFormat("unknown", spec)).toBe("?");
   });
 
+  it("enum: missing values render as empty cells, never the fallback", () => {
+    // null/undefined/空白串是缺失值而非"未映射值"：与 number/padding 分支
+    // 同一判空口径。否则数据空洞会被填成 fallback 文案（"未知"这类有业务
+    // 含义的假值），而同一行的 date/number 空洞是空单元格。
+    const spec = {
+      type: "enum" as const,
+      map: { paid: "Paid" },
+      fallback: "?",
+    };
+    expect(applyFormat(null, spec)).toBe("");
+    expect(applyFormat(undefined, spec)).toBe("");
+    expect(applyFormat("", spec)).toBe("");
+    expect(applyFormat("   ", spec)).toBe("");
+  });
+
   it("enum: prototype-chain keys do not bypass the fallback", () => {
     // "constructor"/"toString"/... used to resolve Object.prototype members
     // (non-nullish) and skip the fallback, writing "function Object() {...}"

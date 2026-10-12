@@ -4,13 +4,13 @@
 
 ## FormatSpec
 
-| 类型       | 参数                                     | 示例                                                          | 说明                                                     |
-| ---------- | ---------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------- |
-| `enum`     | `map`、`fallback?`                       | `{ type: "enum", map: { paid: "已支付" }, fallback: "未知" }` | 枚举值映射；未命中且无 fallback 时原样输出               |
-| `date`     | `pattern?`（默认 `yyyy-MM-dd`）          | `{ type: "date" }`                                            | 转 Excel 日期序列并自动注入 `numFormat`                  |
-| `datetime` | `pattern?`（默认 `yyyy-MM-dd HH:mm`）    | `{ type: "datetime" }`                                        | 同上，带时间                                             |
-| `number`   | `decimals?`（默认 0）、`thousands?`      | `{ type: "number", decimals: 2, thousands: true }`            | 数字语义：Workbook 路径保留完整精度，经 `numFormat` 渲染 |
-| `padding`  | `fill`、`length`、`align?`（left/right） | `{ type: "padding", fill: "0", length: 6, align: "left" }`    | 左/右补全到固定长度（如工号）                            |
+| 类型       | 参数                                     | 示例                                                          | 说明                                                                          |
+| ---------- | ---------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `enum`     | `map`、`fallback?`                       | `{ type: "enum", map: { paid: "已支付" }, fallback: "未知" }` | 枚举值映射；未命中且无 fallback 时原样输出；缺失值（null/空白）渲染为空单元格 |
+| `date`     | `pattern?`（默认 `yyyy-MM-dd`）          | `{ type: "date" }`                                            | 转 Excel 日期序列并自动注入 `numFormat`                                       |
+| `datetime` | `pattern?`（默认 `yyyy-MM-dd HH:mm`）    | `{ type: "datetime" }`                                        | 同上，带时间                                                                  |
+| `number`   | `decimals?`（默认 0）、`thousands?`      | `{ type: "number", decimals: 2, thousands: true }`            | 数字语义：Workbook 路径保留完整精度，经 `numFormat` 渲染                      |
+| `padding`  | `fill`、`length`、`align?`（left/right） | `{ type: "padding", fill: "0", length: 6, align: "left" }`    | 左/右补全到固定长度（如工号）                                                 |
 
 ```ts
 columns: [

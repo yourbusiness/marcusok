@@ -4,13 +4,13 @@ Column `format` can be a structured **FormatSpec** (thread-safe; works on all pa
 
 ## FormatSpec
 
-| Type       | Options                                 | Example                                                        | Description                                                                        |
-| ---------- | --------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `enum`     | `map`, `fallback?`                      | `{ type: "enum", map: { paid: "Paid" }, fallback: "Unknown" }` | Maps raw values to labels; unmapped values use `fallback` or pass through          |
-| `date`     | `pattern?` (default `yyyy-MM-dd`)       | `{ type: "date" }`                                             | Converts to an Excel date serial and auto-injects `numFormat`                      |
-| `datetime` | `pattern?` (default `yyyy-MM-dd HH:mm`) | `{ type: "datetime" }`                                         | Same, with time                                                                    |
-| `number`   | `decimals?` (default 0), `thousands?`   | `{ type: "number", decimals: 2, thousands: true }`             | Numeric semantics; the Workbook path keeps full precision rendered via `numFormat` |
-| `padding`  | `fill`, `length`, `align?` (left/right) | `{ type: "padding", fill: "0", length: 6, align: "left" }`     | Pads to a fixed length (IDs, codes)                                                |
+| Type       | Options                                 | Example                                                        | Description                                                                                                                  |
+| ---------- | --------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `enum`     | `map`, `fallback?`                      | `{ type: "enum", map: { paid: "Paid" }, fallback: "Unknown" }` | Maps raw values to labels; unmapped values use `fallback` or pass through; missing values (null/blank) render as empty cells |
+| `date`     | `pattern?` (default `yyyy-MM-dd`)       | `{ type: "date" }`                                             | Converts to an Excel date serial and auto-injects `numFormat`                                                                |
+| `datetime` | `pattern?` (default `yyyy-MM-dd HH:mm`) | `{ type: "datetime" }`                                         | Same, with time                                                                                                              |
+| `number`   | `decimals?` (default 0), `thousands?`   | `{ type: "number", decimals: 2, thousands: true }`             | Numeric semantics; the Workbook path keeps full precision rendered via `numFormat`                                           |
+| `padding`  | `fill`, `length`, `align?` (left/right) | `{ type: "padding", fill: "0", length: 6, align: "left" }`     | Pads to a fixed length (IDs, codes)                                                                                          |
 
 ```ts
 columns: [

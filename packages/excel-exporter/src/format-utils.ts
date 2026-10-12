@@ -57,6 +57,10 @@ function isBlankString(value: unknown): boolean {
 export function applyFormat(value: unknown, spec: FormatSpec): string | number {
   switch (spec.type) {
     case "enum": {
+      // 缺失值（null/undefined/空串/纯空白串）不是"未映射值"：与 number/
+      // padding 分支同一判空口径，渲染空单元格，不落 fallback——否则数据
+      // 空洞会被填成 fallback 文案（"未知"这类有业务含义的假值）。
+      if (value == null || isBlankString(value)) return "";
       // Own-property lookup: a plain `spec.map[key]` walks the prototype
       // chain, so values like "constructor" / "toString" / "__proto__" that
       // the map does not define would find Object.prototype members (non-
