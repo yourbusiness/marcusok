@@ -8,6 +8,7 @@ import type {
   MergeRange,
   SheetConfig,
 } from "./types";
+import type { ProgressOverlayOptions } from "@marcusok/progress-overlay";
 
 /**
  * A deliberately dependency-free table column descriptor.
@@ -51,6 +52,8 @@ export interface TableExportOptions extends TableSheetInput {
   onProgress?: (progress: number) => void;
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   download?: boolean;
+  /** 全屏进度遮罩（默认开启），语义同 {@link ExportOptions.overlay}。 */
+  overlay?: boolean | ProgressOverlayOptions;
 }
 
 function normalizeHeader(
@@ -161,6 +164,9 @@ export function tableExportToOptions(input: TableExportOptions): ExportOptions {
     onProgress,
     onPhase,
     download,
+    // overlay 与上方 dataStyle/indexColumn 同属"继承自有、漏传静默失效"的字段：
+    // 文档承诺三个入口同样生效的默认遮罩必须透传给 exportExcel。
+    overlay,
   } = input;
 
   return {
@@ -181,5 +187,6 @@ export function tableExportToOptions(input: TableExportOptions): ExportOptions {
     ...(onProgress !== undefined && { onProgress }),
     ...(onPhase !== undefined && { onPhase }),
     ...(download !== undefined && { download }),
+    ...(overlay !== undefined && { overlay }),
   };
 }

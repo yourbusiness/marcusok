@@ -5,6 +5,7 @@ import {
   echartsToSheet,
   tableToSheet,
   tableExportToOptions,
+  echartsExportToOptions,
   WorkbookBuilder,
   StylePresets,
 } from "../index";
@@ -612,6 +613,32 @@ describe("dataStyle / indexColumn passthrough (exportTable)", () => {
     });
     expect(options.sheets[0].dataStyle).toBe(StylePresets.bordered);
     expect(options.sheets[0].indexColumn).toEqual({ label: "序号", width: 8 });
+  });
+
+  // 回归：TableExportOptions/EChartsExportOptions 曾无 overlay 字段、转换函数
+  // 也不透传——文档承诺三个入口同样生效的默认遮罩在这两个便捷入口静默丢失
+  // （TS 编译期也报 excess property）。此处断言透传，行为层由 overlay.test.ts
+  // 覆盖 exportExcel 本体。
+  it("forwards overlay through tableExportToOptions", () => {
+    const options = tableExportToOptions({
+      filename: "t",
+      columns: [{ prop: "name", label: "名称" }],
+      data: [{ name: "a" }],
+      overlay: false,
+    });
+    expect(options.overlay).toBe(false);
+  });
+
+  it("forwards overlay through echartsExportToOptions", () => {
+    const options = echartsExportToOptions({
+      filename: "t",
+      option: {
+        xAxis: { data: ["一月"] },
+        series: [{ name: "销量", data: [1] }],
+      },
+      overlay: false,
+    });
+    expect(options.overlay).toBe(false);
   });
 
   it("exports a real index column through exportTable", async () => {

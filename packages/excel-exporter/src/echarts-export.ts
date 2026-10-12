@@ -5,6 +5,7 @@ import type {
   ExportPhase,
   SheetConfig,
 } from "./types";
+import type { ProgressOverlayOptions } from "@marcusok/progress-overlay";
 
 export type EChartsScalar = number | string | null;
 // 数组形式即散点坐标（含多维 [x, y, ...dims]——第三维起供 symbolSize /
@@ -58,6 +59,8 @@ export interface EChartsExportOptions extends EChartsSheetInput {
   onProgress?: (progress: number) => void;
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   download?: boolean;
+  /** 全屏进度遮罩（默认开启），语义同 {@link ExportOptions.overlay}。 */
+  overlay?: boolean | ProgressOverlayOptions;
 }
 
 const DEFAULT_CATEGORY_HEADER = "类目";
@@ -405,6 +408,9 @@ export function echartsExportToOptions(
     onProgress,
     onPhase,
     download,
+    // 同 tableExportToOptions：overlay 是文档承诺三入口生效的字段，漏传会让
+    // 默认遮罩在本入口静默丢失。
+    overlay,
   } = input;
 
   return {
@@ -424,5 +430,6 @@ export function echartsExportToOptions(
     ...(onProgress !== undefined && { onProgress }),
     ...(onPhase !== undefined && { onPhase }),
     ...(download !== undefined && { download }),
+    ...(overlay !== undefined && { overlay }),
   };
 }
