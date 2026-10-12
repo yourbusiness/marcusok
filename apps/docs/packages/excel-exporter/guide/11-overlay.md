@@ -15,7 +15,7 @@ const result = await exportExcel({
 
 The overlay appears after a short delay, blocks page interaction, and is removed when the export settles — on success **and** on failure. In Node/SSR it is a no-op (there is no `document`).
 
-`exportTable` and `exportEcharts` delegate to `exportExcel`, but their own option types (`TableExportOptions` / `EChartsExportOptions`) do **not** carry `overlay` and their converters drop the field — passing it there is a TypeScript error and is silently ignored at runtime, so the default overlay still shows. To control the overlay while starting from those data shapes, convert first with `tableToSheet` / `echartsToSheet` and call `exportExcel` yourself (see [Table and ECharts entries](/packages/excel-exporter/api/05-table-and-echarts)).
+`exportTable` and `exportEcharts` carry the same `overlay` option — it is declared on `TableExportOptions` / `EChartsExportOptions` and forwarded by their converters, so the overlay is equally customizable from all three entry points. No need to convert to sheets and call `exportExcel` yourself just to reach it (see [Table and ECharts entries](/packages/excel-exporter/api/05-table-and-echarts)).
 
 ## Option values
 

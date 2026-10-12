@@ -1,5 +1,7 @@
 # @marcusok/xlsx-core
 
+> **No longer published to npm** — since `@marcusok/excel-exporter` 3.0 / `@marcusok/excel-preview` 2.0 this package is a private build-time layer, bundled wholesale into both published packages' dist at build time. The 1.0.x versions below are the last published ones; subsequent changes ship inside the business packages and are recorded in their changelogs. The historical entries below describe the architecture as it was when this package was still published independently (e.g. "consumers keep it external" in 1.0.0) and no longer reflect the current bundling.
+
 ## 1.0.1
 
 ### Patch Changes

@@ -5,7 +5,7 @@
  *   1. 复制此目录 → src/demos/<your-pkg>/
  *   2. 在 play package.json 的 dependencies 里声明 "workspace:*"
  *   3. 取消下方注释，填写 name/category/label/description，并在 load() 里动态 import 实现
- *      （category 是包所属大类：导出 "export" / 文档预览 "preview"，侧边栏与首页按它分区）
+ *      （category 是包所属大类：导出 "export" / 文档预览 "preview" / 公共组件 "shared"，侧边栏与首页按它分区）
  *   4. 启动/重启 dev server —— main.tsx 的 import.meta.glob 是启动时静态展开的，
  *      运行中新增的 demo 目录不会被发现，需要重启 dev server 才会识别
  *
@@ -39,7 +39,7 @@
 //
 // registerDemo({
 //   name: "your-pkg",
-//   category: "export", // 大类：导出 "export" / 文档预览 "preview"
+//   category: "export", // 大类：导出 "export" / 文档预览 "preview" / 公共组件 "shared"
 //   label: "your-pkg · 说明",
 //   description: "一句话说明这个 demo 演示什么。",
 //   async load() {

@@ -11,8 +11,8 @@ Two convenience entry points that accept the data shapes you already have — a 
 
 Consequences worth knowing:
 
-- The shared [`ExportOptions`](/packages/excel-exporter/api/01-export-excel#exportoptions) fields these two types do declare — `filename`, `mode`, `onProgress`, `onPhase`, `download` — behave exactly as they do on the main entry (same routing, same progress contract, same `{ success, blob, engine, mode, duration, rowCount, error }` result).
-- The `overlay` field of `ExportOptions` is **not** part of `TableExportOptions` / `EChartsExportOptions`, and neither converter forwards it. The overlay therefore still runs with its default (on), but you cannot customize or disable it through these two wrappers — call `exportExcel` with a converted sheet if you need that.
+- The shared [`ExportOptions`](/packages/excel-exporter/api/01-export-excel#exportoptions) fields these two types do declare — `filename`, `mode`, `onProgress`, `onPhase`, `download`, `overlay` — behave exactly as they do on the main entry (same routing, same progress contract, same `{ success, blob, engine, mode, duration, rowCount, error }` result).
+- `overlay` is declared on both types and forwarded by both converters, with the same semantics as on `exportExcel`: default **on**, `false` to opt out, an options object to customize (see the [Progress Overlay guide](/packages/excel-exporter/guide/11-overlay)).
 - Both wrappers are single-sheet: each produces a `sheets` array of exactly one entry.
 
 ```ts
@@ -55,6 +55,7 @@ Exports one sheet from a `columns + data` pair, with column descriptors in the s
 | `onProgress`  | `(progress: number) => void`                       | —        | 0 → 1, with the leading 0 and trailing 1 each fired once on every route                   |
 | `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                                     |
 | `download`    | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                                             |
+| `overlay`     | `boolean \| ProgressOverlayOptions`                | —        | Same as on `exportExcel`: default **on**; `false` disables, an object customizes          |
 
 ### TableColumnInput
 
@@ -180,20 +181,21 @@ Exports one sheet from a small, explicit structural subset of an ECharts option.
 
 `EChartsExportOptions` extends `EChartsSheetInput` with the export-level fields:
 
-| Field            | Type                                               | Required | Description                                                             |
-| ---------------- | -------------------------------------------------- | -------- | ----------------------------------------------------------------------- |
-| `option`         | `EChartsOptionInput`                               | yes      | The (subset of an) ECharts option to convert                            |
-| `filename`       | `string`                                           | yes      | Download name; `.xlsx` is appended unless already present               |
-| `sheetName`      | `string`                                           | —        | Default `"图表数据"`                                                    |
-| `layout`         | `"wide" \| "long"`                                 | —        | Default `"wide"`; only meaningful for the category layout               |
-| `categoryHeader` | `string`                                           | —        | Default `"类目"`                                                        |
-| `seriesHeader`   | `string`                                           | —        | Default `"系列"`                                                        |
-| `nameHeader`     | `string`                                           | —        | Default `"名称"`                                                        |
-| `valueHeader`    | `string`                                           | —        | Default `"数值"`                                                        |
-| `mode`           | `"auto" \| "main" \| "worker" \| "stream"`         | —        | Default `"auto"`                                                        |
-| `onProgress`     | `(progress: number) => void`                       | —        | 0 → 1, with the leading 0 and trailing 1 each fired once on every route |
-| `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                   |
-| `download`       | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                           |
+| Field            | Type                                               | Required | Description                                                                      |
+| ---------------- | -------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `option`         | `EChartsOptionInput`                               | yes      | The (subset of an) ECharts option to convert                                     |
+| `filename`       | `string`                                           | yes      | Download name; `.xlsx` is appended unless already present                        |
+| `sheetName`      | `string`                                           | —        | Default `"图表数据"`                                                             |
+| `layout`         | `"wide" \| "long"`                                 | —        | Default `"wide"`; only meaningful for the category layout                        |
+| `categoryHeader` | `string`                                           | —        | Default `"类目"`                                                                 |
+| `seriesHeader`   | `string`                                           | —        | Default `"系列"`                                                                 |
+| `nameHeader`     | `string`                                           | —        | Default `"名称"`                                                                 |
+| `valueHeader`    | `string`                                           | —        | Default `"数值"`                                                                 |
+| `mode`           | `"auto" \| "main" \| "worker" \| "stream"`         | —        | Default `"auto"`                                                                 |
+| `onProgress`     | `(progress: number) => void`                       | —        | 0 → 1, with the leading 0 and trailing 1 each fired once on every route          |
+| `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                            |
+| `download`       | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                                    |
+| `overlay`        | `boolean \| ProgressOverlayOptions`                | —        | Same as on `exportExcel`: default **on**; `false` disables, an object customizes |
 
 ### EChartsOptionInput and friends
 
@@ -310,19 +312,19 @@ The same option with the defaults (`layout: "wide"`, Chinese headers) exports a 
 
 ## Low-level converters
 
-All four functions are exported from the main entry. They are pure — no download, no overlay, no `exportExcel` import behind them — which makes them the seam to use when you want to inspect, assert, or post-process the generated configuration before driving a lower-level entry point yourself.
+All four functions are exported from the main entry. They are pure — no download, no overlay UI, no `exportExcel` import behind them — which makes them the seam to use when you want to inspect, assert, or post-process the generated configuration before driving a lower-level entry point yourself.
 
-| Function                                              | Input                  | Output          | Use it when                                                                                                                  |
-| ----------------------------------------------------- | ---------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `tableToSheet(input: TableSheetInput)`                | `TableSheetInput`      | `SheetConfig`   | You want the table shape but a different workbook: combine several sheets, or feed `WorkbookBuilder` / `exportAsStream`      |
-| `tableExportToOptions(input: TableExportOptions)`     | `TableExportOptions`   | `ExportOptions` | You want to tweak the resulting `ExportOptions` (e.g. add a second sheet or an `overlay` value) before calling `exportExcel` |
-| `echartsToSheet(input: EChartsSheetInput)`            | `EChartsSheetInput`    | `SheetConfig`   | Same as `tableToSheet`, for chart data                                                                                       |
-| `echartsExportToOptions(input: EChartsExportOptions)` | `EChartsExportOptions` | `ExportOptions` | Same as `tableExportToOptions`, for chart data                                                                               |
+| Function                                              | Input                  | Output          | Use it when                                                                                                             |
+| ----------------------------------------------------- | ---------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `tableToSheet(input: TableSheetInput)`                | `TableSheetInput`      | `SheetConfig`   | You want the table shape but a different workbook: combine several sheets, or feed `WorkbookBuilder` / `exportAsStream` |
+| `tableExportToOptions(input: TableExportOptions)`     | `TableExportOptions`   | `ExportOptions` | You want to tweak the resulting `ExportOptions` (e.g. add a second sheet) before calling `exportExcel`                  |
+| `echartsToSheet(input: EChartsSheetInput)`            | `EChartsSheetInput`    | `SheetConfig`   | Same as `tableToSheet`, for chart data                                                                                  |
+| `echartsExportToOptions(input: EChartsExportOptions)` | `EChartsExportOptions` | `ExportOptions` | Same as `tableExportToOptions`, for chart data                                                                          |
 
 Two caveats when you drive the lower-level entry points yourself:
 
 - `WorkbookBuilder.addSheet()` and `exportAsStream()` do **not** expand `indexColumn`; pass `applyIndexColumn(sheet)` (also exported) if the converted sheet uses it — see [IndexColumnOptions](/packages/excel-exporter/api/02-types#indexcolumnoptions).
-- The converters transfer the same fields the wrappers do — including the fact that `overlay` is not among them, so the sheet you get back is plain configuration.
+- `tableToSheet` / `echartsToSheet` return plain `SheetConfig`s — `overlay` is an export-level field, so it lives in the `ExportOptions` that `tableExportToOptions` / `echartsExportToOptions` produce (both forward it).
 
 ```ts
 import { tableToSheet, exportExcel } from "@marcusok/excel-exporter";
@@ -340,7 +342,7 @@ await exportExcel({
     sheet,
     { name: "Notes", columns: [{ prop: "body", label: "Note" }], data: [] },
   ],
-  overlay: false, // only reachable because this is the main entry
+  overlay: false, // ExportOptions-level field composes freely with converted sheets
 });
 ```
 

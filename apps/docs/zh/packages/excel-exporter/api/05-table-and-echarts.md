@@ -11,8 +11,8 @@
 
 由此带来几点值得注意的结论：
 
-- 这两个类型确实声明的公共 [`ExportOptions`](/zh/packages/excel-exporter/api/01-export-excel#exportoptions) 字段——`filename`、`mode`、`onProgress`、`onPhase`、`download`——语义与主入口完全一致（同样的路由、同样的进度契约、同样的 `{ success, blob, engine, mode, duration, rowCount, error }` 结果）。
-- `ExportOptions` 的 `overlay` 字段**不在** `TableExportOptions` / `EChartsExportOptions` 里，两个转换函数也不透传它。因此遮罩仍按默认行为（开启）运行，但无法通过这两个封装自定义或关闭——确实需要时，请自行转换后调用 `exportExcel`。
+- 这两个类型确实声明的公共 [`ExportOptions`](/zh/packages/excel-exporter/api/01-export-excel#exportoptions) 字段——`filename`、`mode`、`onProgress`、`onPhase`、`download`、`overlay`——语义与主入口完全一致（同样的路由、同样的进度契约、同样的 `{ success, blob, engine, mode, duration, rowCount, error }` 结果）。
+- `overlay` 在两个类型上均有声明、两个转换函数也都会透传，语义与 `exportExcel` 上完全一致：默认**开启**，`false` 关闭，传对象则自定义（见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)）。
 - 两个入口都是单 sheet：各自产出的 `sheets` 数组有且只有一项。
 
 ```ts
@@ -40,21 +40,22 @@ exportTable(options: TableExportOptions): Promise<ExportResult>
 
 `TableExportOptions` 在 `TableSheetInput` 之上追加了导出级字段：
 
-| 字段          | 类型                                               | 必填 | 说明                                                      |
-| ------------- | -------------------------------------------------- | ---- | --------------------------------------------------------- |
-| `columns`     | `TableColumnInput[]`                               | 是   | 列描述符，会被归一为 `ColumnConfig`（见下）               |
-| `data`        | `Record<string, unknown>[]`                        | 是   | 行对象，以解析出的 `prop` 为键                            |
-| `filename`    | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加               |
-| `sheetName`   | `string`                                           | —    | 默认 `"Sheet1"`                                           |
-| `freezeRows`  | `number`                                           | —    | 冻结的表头行数，校验为非负整数                            |
-| `autoFilter`  | `boolean`                                          | —    | 表头筛选，范围覆盖最后一行表头加全部数据行                |
-| `merges`      | `MergeRange[]`                                     | —    | 合并单元格范围，相对数据区域                              |
-| `dataStyle`   | `CellStyle`                                        | —    | 全部数据单元格的基底样式，列级 `style` 在其上逐字段深合并 |
-| `indexColumn` | `boolean \| IndexColumnOptions`                    | —    | 注入最左侧序号列，`true` 表示全默认；`merges` 会自动右移  |
-| `mode`        | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                                             |
-| `onProgress`  | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                   |
-| `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                    |
-| `download`    | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                          |
+| 字段          | 类型                                               | 必填 | 说明                                                                  |
+| ------------- | -------------------------------------------------- | ---- | --------------------------------------------------------------------- |
+| `columns`     | `TableColumnInput[]`                               | 是   | 列描述符，会被归一为 `ColumnConfig`（见下）                           |
+| `data`        | `Record<string, unknown>[]`                        | 是   | 行对象，以解析出的 `prop` 为键                                        |
+| `filename`    | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                           |
+| `sheetName`   | `string`                                           | —    | 默认 `"Sheet1"`                                                       |
+| `freezeRows`  | `number`                                           | —    | 冻结的表头行数，校验为非负整数                                        |
+| `autoFilter`  | `boolean`                                          | —    | 表头筛选，范围覆盖最后一行表头加全部数据行                            |
+| `merges`      | `MergeRange[]`                                     | —    | 合并单元格范围，相对数据区域                                          |
+| `dataStyle`   | `CellStyle`                                        | —    | 全部数据单元格的基底样式，列级 `style` 在其上逐字段深合并             |
+| `indexColumn` | `boolean \| IndexColumnOptions`                    | —    | 注入最左侧序号列，`true` 表示全默认；`merges` 会自动右移              |
+| `mode`        | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                                                         |
+| `onProgress`  | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                               |
+| `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                |
+| `download`    | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                      |
+| `overlay`     | `boolean \| ProgressOverlayOptions`                | —    | 与 `exportExcel` 上语义一致：默认**开启**；`false` 关闭，传对象自定义 |
 
 ### TableColumnInput
 
@@ -180,20 +181,21 @@ exportEcharts(options: EChartsExportOptions): Promise<ExportResult>
 
 `EChartsExportOptions` 在 `EChartsSheetInput` 之上追加了导出级字段：
 
-| 字段             | 类型                                               | 必填 | 说明                                        |
-| ---------------- | -------------------------------------------------- | ---- | ------------------------------------------- |
-| `option`         | `EChartsOptionInput`                               | 是   | 待转换的（ECharts option 子集）             |
-| `filename`       | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加 |
-| `sheetName`      | `string`                                           | —    | 默认 `"图表数据"`                           |
-| `layout`         | `"wide" \| "long"`                                 | —    | 默认 `"wide"`，仅对类目布局有意义           |
-| `categoryHeader` | `string`                                           | —    | 默认 `"类目"`                               |
-| `seriesHeader`   | `string`                                           | —    | 默认 `"系列"`                               |
-| `nameHeader`     | `string`                                           | —    | 默认 `"名称"`                               |
-| `valueHeader`    | `string`                                           | —    | 默认 `"数值"`                               |
-| `mode`           | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                               |
-| `onProgress`     | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次     |
-| `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时      |
-| `download`       | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob            |
+| 字段             | 类型                                               | 必填 | 说明                                                                  |
+| ---------------- | -------------------------------------------------- | ---- | --------------------------------------------------------------------- |
+| `option`         | `EChartsOptionInput`                               | 是   | 待转换的（ECharts option 子集）                                       |
+| `filename`       | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                           |
+| `sheetName`      | `string`                                           | —    | 默认 `"图表数据"`                                                     |
+| `layout`         | `"wide" \| "long"`                                 | —    | 默认 `"wide"`，仅对类目布局有意义                                     |
+| `categoryHeader` | `string`                                           | —    | 默认 `"类目"`                                                         |
+| `seriesHeader`   | `string`                                           | —    | 默认 `"系列"`                                                         |
+| `nameHeader`     | `string`                                           | —    | 默认 `"名称"`                                                         |
+| `valueHeader`    | `string`                                           | —    | 默认 `"数值"`                                                         |
+| `mode`           | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                                                         |
+| `onProgress`     | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                               |
+| `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                |
+| `download`       | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                      |
+| `overlay`        | `boolean \| ProgressOverlayOptions`                | —    | 与 `exportExcel` 上语义一致：默认**开启**；`false` 关闭，传对象自定义 |
 
 ### EChartsOptionInput 及相关类型
 
@@ -310,19 +312,19 @@ if (!result.success) console.error(result.error);
 
 ## 底层转换器
 
-这四个函数都从主入口导出。它们是纯函数——不下载、不挂遮罩、背后也不引用 `exportExcel`——因此当你想要在驱动更底层入口之前先检查、断言或二次加工生成的配置时，它们就是合适的接缝。
+这四个函数都从主入口导出。它们是纯函数——不下载、不挂遮罩 UI、背后也不引用 `exportExcel`——因此当你想要在驱动更底层入口之前先检查、断言或二次加工生成的配置时，它们就是合适的接缝。
 
-| 函数                                                  | 输入                   | 输出            | 适用场景                                                                                         |
-| ----------------------------------------------------- | ---------------------- | --------------- | ------------------------------------------------------------------------------------------------ |
-| `tableToSheet(input: TableSheetInput)`                | `TableSheetInput`      | `SheetConfig`   | 想用表格形态但换个工作簿装配方式：拼多张 sheet，或喂给 `WorkbookBuilder` / `exportAsStream`      |
-| `tableExportToOptions(input: TableExportOptions)`     | `TableExportOptions`   | `ExportOptions` | 想在调用 `exportExcel` 前改动生成的 `ExportOptions`（例如再加一张 sheet，或补一个 `overlay` 值） |
-| `echartsToSheet(input: EChartsSheetInput)`            | `EChartsSheetInput`    | `SheetConfig`   | 同 `tableToSheet`，对象是图表数据                                                                |
-| `echartsExportToOptions(input: EChartsExportOptions)` | `EChartsExportOptions` | `ExportOptions` | 同 `tableExportToOptions`，对象是图表数据                                                        |
+| 函数                                                  | 输入                   | 输出            | 适用场景                                                                                    |
+| ----------------------------------------------------- | ---------------------- | --------------- | ------------------------------------------------------------------------------------------- |
+| `tableToSheet(input: TableSheetInput)`                | `TableSheetInput`      | `SheetConfig`   | 想用表格形态但换个工作簿装配方式：拼多张 sheet，或喂给 `WorkbookBuilder` / `exportAsStream` |
+| `tableExportToOptions(input: TableExportOptions)`     | `TableExportOptions`   | `ExportOptions` | 想在调用 `exportExcel` 前改动生成的 `ExportOptions`（例如再加一张 sheet）                   |
+| `echartsToSheet(input: EChartsSheetInput)`            | `EChartsSheetInput`    | `SheetConfig`   | 同 `tableToSheet`，对象是图表数据                                                           |
+| `echartsExportToOptions(input: EChartsExportOptions)` | `EChartsExportOptions` | `ExportOptions` | 同 `tableExportToOptions`，对象是图表数据                                                   |
 
 自己驱动更底层入口时有两个注意事项：
 
 - `WorkbookBuilder.addSheet()` 与 `exportAsStream()` **不展开** `indexColumn`；转换后的 sheet 若用到它，请传 `applyIndexColumn(sheet)`（同样已导出）——见 [IndexColumnOptions](/zh/packages/excel-exporter/api/02-types#indexcolumnoptions)。
-- 转换器搬运的字段与两个封装一致——包括 `overlay` 不在其中这一点，所以你拿到的就是一份纯粹的配置。
+- `tableToSheet` / `echartsToSheet` 返回的是纯粹的 `SheetConfig`——`overlay` 是导出级字段，只存在于 `tableExportToOptions` / `echartsExportToOptions` 产出的 `ExportOptions` 里（两者都会透传它）。
 
 ```ts
 import { tableToSheet, exportExcel } from "@marcusok/excel-exporter";
@@ -340,7 +342,7 @@ await exportExcel({
     sheet,
     { name: "Notes", columns: [{ prop: "body", label: "Note" }], data: [] },
   ],
-  overlay: false, // 只有走主入口才够得着这个选项
+  overlay: false, // 导出级字段可与转换出的 sheet 自由组合
 });
 ```
 

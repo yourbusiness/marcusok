@@ -50,7 +50,7 @@ Cross-path `thousands`: the Workbook path renders the separator via an auto-inje
 { type: "padding", fill: "0", length: 6 } // "42" -> "000042"
 ```
 
-Omitting `align` (the default) maps to `padStart`: the fill goes on the **left** (value right-aligned) — right for leading-zero IDs. `align: "left"` maps to `padEnd`: the fill goes on the **right** (value left-aligned).
+Omitting `align` (the default) maps to `padStart`: the fill goes on the **left** (value right-aligned) — right for leading-zero IDs. `align: "left"` maps to `padEnd`: the fill goes on the **right** (value left-aligned). `length` is validated as an integer in 0–10000 (an out-of-range value fails up front with a clear error instead of blowing up — or silently not padding — at render time).
 
 ## Function form
 

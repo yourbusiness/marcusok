@@ -56,7 +56,7 @@ columns: [
 }
 ```
 
-函数签名：`(value: unknown, row: Record<string, unknown>) => string | number | boolean`。函数无法穿过结构化克隆，各路径行为不同：main 路径（浏览器 < 20,000 行 / Node < 50,000 行）、Node 的 stream 路径（≥ 50,000 行，同样在主线程执行）、以及 worker 失败后的主线程重试（原始 options 里的函数仍在——被剥离的只是发给 worker 的副本）都正常执行；浏览器 worker 路径（auto ≥ 20,000 行，或显式 `mode: "worker"` / `mode: "stream"`）会**剥离函数并打印 `console.warn`**，该列以原始值导出（不报错、不回落 main）。需要 worker 路径保留格式时改为 FormatSpec。
+函数签名：`(value: unknown, row: Record<string, unknown>) => string | number | boolean`。函数无法穿过结构化克隆，各路径行为不同：main 路径（浏览器 < 20,000 行 / Node < 50,000 行，或任意行数下显式 `mode: "main"`）、Node 的 stream 路径（≥ 50,000 行，同样在主线程执行）、以及 worker 失败后的主线程重试（原始 options 里的函数仍在——被剥离的只是发给 worker 的副本）都正常执行；浏览器 worker 路径（auto ≥ 20,000 行，或显式 `mode: "worker"` / `mode: "stream"`）会**剥离函数并打印 `console.warn`**，该列以原始值导出（不报错、不回落 main）。需要 worker 路径保留格式时改为 FormatSpec。
 
 ## 跨模式精度注意事项
 

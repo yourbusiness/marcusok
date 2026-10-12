@@ -326,7 +326,7 @@ export const packages: PackageEntry[] = [
     npmName: "@marcusok/excel-preview",
     category: "preview",
     version: excelPreviewPkg.version,
-    // 已发 1.0.x 正式版（initial release + patch），与导出包同为 stable 口径
+    // 已发正式版，与导出包同为 stable 口径（版本号动态读取 package.json，勿在此写死纪元）
     status: "stable",
     zh: true,
     tagline: {

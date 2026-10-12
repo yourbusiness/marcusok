@@ -27,8 +27,12 @@ What v1 deliberately does not do, and why.
 ## CSV encodings
 
 UTF-8 (with or without BOM) and GB18030 are detected automatically. UTF-16
-(`FF FE` / `FE FF` BOM) CSV files are detected as binary and rejected with
-`UNSUPPORTED` — re-save them as UTF-8 first.
+CSV files usually fail the text sniff — not because their BOM (`FF FE` /
+`FE FF`) is detected, but because UTF-16 bytes are full of NULs and the sniff
+requires ≥ 95% printable bytes in the first 2 KB. They land in `unknown` and
+are rejected with `UNSUPPORTED` — re-save them as UTF-8 first (a
+pathologically printable UTF-16 stream could still slip past the sniff and
+decode as garbage instead of being rejected).
 
 ## Formulas
 
@@ -36,7 +40,7 @@ Formula cells render their **cached** `<v>` values — the same convention as Sh
 
 ## Scale
 
-Parsing is not streaming (OOXML parts cross-reference each other; browsers cannot stream-parse a zip of interdependent parts) — the whole file is read into memory inside the worker. 100k × 10 cells parse in ~1.5s (measured); virtual scrolling keeps the DOM at viewport size regardless of file dimensions. Multi-hundred-MB files will hit memory limits before anything else.
-The repo's performance test asserts a different, looser bound: 100k × 8 model build < 4s, measured inside happy-dom without real rendering, and skipped in CI and the release pipeline (`RUN_PERF=0`).
+Parsing is not streaming (OOXML parts cross-reference each other; browsers cannot stream-parse a zip of interdependent parts) — the whole file is read into memory inside the worker. 100k rows × 10 cols parse in ~1.5s (measured); virtual scrolling keeps the DOM at viewport size regardless of file dimensions. Multi-hundred-MB files will hit memory limits before anything else.
+The repo's performance test asserts a different, looser bound: 100k rows × 8 cols model build < 4s, measured inside happy-dom without real rendering, and skipped in CI and the release pipeline (`RUN_PERF=0`).
 
 **Row-count ceiling (a browser limit, not memory)**: the grid is one tall container element, and at 20px per row (15pt) roughly 890k rows (~17.9M px) hit the element-size cap in Firefox / Safari — rows past that point are unreachable. Chrome's cap is ~33.5M px (about 1.67M rows). Headers and row/column labels stay viewport-sized either way; only the scrollable range is cut short. Previewing a full sheet (1,048,576 rows) needs the renderer to switch to chunked offsets first.

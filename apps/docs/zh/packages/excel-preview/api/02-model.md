@@ -7,7 +7,7 @@
 ```ts
 interface PreviewWorkbook {
   sheets: PreviewSheet[];
-  activeSheetIndex: number; // 0 起，来自文件 activeTab（越界已钳制到 0）
+  activeSheetIndex: number; // 0 起，来自文件 activeTab（越界已钳制到 0；指向隐藏 sheet 的 activeTab 会顺延到首个可见 sheet）
   dateSystem: "date1900" | "date1904"; // 决定序列号 → 日期的换算
 }
 
@@ -137,7 +137,7 @@ id 字段直接来自文件的 `cellXfs`（属性缺失时兜底 `0`），而三
 | `bold` / `italic` / `underline` / `strike` | `boolean`        | 每项一个标志；下划线与删除线会合并为一条 `text-decoration`  |
 | `color`                                    | `string \| null` | 已解析的 CSS 色；**`null` = 自动 → 渲染为黑**               |
 
-恶意文件的字体名在拼进 CSS `font-family` 声明前会被剥掉 `"` 与 `\`（未转义的引号会提前终止生成的规则，让文件得以注入任意声明）。其余插值要么是校验过的十六进制色，要么是固定关键字。
+恶意文件的字体名在拼进 CSS `font-family` 声明前会被剥掉 `"`、`\` 与 C0 控制字符（未转义的引号会提前终止生成的规则，让文件得以注入任意声明）。其余插值要么是校验过的十六进制色，要么是固定关键字。
 
 ### 填充（PreviewFill）
 

@@ -91,8 +91,8 @@ randomness.
 3. Uncomment the template in `index.ts`, fill in `name` / `category` /
    `label` / `description`, and dynamically import the implementation in
    `load()` (returning `{ default: React component }`) — `category` is the
-   package category (`"export"` / `"preview"`); the sidebar and home page
-   group demos by it
+   package category (`"export"` / `"preview"` / `"shared"`); the sidebar and
+   home page group demos by it
 4. **Restart the dev server**: `import.meta.glob` is expanded statically at
    startup, so demo directories added at runtime are not discovered (adding a
    demo or renaming one both require a restart)
@@ -110,7 +110,7 @@ non-compliant package fails the suite outright:
   `src/demos/<pkg>/index.ts` registering itself via
   `registerDemo({ name: "<pkg>", ... })`.
 - Every registered demo must declare a known `category` (`"export"` /
-  `"preview"`, mirrored from the docs-site registry).
+  `"preview"` / `"shared"`, mirrored from the docs-site registry).
 
 ### Demo lifecycle
 
@@ -122,7 +122,7 @@ Each demo's `index.ts` entry only registers lightweight metadata (`name` /
 // index.ts — metadata only; do not statically import heavy dependencies here
 registerDemo({
   name: "your-pkg",
-  category: "export", // package category: "export" / "preview"
+  category: "export", // package category: "export" / "preview" / "shared"
   label: "your-pkg · summary",
   description: "One sentence on what this demo shows.",
   async load() {
@@ -194,7 +194,7 @@ the upstream package and refresh the page manually.
   field (`pnpm@9.12.0`); run it via corepack (or equivalent) so different pnpm
   versions don't rewrite the lockfile and produce huge diffs.
 - play uses Vite 8, which requires Node >= 22.12 (declared in play's
-  `package.json` `engines`); the local Node 22.22.2 satisfies this.
+  `package.json` `engines`; the repo `.nvmrc` pins the Node 22 major).
 - vitest 4.1.x aligns with vite 8 (peer supports `^6 || ^7 || ^8`). Note the
   repo carries two vite majors: play and the root toolchain use vite 8, while
   the docs site's vitepress 1.6 brings its own vite 5 — the two never meet in

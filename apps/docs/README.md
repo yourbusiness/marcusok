@@ -9,7 +9,7 @@
 
 ```bash
 pnpm dev:docs      # 本地开发，端口 5174
-pnpm build:docs    # 构建（turbo 先构建 excel-exporter，再构建文档站）
+pnpm build:docs    # 构建（turbo 先构建 excel-exporter / excel-preview，再构建文档站）
 pnpm preview:docs  # 本地预览构建产物
 pnpm test          # turbo 全仓测试（docs 执行 zh/en 页面镜像校验）
 pnpm typecheck     # turbo 全仓类型检查（docs 执行 vue-tsc --noEmit）
@@ -29,7 +29,7 @@ pnpm typecheck     # turbo 全仓类型检查（docs 执行 vue-tsc --noEmit）
 .vitepress/registry.ts               # ★ 包注册表：新增包只需在此登记（含侧边栏/统计/亮点/live demo）
 .vitepress/theme/components/         # 自定义 Vue 组件（首页卡片、live demo 等）
 scripts/check-i18n.mjs               # en/zh 页面镜像校验（`pnpm test` 会执行）
-src/demos/<name>/                    # 每个包各自的确定性 mock 数据生成器
+src/demos/<name>/                    # 需确定性数据的演示（当前仅 excel-exporter）的 mock 生成器
 packages/<name>/                     # 每个库包一份文档（guide / examples / api，英文，即默认语言）
 zh/                                  # 中文版镜像（根目录为英文默认）
 ```

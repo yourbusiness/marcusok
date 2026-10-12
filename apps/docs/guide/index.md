@@ -1,6 +1,6 @@
 # Ecosystem
 
-`marcusok` is a pnpm + Turborepo frontend monorepo providing shared capability packages for multiple admin applications. Every package is versioned and published independently via Changesets, wired together with `workspace:*` during development.
+`marcusok` is a pnpm + Turborepo frontend monorepo providing shared capability packages for multiple admin applications. Each published package is versioned and released independently via Changesets, wired together with `workspace:*` during development.
 
 ## Current packages
 

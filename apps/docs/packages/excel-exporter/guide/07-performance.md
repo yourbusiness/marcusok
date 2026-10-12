@@ -1,6 +1,6 @@
 # Performance
 
-Numbers below come from local measurements (real Chrome, 6 mixed-type columns). The Node **in-process** regression baseline (SLA 200/500/1000 ms) lives in `src/__tests__/performance.test.ts`; the toBuffer cliff is verified out-of-band via independent processes (see the package README).
+Numbers below come from local measurements (real Chrome, 6 mixed-type columns). The Node **in-process** regression baseline (SLA 200/500/1000 ms) lives in `src/__tests__/performance.test.ts`; the toBuffer cliff is verified out-of-band via independent processes (see the package README) — measured in Node, the same 100k Workbook cliff lands around ~21s cold, versus the 17.5s Chrome figure below: one cliff, two environments.
 
 ## Benchmarks
 

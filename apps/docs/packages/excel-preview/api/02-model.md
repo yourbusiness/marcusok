@@ -7,7 +7,7 @@
 ```ts
 interface PreviewWorkbook {
   sheets: PreviewSheet[];
-  activeSheetIndex: number; // 0-based, from the file's activeTab (clamped to 0)
+  activeSheetIndex: number; // 0-based, from the file's activeTab (clamped to 0; an activeTab pointing at a hidden sheet falls through to the first visible one)
   dateSystem: "date1900" | "date1904"; // drives serial→date conversion
 }
 
@@ -137,7 +137,7 @@ The id fields come straight from the file's `cellXfs` (floored to `0` when the a
 | `bold` / `italic` / `underline` / `strike` | `boolean`        | One flag per attribute; underline and strike combine into one `text-decoration` |
 | `color`                                    | `string \| null` | Resolved CSS color; **`null` = automatic → rendered black**                     |
 
-A hostile file's font name is stripped of `"` and `\` before it is interpolated into a CSS `font-family` declaration (an unescaped quote would otherwise terminate the generated rule and let the file inject arbitrary declarations). Every other interpolated value is a validated hex color or a fixed keyword.
+A hostile file's font name is stripped of `"`, `\` and C0 control characters before it is interpolated into a CSS `font-family` declaration (an unescaped quote would otherwise terminate the generated rule and let the file inject arbitrary declarations). Every other interpolated value is a validated hex color or a fixed keyword.
 
 ### Fills (`PreviewFill`)
 
