@@ -619,6 +619,70 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
         /sheet "S" dataStyle: font\.size must be a finite positive number/,
     },
     {
+      // 直通引擎会照单写进 styles.xml（<color rgb="notacolor"/>），产出
+      // Excel 可能要求修复的工作簿而 success 仍 true——与表名/merge 同口径
+      // 前置拦截（OOXML 的 rgb 是 ST_UnsignedIntHex）。
+      label: "font.color not 6-digit hex",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            style: { font: { color: "notacolor" as unknown as string } },
+          },
+        ],
+      },
+      message: /column "A" style: font\.color must be a 6-digit RGB hex string/,
+    },
+    {
+      label: "fill.fgColor 8-digit ARGB rejected (documented shape is RGB)",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            style: {
+              fill: {
+                pattern: "solid",
+                fgColor: "FFFF0000" as unknown as string,
+              },
+            },
+          },
+        ],
+      },
+      message:
+        /column "A" style: fill\.fgColor must be a 6-digit RGB hex string/,
+    },
+    {
+      label: "border style not an OOXML enum value",
+      sheet: {
+        headerStyle: {
+          border: { bottom: { style: "wavy" as unknown as "thin" } },
+        },
+        columns: [{ prop: "a", label: "A" }],
+      },
+      message:
+        /sheet "S" headerStyle: border\.bottom\.style must be one of the OOXML border styles/,
+    },
+    {
+      label: "border side color validated too",
+      sheet: {
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            style: {
+              border: {
+                top: { style: "thin", color: "red" as unknown as string },
+              },
+            },
+          },
+        ],
+      },
+      message:
+        /column "A" style: border\.top\.color must be a 6-digit RGB hex string/,
+    },
+    {
       label: "font.size NaN (JS caller)",
       sheet: {
         columns: [

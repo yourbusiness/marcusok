@@ -712,6 +712,40 @@ describe("empty-string cells are physical blanks on both paths", () => {
     expect(xml).not.toContain('<c r="B3"');
   });
 
+  it("function format returning undefined is a physical blank on both paths", async () => {
+    // 函数 format 的返回值走 toStr 兜底分支（非 string 分支）：此前 undefined
+    // 归一出的 "" 直入 aoa 建成空文本格（ISBLANK()=FALSE），与 stream 路径
+    // 的跳格不一致——同属跨路径同一性缺口，统一为缺失格。
+    const fnSheet: SheetConfig = {
+      name: "S",
+      columns: [
+        { prop: "a", label: "A" },
+        {
+          prop: "b",
+          label: "B",
+          // 类型层签名不允许 undefined（JS 调用方才会传），断言绕过以锁定
+          // 运行时对 JS 调用方的强硬化行为
+          format: (() => undefined) as unknown as NonNullable<
+            SheetConfig["columns"][number]["format"]
+          >,
+        },
+      ],
+      data: [{ a: 1 }],
+    };
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet(fnSheet);
+    const xml = strFromU8(
+      unzipSync(await builder.toBuffer())["xl/worksheets/sheet1.xml"],
+    );
+    expect(xml).toContain('<c r="A2"');
+    expect(xml).not.toContain('<c r="B2"');
+
+    const { bytes } = await exportAsStream([fnSheet]);
+    const streamXml = strFromU8(unzipSync(bytes)["xl/worksheets/sheet1.xml"]);
+    expect(streamXml).toContain('<c r="A2"');
+    expect(streamXml).not.toContain('<c r="B2"');
+  });
+
   it("stream path keeps the identical physical shape", async () => {
     const { bytes } = await exportAsStream([sheet]);
     const xml = strFromU8(unzipSync(bytes)["xl/worksheets/sheet1.xml"]);

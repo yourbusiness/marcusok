@@ -168,7 +168,7 @@ Field reference:
 | `border`    | per-side `{ style, color }`; `style` values come from modern-xlsx `BorderStyle`                      |
 | `numFormat` | Excel format codes such as `"#,##0.00"`, `"yyyy-mm-dd"`, `"0.00%"`                                   |
 
-> Colors are 6-digit RGB hex **without** `#`, matching modern-xlsx's type contract.
+> Colors are 6-digit RGB hex **without** `#`, matching modern-xlsx's type contract. Invalid values (a color that is not 6-hex, a border style outside the OOXML enum, `textRotation` outside 0–180) are rejected at export time with a structured `{ success: false }` instead of silently producing a workbook Excel flags as corrupt.
 
 ## Default alignment
 

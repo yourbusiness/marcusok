@@ -168,7 +168,7 @@ const highlight: CellStyle = {
 | `border`    | 四边 `{ style, color }`，`style` 取值见 modern-xlsx 的 `BorderStyle`                                    |
 | `numFormat` | Excel 数字格式码，如 `"#,##0.00"`、`"yyyy-mm-dd"`、`"0.00%"`                                            |
 
-> 颜色统一使用 6 位 RGB hex（不带 `#`），与 modern-xlsx 的类型约定一致。
+> 颜色统一使用 6 位 RGB hex（不带 `#`），与 modern-xlsx 的类型约定一致。非法值（颜色不是 6 位 hex、border 样式不在 OOXML 枚举内、`textRotation` 超出 0–180）会在导出时以结构化 `{ success: false }` 拒绝，而不是静默产出 Excel 可能要求修复的工作簿。
 
 ## 默认居中
 

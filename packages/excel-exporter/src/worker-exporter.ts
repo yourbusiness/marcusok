@@ -101,9 +101,22 @@ function getOrCreateWorker(): Worker {
   return w;
 }
 
-/** Strip function-form format before structured clone (functions cannot be cloned). */
+/**
+ * Strip non-cloneable / worker-irrelevant fields before structured clone.
+ * Functions (callbacks, function-form formats) cannot be cloned; `overlay` is
+ * consumed entirely by the exportExcel wrapper on the main thread (the mask is
+ * already wired there) and may legally carry DOM values (e.g. `container:
+ * HTMLElement`) — leaving it in the payload makes every worker-route postMessage
+ * throw DataCloneError, silently degrading 20k+ row exports to a main-thread
+ * rebuild the worker threshold exists to avoid.
+ */
 function stripFunctionFormats(options: ExportOptions): ExportOptions {
-  const { onProgress: _onProgress, onPhase: _onPhase, ...rest } = options;
+  const {
+    onProgress: _onProgress,
+    onPhase: _onPhase,
+    overlay: _overlay,
+    ...rest
+  } = options;
   return {
     ...rest,
     sheets: options.sheets.map((s) => ({

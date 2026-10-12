@@ -81,9 +81,12 @@ export class WorkbookBuilder {
         // 物理缺失格而非空文本格：引擎 writeAoaRow 对 null 跳格（不建 <c>），
         // 与 stream 路径 fast-xlsx 的 v === "" continue 语义对齐。空文本格
         // ISBLANK()=FALSE，同一份数据跨 50k 阈值会让 COUNTA/ISBLANK 类公式
-        // 结果漂移，违反 types.ts 的跨路径同一性契约。
+        // 结果漂移，违反 types.ts 的跨路径同一性契约。兜底分支（函数 format
+        // 返回 undefined/null、toStr 产出 ""）同口径归 null——此前 "" 直入
+        // aoa 建成空文本格，与 stream 的跳格不一致（同一性缺口）。
         if (typeof v === "string") return v === "" ? null : v;
-        return toStr(v);
+        const fallback = toStr(v);
+        return fallback === "" ? null : fallback;
       }),
     );
     const aoa = [...headerGrid, ...rows];

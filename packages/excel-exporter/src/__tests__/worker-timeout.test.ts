@@ -5,17 +5,22 @@ import type { ExportOptions } from "../types";
 
 // A fake Worker whose postMessage never produces a response, driving every
 // request into the 120s timeout without waiting real time (vi.useFakeTimers).
+// postMessage 载荷同步记录：载荷剥离（回调/overlay）的断言在不动 worker
+// 协议 mock 的前提下即可锁定。
 class FakeWorker {
   static instances: FakeWorker[] = [];
   onmessage: ((e: unknown) => void) | null = null;
   onerror: ((err: { message?: string }) => void) | null = null;
   terminated = false;
+  posted: unknown[] = [];
 
   constructor() {
     FakeWorker.instances.push(this);
   }
 
-  postMessage(..._args: unknown[]): void {}
+  postMessage(data: unknown, ..._rest: unknown[]): void {
+    this.posted.push(data);
+  }
   terminate(): void {
     this.terminated = true;
   }
@@ -40,6 +45,39 @@ describe("exportInWorker timeout recovery", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     FakeWorker.instances = [];
+  });
+
+  it("strips the overlay option (DOM values would fail structured clone)", async () => {
+    // overlay 由 exportExcel 包装层在主线程消费（遮罩已接线），但它是
+    // ProgressOverlayOptions——合法携带 container: HTMLElement 一类不可
+    // 克隆值。留在载荷里会让 worker 路由的每次 postMessage 同步抛
+    // DataCloneError，20k+ 行导出全部退回主线程阻塞重建（worker 阈值要
+    // 避免的正是这个），用户定制的遮罩还冻结在屏上。
+    stubBrowser();
+    configureWasm({ workerUrl: "/fake/export.worker.js" });
+    vi.useFakeTimers();
+
+    const doomed = exportInWorker(
+      {
+        filename: "overlay-strip",
+        download: false,
+        sheets,
+        // 非纯数据值：真实浏览器里 structuredClone 对它必抛 DataCloneError
+        overlay: { container: { nodeType: 1 } as unknown as HTMLElement },
+      },
+      "workbook",
+    );
+    await vi.advanceTimersByTimeAsync(120_000);
+    const r = await doomed;
+    // FakeWorker.postMessage 不抛——超时路径证明请求确实发出去了；载荷
+    // 断言才是本用例的目的：overlay 字段不得出现在 postMessage 参数里。
+    expect(r.success).toBe(false);
+    const payload = FakeWorker.instances[0].posted[0] as {
+      options: Record<string, unknown>;
+    };
+    expect(payload.options).not.toHaveProperty("overlay");
+    expect(payload.options).not.toHaveProperty("onProgress");
+    expect(payload.options).toHaveProperty("filename");
   });
 
   it("terminates the timed-out worker and drops the cached instance", async () => {

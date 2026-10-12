@@ -127,7 +127,43 @@ function pickMode(options: ExportOptions, totalRows: number): PickedMode {
  * 为无样式 stream——正是前置校验要消除的"同一错误一边降级一边成功"分裂。
  * 范围只限 types.ts 明确承诺了取值区间的字段（textRotation 注释 0-180），
  * 不替引擎承诺未文档化的上限（如 font.size 的 409）。
+ *
+ * 颜色与 border.style 同属"types.ts 已承诺、直通引擎却产出 Excel 可能要求
+ * 修复的工作簿（success 仍 true）"的字段：引擎对 color: "notacolor" /
+ * style: "wavy" 照单全收写进 styles.xml（实测），而 OOXML 的 rgb 是
+ * ST_UnsignedIntHex、border style 是封闭枚举——与表名/merge 的校验同一
+ * 口径前置拦截（"不产出 Excel 判损文件而 success 仍为 true"）。
  */
+const COLOR_HEX = /^[0-9A-Fa-f]{6}$/;
+const BORDER_STYLES = new Set<string>([
+  "thin",
+  "medium",
+  "thick",
+  "dashed",
+  "dotted",
+  "double",
+  "hair",
+  "mediumDashed",
+  "dashDot",
+  "mediumDashDot",
+  "dashDotDot",
+  "mediumDashDotDot",
+  "slantDashDot",
+]);
+
+function validateColor(
+  color: string | undefined,
+  at: string,
+  field: string,
+): void {
+  if (color === undefined) return;
+  if (typeof color !== "string" || !COLOR_HEX.test(color)) {
+    throw new Error(
+      `[excel-exporter] ${at}: ${field} must be a 6-digit RGB hex string (e.g. 'FF0000'), got ${JSON.stringify(color)}`,
+    );
+  }
+}
+
 function validateCellStyle(style: CellStyle | undefined, at: string): void {
   if (!style) return;
   const rotation = style.alignment?.textRotation;
@@ -147,6 +183,22 @@ function validateCellStyle(style: CellStyle | undefined, at: string): void {
     throw new Error(
       `[excel-exporter] ${at}: font.size must be a finite positive number`,
     );
+  }
+  validateColor(style.font?.color, at, "font.color");
+  validateColor(style.fill?.fgColor, at, "fill.fgColor");
+  validateColor(style.fill?.bgColor, at, "fill.bgColor");
+  const border = style.border;
+  if (border) {
+    for (const side of ["top", "bottom", "left", "right"] as const) {
+      const b = border[side];
+      if (!b) continue;
+      if (!BORDER_STYLES.has(b.style)) {
+        throw new Error(
+          `[excel-exporter] ${at}: border.${side}.style must be one of the OOXML border styles (thin/medium/thick/dashed/...), got ${JSON.stringify(b.style)}`,
+        );
+      }
+      validateColor(b.color, at, `border.${side}.color`);
+    }
   }
 }
 
