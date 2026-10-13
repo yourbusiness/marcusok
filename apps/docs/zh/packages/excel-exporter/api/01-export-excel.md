@@ -46,13 +46,14 @@ configureWasm(options: LoaderOptions): void
 
 可选——资产默认定位到随包发布的位置（见[安装与配置](/zh/packages/excel-exporter/guide/02-installation)）。仅自托管副本、CDN、或不支持资产 URL 的打包器需要覆盖。
 
-| 字段              | 默认值             | 说明                                                                                       |
-| ----------------- | ------------------ | ------------------------------------------------------------------------------------------ |
-| `wasmUrl`         | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                                                                    |
-| `workerUrl`       | 随包发布的 worker  | 覆盖为**同源**自托管副本——跨域 URL 在 `Worker` 构造时即被浏览器拒绝，普通 CDN 在这里不可用 |
-| `timeoutMs`       | `10_000`           | 单次加载超时                                                                               |
-| `maxRetries`      | `3`                | 最大加载尝试次数（默认共 3 次含首次，退避 300ms/600ms）                                    |
-| `workerTimeoutMs` | `120_000`          | Worker 导出超时。必须保持 > 0——没有「禁用」取值：`0`/负数意味着「立即超时」而非「不超时」  |
+| 字段              | 默认值             | 说明                                                                                                                                                  |
+| ----------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wasmUrl`         | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                                                                                                                               |
+| `workerUrl`       | 随包发布的 worker  | 覆盖为**同源**自托管副本——跨域 URL 在 `Worker` 构造时即被浏览器拒绝，普通 CDN 在这里不可用                                                            |
+| `timeoutMs`       | `10_000`           | 单次加载超时                                                                                                                                          |
+| `maxRetries`      | `3`                | 最大加载尝试次数（默认共 3 次含首次，退避 300ms/600ms）                                                                                               |
+| `workerTimeoutMs` | `120_000`          | Worker 导出超时。必须保持 > 0——没有「禁用」取值：`0`/负数意味着「立即超时」而非「不超时」                                                             |
+| `parseWorkerUrl`  | —                  | 共享 `LoaderOptions` 类型上存在但对本包无效：它为 `@marcusok/excel-preview` 的解析 worker 指定自托管地址；本包的导出 worker 用上方的 `workerUrl` 配置 |
 
 ## 其他导出符号
 
@@ -109,4 +110,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> 本文档覆盖常用的稳定 API。主入口另外还重导出了上表列出的 `format-utils` 工具、`BorderStyle` 以及来自内置引擎层的其它引擎类型；完整列表见 `src/index.ts`。
+> 本文档覆盖常用的稳定 API。主入口另外还重导出了上表列出的 `format-utils` 工具、`BorderStyle` 以及来自内置引擎层的其它引擎类型；完整导出清单见 [GitHub 上的 `src/index.ts`](https://github.com/yourbusiness/marcusok/blob/main/packages/excel-exporter/src/index.ts)（安装包内对应 `dist/index.d.ts`）。

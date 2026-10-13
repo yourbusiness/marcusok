@@ -56,13 +56,14 @@ configureWasm({ wasmUrl, workerUrl });
 
 > Before 3.0, the canonical wasm path was `@marcusok/xlsx-core/dist/modern-xlsx.wasm` (the engine shipped as a separate package). That package is no longer published; the binary now ships with this package and the path above is the canonical one.
 
-| Option            | Type            | Default                 | Description                                                                                                                                                                  |
-| ----------------- | --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wasmUrl`         | `string \| URL` | the shipped `.wasm`     | Override for a self-hosted / CDN copy                                                                                                                                        |
-| `workerUrl`       | `string \| URL` | the shipped worker file | Override for a **same-origin** self-hosted copy — a cross-origin URL is rejected at `Worker` construction, so a plain CDN does not work here                                 |
-| `timeoutMs`       | `number`        | `10_000`                | Per-attempt load timeout                                                                                                                                                     |
-| `maxRetries`      | `number`        | `3`                     | Max attempts; failed attempts wait 300ms, then 600ms                                                                                                                         |
-| `workerTimeoutMs` | `number`        | `120_000`               | Worker export timeout; a timed-out export terminates the shared worker. Keep it > 0 — there is no disable value: `0`/negative means "time out immediately", not "no timeout" |
+| Option            | Type            | Default                 | Description                                                                                                                                                                            |
+| ----------------- | --------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wasmUrl`         | `string \| URL` | the shipped `.wasm`     | Override for a self-hosted / CDN copy                                                                                                                                                  |
+| `workerUrl`       | `string \| URL` | the shipped worker file | Override for a **same-origin** self-hosted copy — a cross-origin URL is rejected at `Worker` construction, so a plain CDN does not work here                                           |
+| `timeoutMs`       | `number`        | `10_000`                | Per-attempt load timeout                                                                                                                                                               |
+| `maxRetries`      | `number`        | `3`                     | Max attempts; failed attempts wait 300ms, then 600ms                                                                                                                                   |
+| `workerTimeoutMs` | `number`        | `120_000`               | Worker export timeout; a timed-out export terminates the shared worker. Keep it > 0 — there is no disable value: `0`/negative means "time out immediately", not "no timeout"           |
+| `parseWorkerUrl`  | `string \| URL` | —                       | Accepted by the shared `LoaderOptions` type but inert here: it configures `@marcusok/excel-preview`'s parse worker, never this package's export worker (that one is `workerUrl` above) |
 
 `configureWasm` merges options: only a changed `wasmUrl` resets an already-loaded (or mid-load) WASM instance; changing timeouts/retries alone never causes re-initialization. If a previous load failed (error state), any `configureWasm` call clears the error so the next export retries with the new settings.
 

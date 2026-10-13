@@ -46,13 +46,14 @@ configureWasm(options: LoaderOptions): void
 
 Optional — assets default to the files shipped next to the package entry (see [Installation](/packages/excel-exporter/guide/02-installation)). Override for self-hosted copies, a CDN, or bundlers without asset-URL support.
 
-| Field             | Default                 | Description                                                                                                                                  |
-| ----------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wasmUrl`         | the shipped `.wasm`     | Override for a self-hosted / CDN copy                                                                                                        |
-| `workerUrl`       | the shipped worker file | Override for a **same-origin** self-hosted copy — a cross-origin URL is rejected at `Worker` construction, so a plain CDN does not work here |
-| `timeoutMs`       | `10_000`                | Per-attempt load timeout                                                                                                                     |
-| `maxRetries`      | `3`                     | Max load attempts (3 total incl. the first; 300ms/600ms backoff)                                                                             |
-| `workerTimeoutMs` | `120_000`               | Worker export timeout. Keep it > 0 — there is no disable value: `0`/negative means "time out immediately", not "no timeout"                  |
+| Field             | Default                 | Description                                                                                                                                                                                                       |
+| ----------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wasmUrl`         | the shipped `.wasm`     | Override for a self-hosted / CDN copy                                                                                                                                                                             |
+| `workerUrl`       | the shipped worker file | Override for a **same-origin** self-hosted copy — a cross-origin URL is rejected at `Worker` construction, so a plain CDN does not work here                                                                      |
+| `timeoutMs`       | `10_000`                | Per-attempt load timeout                                                                                                                                                                                          |
+| `maxRetries`      | `3`                     | Max load attempts (3 total incl. the first; 300ms/600ms backoff)                                                                                                                                                  |
+| `workerTimeoutMs` | `120_000`               | Worker export timeout. Keep it > 0 — there is no disable value: `0`/negative means "time out immediately", not "no timeout"                                                                                       |
+| `parseWorkerUrl`  | —                       | Accepted by the shared `LoaderOptions` type but inert on this package: it points `@marcusok/excel-preview`'s parse worker at a self-hosted copy. This package's export worker is configured via `workerUrl` above |
 
 ## Other exported symbols
 
@@ -109,4 +110,4 @@ import {
 } from "@marcusok/excel-exporter";
 ```
 
-> This page covers the commonly used stable API. The main entry additionally re-exports the `format-utils` helpers tabulated above, `BorderStyle` and the other engine types from the bundled engine layer; `src/index.ts` is the exhaustive list.
+> This page covers the commonly used stable API. The main entry additionally re-exports the `format-utils` helpers tabulated above, `BorderStyle` and the other engine types from the bundled engine layer; the exhaustive export list is [`src/index.ts` on GitHub](https://github.com/yourbusiness/marcusok/blob/main/packages/excel-exporter/src/index.ts) (shipped in the installed package as `dist/index.d.ts`).

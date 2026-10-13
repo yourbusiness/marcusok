@@ -67,7 +67,7 @@ That is the documented timing, not a bug: `createPreview` boots asynchronously, 
 
 ### A formula cell renders empty
 
-Formula cells render their **cached** value — the same convention as SheetJS and exceljs; the preview never evaluates formulas. A file written by a non-Excel writer without a cached `<v>` therefore shows an empty cell; opening and re-saving it in Excel populates the cache. A formula with a cached result does render (a numeric cache arrives as `type: "number"`, a string cache as `type: "string"`).
+Formula cells render their **cached** value — the same convention as SheetJS and exceljs; the preview never evaluates formulas. A file written by a non-Excel writer without a cached `<v>` therefore shows an empty cell; opening and re-saving it in Excel populates the cache. A formula with a cached result does render (a numeric cache arrives as `type: "number"`, a string cache as `type: "formulaStr"`).
 
 ### Does previewing a huge file freeze the page?
 

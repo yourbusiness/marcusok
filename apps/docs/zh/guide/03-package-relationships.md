@@ -65,7 +65,7 @@ configurePreviewWasm({ wasmUrl, parseWorkerUrl }); // 预览包的 loader + pars
 
 - **2.8.0 起**，每次导出默认显示遮罩。无需额外 import、无需包装函数。
 - `overlay` 字段声明在 `ExportOptions` 上，三种取值——缺省/`true`（默认导出文案）、`false`（完全关闭：不挂载、不多让一帧）、或选项对象（定制文案、`delayMs`、主题等）。三者及自定义文案的合并语义见[进度遮罩](/zh/packages/excel-exporter/guide/11-overlay#取值)，本页不再重复。
-- **该字段在全部三个入口都生效。** 3.0.3 起 `TableExportOptions` 与 `EChartsExportOptions` 也声明了 `overlay`，两个转换器都会转发给 `exportExcel`——三个入口定制或关闭遮罩的方式完全一致。见[表格与 ECharts → 与 exportExcel 的关系](/zh/packages/excel-exporter/api/05-table-and-echarts#与-exportexcel-的关系)。
+- **该字段在全部三个入口都生效。** 3.0.2 起 `TableExportOptions` 与 `EChartsExportOptions` 也声明了 `overlay`，两个转换器都会转发给 `exportExcel`——三个入口定制或关闭遮罩的方式完全一致。见[表格与 ECharts → 与 exportExcel 的关系](/zh/packages/excel-exporter/api/05-table-and-echarts#与-exportexcel-的关系)。
 - **给非 Excel 任务驱动同一遮罩。** 遮罩已内置于导出包，公开路径是 `@marcusok/excel-exporter/overlay` 子路径——导出通用的遮罩入口 `showExportOverlay`（与 Excel 无关）及句柄类型。文档示例见[进度遮罩 → 自己驱动遮罩](/zh/packages/excel-exporter/guide/11-overlay#自己驱动遮罩)。
 
 ## 版本、发布与兼容性
