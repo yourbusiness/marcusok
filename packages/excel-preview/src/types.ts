@@ -194,7 +194,13 @@ export type PreviewErrorCode =
   | "UNSUPPORTED"
   | "CORRUPT"
   | "WASM"
-  | "UNKNOWN";
+  | "UNKNOWN"
+  /**
+   * 调用方主动取消：createPreview 的 destroy() 中止了在途解析，或
+   * parseWorkbookBytes 的 signal 被 abort。取消不是错误——createPreview
+   * 对该码静默（不触发 onError）。
+   */
+  | "ABORTED";
 
 export interface PreviewError {
   code: PreviewErrorCode;
@@ -204,7 +210,12 @@ export interface PreviewError {
 }
 
 export interface PreviewInstance {
-  /** 卸载渲染 DOM 并释放资源（Worker 为模块级共享，不随实例销毁）。 */
+  /**
+   * 卸载渲染 DOM 并释放资源（Worker 为模块级共享，不随实例销毁）。
+   * 同时中止在途解析（code ABORTED，见 PreviewErrorCode）：调用方立即
+   * 解除等待；主线程回退路径在 await 边界放弃后续大计算，worker 路径的
+   * 迟到结果到达即丢弃（共享 worker 不为此 terminate——会拒绝兄弟请求）。
+   */
   destroy(): void;
   /** 切换 sheet（名称或 0-based 索引）。 */
   setSheet(nameOrIndex: string | number): void;

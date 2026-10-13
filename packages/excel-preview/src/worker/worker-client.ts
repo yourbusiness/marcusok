@@ -13,6 +13,14 @@ import type { PreviewErrorCode, PreviewWorkbook } from "../types";
 export interface ParseRequest {
   bytes: Uint8Array;
   password?: string;
+  /**
+   * 取消信号：中止即以 code ABORTED 解除调用方等待。语义边界——主线程
+   * 路径在 await 边界（ensureLoaded / readBuffer 之后）放弃后续大计算，
+   * 同步 WASM 段不可中途打断；worker 路径不清空 worker 内的计算（共享
+   * worker 不为此 terminate，会拒绝兄弟请求），收益是调用方立即返回与
+   * 迟到结果经已清的 pending 槽位丢弃。取消结果不回退主线程复跑。
+   */
+  signal?: AbortSignal;
 }
 
 export interface ParseOk {
@@ -139,6 +147,7 @@ export async function parseOnMainThread(
 ): Promise<ParseResult> {
   const t0 = performance.now();
   try {
+    if (req.signal?.aborted) return abortedResult();
     const form = sniffFormat(req.bytes);
     if (form === "text") {
       const workbook = csvToWorkbook(req.bytes);
@@ -172,15 +181,30 @@ export async function parseOnMainThread(
         { code: "WASM" },
       );
     }
+    // WASM 加载可能耗时数秒，等待期间中止即放弃后续解析
+    if (req.signal?.aborted) return abortedResult();
     const wb = await readBuffer(
       req.bytes,
       req.password ? { password: req.password } : undefined,
     );
+    // readBuffer 返回后的微任务边界：模型构建是下一段大计算（100k 行
+    // ~2.6s 实测），中止即放弃（同步 WASM 段内无法打断，只能边界放弃）
+    if (req.signal?.aborted) return abortedResult();
     const workbook = buildPreviewWorkbook(wb, req.bytes);
     return { ok: true, workbook, parseMs: performance.now() - t0 };
   } catch (err) {
     return normalizeParseError(err);
   }
+}
+
+/** 调用方主动取消的统一结果（ABORTED，不回退主线程复跑——复跑违背取消意图）。 */
+function abortedResult(): ParseErr {
+  return {
+    ok: false,
+    code: "ABORTED",
+    message:
+      "The parse was cancelled by the caller (createPreview destroy() or an aborted signal).",
+  };
 }
 
 /** 拒绝全部在途请求（worker 超时/报废时整批收尾，槽位一并清空）。 */
@@ -198,6 +222,8 @@ function rejectAllPending(err: Omit<ParseErr, "ok">): void {
 export async function parseWorkbookSource(
   req: ParseRequest,
 ): Promise<ParseResult> {
+  // 已中止的 signal 直接短路：不构造 worker、不发消息、不跑主线程解析
+  if (req.signal?.aborted) return abortedResult();
   const w = getOrCreateWorker();
   if (!w) return parseOnMainThread(req);
 
@@ -205,8 +231,20 @@ export async function parseWorkbookSource(
   const id = ++requestIdSeq;
   const { wasmUrl, workerTimeoutMs } = getWasmLoader().getOptions();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  // abort 监听在 Promise settle 后必须摘除：signal 归调用方长期持有（如页面
+  // 级 controller）时，once 监听器会一直挂着 resolve 闭包 → 持有 req.bytes
+  // 引用，直至 signal 被 GC。
+  let onAbort: (() => void) | undefined;
   const result = await new Promise<ParseResult>((resolve) => {
     pending.set(id, resolve);
+    if (req.signal) {
+      onAbort = () => {
+        pending.delete(id);
+        clearTimeout(timer);
+        resolve(abortedResult());
+      };
+      req.signal.addEventListener("abort", onAbort, { once: true });
+    }
     // 每请求一个计时器（首个触发的负责收尾）：worker 挂死（wasm 初始化
     // 悬置/引擎死循环）时 pending 会无限等待，onParsed/onError 均不触发。
     // 超时即终止共享 worker 并拒绝全部在途请求——与 xlsx-core 对
@@ -252,12 +290,17 @@ export async function parseWorkbookSource(
       });
     }
   });
-  // 响应已到（含 onerror/超时收尾后 resolve 的情形）：清掉本请求的计时器，
-  // 已触发的计时器 clearTimeout 为无害 no-op
+  // 响应已到（含 onerror/超时/abort 收尾后 resolve 的情形）：清掉本请求的
+  // 计时器（已触发的 clearTimeout 为无害 no-op），摘除 abort 监听（见其声明）
   clearTimeout(timer);
+  if (req.signal && onAbort) {
+    req.signal.removeEventListener("abort", onAbort);
+  }
   if (result.ok) {
     return { ...result, parseMs: performance.now() - t0 };
   }
+  // 调用方取消：直传，不回退主线程（对取消的输入复跑违背取消意图）
+  if (result.code === "ABORTED") return result;
   // 域错误（密码/格式判别等确定性结论）直传：主线程复跑必然同错，
   // 回退只会把加密/损坏文件的解析成本翻倍
   if (result.domain) return result;

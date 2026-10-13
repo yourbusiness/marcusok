@@ -17,7 +17,7 @@ const preview = createPreview(el, {
 
 // setSheet() / getSheetNames() only take effect once the parse resolves
 preview.setSheet("Sheet2"); // by name or index
-preview.destroy();
+preview.destroy(); // also aborts an in-flight parse (ABORTED — never an onError)
 ```
 
 That is the entire setup. Parsing runs in a Web Worker in the browser; the
@@ -47,8 +47,10 @@ load, so use `duration.render` for a switch's own cost).
   minute-adjacent `mm` (the engine renders it as month), `date1904` shift,
   `[Red]`-style section colors.
 - **More** — password-protected workbooks (`password` option), CSV (UTF-8 /
-  GB18030, delimiter sniffing), friendly code-carrying errors
-  (`PASSWORD_PROTECTED`, `LEGACY_FORMAT` for legacy `.xls`, …).
+  GB18030, delimiter sniffing), parse cancellation (`destroy()` aborts an
+  in-flight parse; `parseWorkbookBytes` accepts an `AbortSignal`), friendly
+  code-carrying errors (`PASSWORD_PROTECTED`, `LEGACY_FORMAT` for legacy
+  `.xls`, `ABORTED` for cancellations, …).
 
 ## Large files
 

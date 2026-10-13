@@ -48,13 +48,18 @@ async function toBytes(source: PreviewOptions["source"]): Promise<Uint8Array> {
 
 /**
  * 低层解析：字节 → PreviewWorkbook（不做任何 DOM）。浏览器内经共享
- * Worker，Node/SSR 主线程；CSV 文本自动分流。
+ * Worker，Node/SSR 主线程；CSV 文本自动分流。`opts.signal` 中止时抛带
+ * `.code === "ABORTED"` 的 Error（取消语义见 ParseRequest.signal 注释）。
  */
 export async function parseWorkbookBytes(
   bytes: Uint8Array,
-  opts: { password?: string } = {},
+  opts: { password?: string; signal?: AbortSignal } = {},
 ): Promise<PreviewWorkbook> {
-  const result = await parseWorkbookSource({ bytes, password: opts.password });
+  const result = await parseWorkbookSource({
+    bytes,
+    password: opts.password,
+    signal: opts.signal,
+  });
   if (!result.ok) {
     const err = new Error(result.message) as Error & { code: string };
     err.code = result.code;
@@ -85,6 +90,10 @@ export function createPreview(
 ): PreviewInstance {
   const { onParsed, onError } = options;
   let destroyed = false;
+  // destroy 即取消：abort 在途解析（见 PreviewInstance.destroy 注释）。
+  // worker 路径由此立即解除 boot 的等待、迟到结果丢弃；主线程回退路径
+  // 在 await 边界放弃后续大计算（同步 WASM 段不可中途打断）。
+  const abortController = new AbortController();
   let renderer: SheetRenderer | null = null;
   let workbook: PreviewWorkbook | null = null;
 
@@ -95,9 +104,12 @@ export function createPreview(
       const result = await parseWorkbookSource({
         bytes,
         password: options.password,
+        signal: abortController.signal,
       });
       if (destroyed) return;
       if (!result.ok) {
+        // destroy 触发的取消不是错误：静默返回，不触发 onError
+        if (result.code === "ABORTED") return;
         onError?.({ code: result.code, message: result.message });
         return;
       }
@@ -144,6 +156,7 @@ export function createPreview(
   return {
     destroy() {
       destroyed = true;
+      abortController.abort();
       renderer?.destroy();
       renderer = null;
       workbook = null;

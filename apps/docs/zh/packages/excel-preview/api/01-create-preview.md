@@ -42,14 +42,15 @@ interface PreviewParsedInfo {
 
 ## PreviewError 错误码
 
-| 错误码               | 含义                                                                                                                                                                                                                                         |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PASSWORD_PROTECTED` | 加密工作簿，`password` 缺失或错误                                                                                                                                                                                                            |
-| `LEGACY_FORMAT`      | 旧版 `.xls`（BIFF8）——请另存为 `.xlsx`                                                                                                                                                                                                       |
-| `CORRUPT`            | ZIP 但不是有效 xlsx：部件缺失/损坏（`.ods` / `.docx` 同形包、截断文件），或工作簿一个 sheet 都没有                                                                                                                                           |
-| `UNSUPPORTED`        | 既不是 ZIP 也不是可识别的纯文本——含 XML/HTML 伪表格（SpreadsheetML 2003、HTML 表格另存为 `.xls`）与 UTF-16 编码的 CSV                                                                                                                        |
-| `WASM`               | 当前环境不支持 WebAssembly，或引擎加载失败（资产 404、CSP 禁止 WebAssembly、网络失败）                                                                                                                                                       |
-| `UNKNOWN`            | 其他——含解析 worker 超时，其报文为专用的 `parse worker timed out after …ms (worker terminated); retry the parse`（worker 会被终止，且**不会**转到主线程重跑）；底层错误信息原样透传（失败来自预览自身 boot 路径时，原始错误对象在 `.cause`） |
+| 错误码               | 含义                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PASSWORD_PROTECTED` | 加密工作簿，`password` 缺失或错误                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `LEGACY_FORMAT`      | 旧版 `.xls`（BIFF8）——请另存为 `.xlsx`                                                                                                                                                                                                                                                                                                                                                                                              |
+| `CORRUPT`            | ZIP 但不是有效 xlsx：部件缺失/损坏（`.ods` / `.docx` 同形包、截断文件），或工作簿一个 sheet 都没有                                                                                                                                                                                                                                                                                                                                  |
+| `UNSUPPORTED`        | 既不是 ZIP 也不是可识别的纯文本——含 XML/HTML 伪表格（SpreadsheetML 2003、HTML 表格另存为 `.xls`）与 UTF-16 编码的 CSV                                                                                                                                                                                                                                                                                                               |
+| `WASM`               | 当前环境不支持 WebAssembly，或引擎加载失败（资产 404、CSP 禁止 WebAssembly、网络失败）                                                                                                                                                                                                                                                                                                                                              |
+| `UNKNOWN`            | 其他——含解析 worker 超时，其报文为专用的 `parse worker timed out after …ms (worker terminated); retry the parse`（worker 会被终止，且**不会**转到主线程重跑）；底层错误信息原样透传（失败来自预览自身 boot 路径时，原始错误对象在 `.cause`）                                                                                                                                                                                        |
+| `ABORTED`            | 调用方主动取消——在途预览的 `destroy()`，或传给 `parseWorkbookBytes` 的 `signal` 被 abort。取消**不会**转到主线程重跑（对已取消的输入复跑违背取消意图）。`createPreview` 对该码静默：**不**触发 `onError`。语义边界：主线程路径在下一个 `await` 边界放弃后续大计算（同步 WASM 段无法中途打断）；worker 路径调用方立即解除等待、迟到的 worker 结果经已清空的 pending 槽位丢弃——取消**不会** terminate 共享 worker（那会拒绝兄弟请求） |
 
 错误对象的完整形状：
 
@@ -73,7 +74,7 @@ interface PreviewInstance {
 }
 ```
 
-`destroy()` 移除渲染 DOM。解析 worker 是模块级共享资源（与导出包一致，有意跨实例保温）；解析完成后不持有任何文件数据。
+`destroy()` 移除渲染 DOM，**并中止在途解析**（上表的 `ABORTED` 码——boot 路径静默返回，取消的预览不会触发 `onError`/`onParsed`）。解析 worker 是模块级共享资源（与导出包一致，有意跨实例保温）；解析完成后不持有任何文件数据，取消也不会 terminate 它（迟到的结果直接丢弃）。
 
 隐藏 sheet 语义：`setSheet()` 按名称或 0 起索引查找，**不过滤隐藏 sheet**——与页签栏（永不显示它们）不同，显式 `setSheet("HiddenSheet")` 会渲染它。无效的名称/索引经 `onError` 报出（`UNKNOWN` 码）。`getSheetNames()` 同样包含 hidden / veryHidden 的 sheet，按文件顺序——若用它驱动自己的 sheet 选择器，请自行过滤。
 
@@ -84,10 +85,13 @@ interface PreviewInstance {
 ```ts
 import { parseWorkbookBytes } from "@marcusok/excel-preview";
 
-const workbook = await parseWorkbookBytes(bytes, { password: "…" });
+const workbook = await parseWorkbookBytes(bytes, {
+  password: "…",
+  signal, // 可选 AbortSignal——abort 时以 ABORTED 码拒绝
+});
 ```
 
-失败时抛出带 `.code` 属性的 `Error`（错误码同上）。模型字段见[数据模型](/zh/packages/excel-preview/api/02-model)。
+失败时抛出带 `.code` 属性的 `Error`（错误码同上）；`signal` 中止时抛出 `ABORTED` 码。模型字段见[数据模型](/zh/packages/excel-preview/api/02-model)。
 
 ## 其他导出
 

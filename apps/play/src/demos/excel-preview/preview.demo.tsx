@@ -27,6 +27,9 @@ const ERROR_CODE_TEXT: Record<PreviewError["code"], string> = {
   CORRUPT: "不是有效的 xlsx/zip 文件",
   WASM: "当前环境不支持 WebAssembly",
   UNKNOWN: "未知错误",
+  // createPreview 对取消静默（不触发 onError），此文案仅供直接消费
+  // parseWorkbookBytes + signal 的调用方参考
+  ABORTED: "解析已取消",
 };
 
 export default function ExcelPreviewDemo() {
