@@ -39,7 +39,7 @@ Progress granularity is the caller's: only callers that emit intermediate values
 
 ## 样式定制（CSS 变量）
 
-配色不写死，全部经 10 个 CSS 变量承载，类名统一 `mxe-` 前缀
+配色不写死，全部经 9 个 CSS 变量承载，类名统一 `mxe-` 前缀
 （`.mxe-overlay` / `.mxe-panel` / `.mxe-title` / `.mxe-hint` /
 `.mxe-track` / `.mxe-fill` / `.mxe-spinner` / `.mxe-percent`）。浅色值
 定义在 `.mxe-overlay` 基础规则上，深色经 `.mxe-overlay[data-mxe-theme="dark"]`

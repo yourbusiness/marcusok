@@ -15,7 +15,7 @@ Worker path behavior:
 
 ## Streaming writes (≥ 50,000 rows)
 
-`fast-xlsx.ts` uses `fflate` to produce minimal OOXML: ~0.8s at 100k rows (vs 17.5s on the Workbook path). `auto` selects it at ≥ 50k rows.
+`fast-xlsx.ts` uses `fflate` to produce minimal OOXML: ~0.8s at 100k rows (vs 17.5s on the Workbook path in Chrome — ~21s cold in Node; see [Performance](/packages/excel-exporter/guide/07-performance)). `auto` selects it at ≥ 50k rows.
 
 Known stream limitations:
 

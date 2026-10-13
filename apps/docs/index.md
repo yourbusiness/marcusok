@@ -31,7 +31,7 @@ hero:
 
 ## Performance Snapshot
 
-Fast stream completes a 100k-row export in ~0.8s, while the same engine's Workbook path slows sharply beyond ~55k rows (17.5s at 100k).
+Fast stream completes a 100k-row export in ~0.8s, while the same engine's Workbook path slows sharply beyond ~55k rows (17.5s at 100k in Chrome; ~21s cold in Node).
 
 <ClientOnly>
   <BenchmarkChart />

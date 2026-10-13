@@ -32,6 +32,6 @@ await exportExcel({ ..., mode: "main" });    // 强制主线程
 ## 阈值为什么是 20,000 / 50,000
 
 - **20,000 行**：主线程同步工作在此量级以下可接受，避免不必要的 Worker 启动开销；
-- **50,000 行**：实测 `Workbook.toBuffer()` 在 ~5.5 万行开始出现超线性性能断崖（10 万行 ~17.5s），而 Fast stream 约 0.8s。`STREAM_THRESHOLD = 50_000` 保留了安全余量。
+- **50,000 行**：实测 `Workbook.toBuffer()` 在 ~5.5 万行开始出现超线性性能断崖（10 万行 Chrome 实测 ~17.5s，Node 冷启动约 21s，见[性能页](/zh/packages/excel-exporter/guide/07-performance)），而 Fast stream 约 0.8s。`STREAM_THRESHOLD = 50_000` 保留了安全余量。
 
 > 代价说明：Stream 路径支持多行表头与单元格合并，但不支持单元格样式、表头样式与列宽/冻结/筛选等布局特性。auto 模式按**一次调用中全部 sheet 的总行数**路由，把数据拆成同一次调用的多个 sheet 并不能保住样式。需要完整样式的导出请把单次调用的总行数控制在 5 万行以内，或拆成多次 `exportExcel` 调用（每次一个文件）。

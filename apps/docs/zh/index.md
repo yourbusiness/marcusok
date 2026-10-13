@@ -31,7 +31,7 @@ hero:
 
 ## 性能参考
 
-Fast stream 在 10 万行数据下约 0.8s 完成导出，而同一引擎的 Workbook 整表序列化路径在约 5.5 万行后耗时陡增（10 万行 17.5s）。
+Fast stream 在 10 万行数据下约 0.8s 完成导出，而同一引擎的 Workbook 整表序列化路径在约 5.5 万行后耗时陡增（10 万行 Chrome 实测 17.5s，Node 冷启动约 21s）。
 
 <ClientOnly>
   <BenchmarkChart />

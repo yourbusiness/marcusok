@@ -15,7 +15,7 @@ Worker 路径行为：
 
 ## 流式写入（≥ 50,000 行）
 
-`fast-xlsx.ts` 使用 `fflate` 生成 minimal OOXML，10 万行约 0.8s（对比 Workbook 路径 17.5s）。`auto` 在 ≥ 5 万行时自动选择它。
+`fast-xlsx.ts` 使用 `fflate` 生成 minimal OOXML，10 万行约 0.8s（对比 Workbook 路径 Chrome 实测 17.5s——同一断崖在 Node 冷启动约 21s，见[性能页](/zh/packages/excel-exporter/guide/07-performance)）。`auto` 在 ≥ 5 万行时自动选择它。
 
 Stream 路径的已知限制：
 
