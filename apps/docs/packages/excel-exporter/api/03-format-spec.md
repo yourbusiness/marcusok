@@ -54,6 +54,15 @@ Cross-path `thousands`: the Workbook path renders the separator via an auto-inje
 
 Omitting `align` (the default) maps to `padStart`: the fill goes on the **left** (value right-aligned) — right for leading-zero IDs. `align: "left"` maps to `padEnd`: the fill goes on the **right** (value left-aligned). `length` is validated as an integer in 0–10000 (an out-of-range value fails up front with a clear error instead of blowing up — or silently not padding — at render time).
 
+## Up-front validation
+
+The whole spec family is validated before any route runs — a violation fails the export with `{ success: false }` and an error naming the column, instead of surfacing later as an opaque error or a silently degraded file. Beyond the `decimals` / `length` ranges above:
+
+- `type` must be exactly one of the five literals — a typo like `"percent"` is rejected up front (otherwise the value would silently stringify, turning a numeric column into text with no warning);
+- `enum.map` must be a non-array, non-null object (missing / `null` / an array are all rejected);
+- a provided `date` / `datetime` `pattern` must be a string;
+- `padding.fill` must be a string — it is required on the type, so `undefined` is rejected as well (a non-string would not throw later but produce odd output, hence the up-front gate).
+
 ## Function form
 
 ```ts

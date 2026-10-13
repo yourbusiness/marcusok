@@ -21,21 +21,22 @@ pnpm lint        # ESLint
 pnpm typecheck   # TypeScript type checking
 ```
 
+Note on `pnpm test`: locally it includes the two published packages' performance baselines (the product SLA — no environment slack, so a heavily loaded machine may fail them occasionally; re-run once before investigating). CI, the release pipeline and the pre-push hook all set `RUN_PERF=0` to skip them.
 Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages themselves only need Node >= 22), pnpm >= 9. `.nvmrc` pins Node 22. The modern-xlsx@1.2.0 dependency (a real `dependencies` entry of both published packages — kept for consumer-side d.ts resolution only, while the engine itself is bundled into their dist at build time) declares `engines.node >= 24`, but its WASM core targets browsers; the repo is fully green on Node 22, and `.npmrc` sets `engine-strict=false` to allow this. Consumers are unaffected at runtime — nothing from modern-xlsx loads, and the published packages are self-contained (each carries the engine and its WASM binary inside its own dist).
 
 ## Tooling
 
-| Area               | Choice                           | Notes                                                                                                                                     |
-| ------------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Package manager    | pnpm workspace                   | Hard links save disk, `workspace:*` protocol, strict dependency isolation                                                                 |
-| Build orchestrator | Turborepo                        | Parallel builds + local cache; `^build` automatically orders package dependencies                                                         |
-| Package bundler    | tsup                             | esbuild-driven; TS → ESM + DTS in one pass; ESM-only across the board                                                                     |
-| Language           | TypeScript 5.x                   | `moduleResolution: bundler`; `lib` includes both DOM and WebWorker                                                                        |
-| Code style         | ESLint 9 + Prettier              | flat config; `no-floating-promises` prevents missed awaits                                                                                |
-| Commit convention  | Husky + lint-staged + commitlint | Conventional Commits, powering Changesets-generated changelogs                                                                            |
-| Versioning/release | Changesets                       | Independent per-package releases, auto-generated changelogs, prerelease support                                                           |
-| Testing            | Vitest                           | Native ESM, WASM-friendly                                                                                                                 |
-| CI/CD              | GitHub Actions                   | `ci.yml` (commitlint → format:check → lint → typecheck → test → build) + `release.yml` (auto publish) + `deploy.yml` (docs site to Pages) |
+| Area               | Choice                           | Notes                                                                                                                                                                 |
+| ------------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Package manager    | pnpm workspace                   | Hard links save disk, `workspace:*` protocol, strict dependency isolation                                                                                             |
+| Build orchestrator | Turborepo                        | Parallel builds + local cache; `^build` automatically orders package dependencies                                                                                     |
+| Package bundler    | tsup                             | esbuild-driven; TS → ESM + DTS in one pass; ESM-only across the board                                                                                                 |
+| Language           | TypeScript 5.x                   | `moduleResolution: bundler`; `lib` includes both DOM and WebWorker                                                                                                    |
+| Code style         | ESLint 9 + Prettier              | flat config; `no-floating-promises` prevents missed awaits                                                                                                            |
+| Commit convention  | Husky + lint-staged + commitlint | Conventional Commits, powering Changesets-generated changelogs                                                                                                        |
+| Versioning/release | Changesets                       | Independent per-package releases, auto-generated changelogs, prerelease support                                                                                       |
+| Testing            | Vitest                           | Native ESM, WASM-friendly                                                                                                                                             |
+| CI/CD              | GitHub Actions                   | `ci.yml` (commitlint → format:check → lint → typecheck → test → build) + `release.yml` (version PR — merging it publishes to npm) + `deploy.yml` (docs site to Pages) |
 
 ## Directory Layout
 

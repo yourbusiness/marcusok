@@ -93,7 +93,7 @@ const workbook = await parseWorkbookBytes(bytes, { password: "…" });
 
 | 导出              | 说明                                                                                                                                                                                                                                    |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `formatCellValue` | 渲染器同源的单元格格式化器（见[数据模型](/zh/packages/excel-preview/api/02-model)）                                                                                                                                                     |
+| `formatCellValue` | 渲染器同源的单元格格式化器；返回 `FormattedValue`（`{ text, color? }`，该类型同样随包导出——见[数据模型](/zh/packages/excel-preview/api/02-model)）                                                                                      |
 | `configureWasm`   | 资源自托管配置（见[资源与自托管](/zh/packages/excel-preview/guide/02-assets)）                                                                                                                                                          |
 | `getWasmLoader`   | 本包的 `WasmLoader` 单例（来自打包进本包 `dist` 的引擎层）。就绪状态用 `isReady` / `supported` 读取，配置用 `getOptions()`（状态机本身是私有的）。`ensureLoaded()` 也是公开的——可在首次预览前调用预热引擎，把 WASM 加载从首次解析中拿掉 |
 

@@ -37,6 +37,42 @@ try {
 
 Progress granularity is the caller's: only callers that emit intermediate values ever reach the determinate mode. A task that only reports `0` and `1` stays on the spinner for its whole run — that is the data source, not a rendering problem.
 
+## 样式定制（CSS 变量）
+
+配色不写死，全部经 10 个 CSS 变量承载，类名统一 `mxe-` 前缀
+（`.mxe-overlay` / `.mxe-panel` / `.mxe-title` / `.mxe-hint` /
+`.mxe-track` / `.mxe-fill` / `.mxe-spinner` / `.mxe-percent`）。浅色值
+定义在 `.mxe-overlay` 基础规则上，深色经 `.mxe-overlay[data-mxe-theme="dark"]`
+整体换变量：
+
+| 变量                 | 作用                       |
+| -------------------- | -------------------------- |
+| `--mxe-backdrop`     | 全屏背景遮罩色             |
+| `--mxe-panel-bg`     | 玻璃面板背景               |
+| `--mxe-panel-border` | 面板边框                   |
+| `--mxe-panel-shadow` | 面板阴影（多层）           |
+| `--mxe-title`        | 标题文字色                 |
+| `--mxe-text`         | 阶段/百分比文字色          |
+| `--mxe-hint`         | 提示行文字色               |
+| `--mxe-track`        | 进度条轨道色               |
+| `--mxe-fill`         | 进度条填充/-spinner 描边色 |
+
+样式经一次性 `<style id="mxe-overlay-style">` 注入 `document.head`
+**末尾**（首次 show 时），因此宿主侧同特异性的自定义规则会被它覆盖——
+覆盖变量请用更高特异性的选择器（如 `.app-root .mxe-overlay { … }`）。
+例：
+
+```css
+/* 品牌化进度条填充色（对深浅两主题都生效） */
+.app-root .mxe-overlay,
+.app-root .mxe-overlay[data-mxe-theme="dark"] {
+  --mxe-fill: #2f6bff;
+}
+```
+
+整体换肤优先用 `theme` 选项（`"light"` / `"dark"` / `"auto"`）；
+变量覆盖用于在既有主题上微调单个颜色。
+
 ## API
 
 ### `showProgressOverlay(options?): ProgressOverlayHandle`

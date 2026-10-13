@@ -2,33 +2,37 @@
 
 ## SheetConfig
 
-| 字段           | 类型                            | 必填 | 说明                                                                                                                                                                 |
-| -------------- | ------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`         | `string`                        | 是   | 工作表名：非空、≤ 31 字符，不含 `: \ / ? * [ ]`，且不得以单引号开头/结尾。`sheets` 内查重**不区分大小写**（Excel 自身规则——`Sheet1` 与 `SHEET1` 视为同名，会被拒绝） |
-| `columns`      | `ColumnConfig[]`                | 是   | 列定义                                                                                                                                                               |
-| `data`         | `Record<string, unknown>[]`     | 是   | 行数据                                                                                                                                                               |
-| `headerStyle?` | `CellStyle`                     | —    | 表头行默认样式，可被列级 `headerStyle` 覆盖                                                                                                                          |
-| `dataStyle?`   | `CellStyle`                     | —    | 全部数据单元格的基底样式，列级 `style` 逐字段深合并覆盖（见样式指南）                                                                                                |
-| `indexColumn?` | `boolean \| IndexColumnOptions` | —    | 注入最左侧序号列；`true` 即全部默认值。已有 merges 自动右移一列                                                                                                      |
-| `freezeRows?`  | `number`                        | —    | 冻结前 N 行表头；校验为非负整数                                                                                                                                      |
-| `merges?`      | `MergeRange[]`                  | —    | 合并单元格（相对数据区定位）                                                                                                                                         |
-| `autoFilter?`  | `boolean`                       | —    | 表头自动筛选                                                                                                                                                         |
+| 字段           | 类型                            | 必填 | 说明                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | ------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`         | `string`                        | 是   | 工作表名：非空、≤ 31 字符，不含 `: \ / ? * [ ]`，且不得以单引号开头/结尾。`sheets` 内查重**不区分大小写**（Excel 自身规则——`Sheet1` 与 `SHEET1` 视为同名，会被拒绝）                                                                                                                                                                                            |
+| `columns`      | `ColumnConfig[]`                | 是   | 列定义                                                                                                                                                                                                                                                                                                                                                          |
+| `data`         | `Record<string, unknown>[]`     | 是   | 行数据。列上没有 `format` 时，值在所有路径（main / worker / stream，含降级）按同一规则归一化：`Date` → ISO 字符串、普通对象 → JSON、`NaN`/`Infinity`/`bigint` → 可见字符串——数据跨 50k 阈值时单元格内容不变。因此不带 `date`/`datetime` format 的原始 `Date` 落表为**文本**而非 Excel 日期（见[值格式化指南](/zh/packages/excel-exporter/guide/04-formatting)） |
+| `headerStyle?` | `CellStyle`                     | —    | 表头行默认样式，可被列级 `headerStyle` 覆盖。stream 路径下被丢弃（见表后说明）                                                                                                                                                                                                                                                                                  |
+| `dataStyle?`   | `CellStyle`                     | —    | 全部数据单元格的基底样式，列级 `style` 逐字段深合并覆盖（见样式指南）。stream 路径下被丢弃                                                                                                                                                                                                                                                                      |
+| `indexColumn?` | `boolean \| IndexColumnOptions` | —    | 注入最左侧序号列；`true` 即全部默认值。已有 merges 自动右移一列。所有路径均生效（含 stream）                                                                                                                                                                                                                                                                    |
+| `freezeRows?`  | `number`                        | —    | 从工作表顶部冻结的行数——通常等于表头行数但并不绑定（表头 2 行冻结 5 会连冻 3 行数据）；校验为非负整数。stream 路径下被丢弃                                                                                                                                                                                                                                      |
+| `merges?`      | `MergeRange[]`                  | —    | 合并单元格（相对数据区定位）。stream 路径下保留（合并是结构不是样式）                                                                                                                                                                                                                                                                                           |
+| `autoFilter?`  | `boolean`                       | —    | 自动筛选，覆盖最后一个表头行 + 全部数据行。stream 路径下被丢弃                                                                                                                                                                                                                                                                                                  |
 
 ## ColumnConfig
 
-| 字段           | 类型                     | 必填       | 说明                                                                                       |
-| -------------- | ------------------------ | ---------- | ------------------------------------------------------------------------------------------ |
-| `prop?`        | `string`                 | 叶子列必填 | 数据行字段名（Element Plus 命名）；分组列（带 `children`）可省略                           |
-| `key?`         | `string`                 | —          | `prop` 的废弃别名（2.2 之前命名）；两者同给时 `prop` 优先                                  |
-| `label?`       | `string`                 | 是*        | 表头文字（叶子列与分组列都需要）；`label` 或旧名 `header` 至少提供一个（导出时校验）       |
-| `header?`      | `string`                 | —          | `label` 的废弃别名（2.2 之前命名）；两者同给时 `label` 优先                                |
-| `children?`    | `ColumnConfig[]`         | —          | 分组列：生成多行表头，该表头格自动跨其全部叶子列合并；`children: []` 视为叶子列            |
-| `width?`       | `number`                 | —          | 列宽（Excel 字符单位，`0` 表示隐藏列）；校验为有限非负数；仅叶子列生效                     |
-| `style?`       | `CellStyle`              | —          | 数据单元格样式（不含表头）；仅叶子列生效                                                   |
-| `headerStyle?` | `CellStyle`              | —          | 本列表头样式（含分组表头格），优先于表级 `headerStyle`                                     |
-| `format?`      | `FormatSpec \| Function` | —          | 值格式化；仅叶子列；函数在主线程路径执行，浏览器 worker 路径会被剥离（详见 FormatSpec 页） |
+| 字段           | 类型                     | 必填       | 说明                                                                                        |
+| -------------- | ------------------------ | ---------- | ------------------------------------------------------------------------------------------- |
+| `prop?`        | `string`                 | 叶子列必填 | 数据行字段名（Element Plus 命名）；分组列（带 `children`）可省略                            |
+| `key?`         | `string`                 | —          | `prop` 的废弃别名（2.2 之前命名）；两者同给时 `prop` 优先                                   |
+| `label?`       | `string`                 | 是*        | 表头文字（叶子列与分组列都需要）；`label` 或旧名 `header` 至少提供一个（导出时校验）        |
+| `header?`      | `string`                 | —          | `label` 的废弃别名（2.2 之前命名）；两者同给时 `label` 优先                                 |
+| `children?`    | `ColumnConfig[]`         | —          | 分组列：生成多行表头，该表头格自动跨其全部叶子列合并；`children: []` 视为叶子列             |
+| `width?`       | `number`                 | —          | 列宽（Excel 字符单位，`0` 表示隐藏列）；校验为有限非负数；仅叶子列生效。stream 路径下被丢弃 |
+| `style?`       | `CellStyle`              | —          | 数据单元格样式（不含表头）；仅叶子列生效。stream 路径下被丢弃                               |
+| `headerStyle?` | `CellStyle`              | —          | 本列表头样式（含分组表头格），优先于表级 `headerStyle`。stream 路径下被丢弃                 |
+| `format?`      | `FormatSpec \| Function` | —          | 值格式化；仅叶子列；函数在主线程路径执行，浏览器 worker 路径会被剥离（详见 FormatSpec 页）  |
 
 带 `children` 的列为分组列，无数据单元格，只贡献表头行。表头行数 = 1 + 列树最大深度（扁平列即 1 行）；叶子列表头纵向跨满剩余表头行，分组列表头横向跨其子树所有叶子列，合并由库自动生成（无需手工写 `merges`）。
+
+两条结构校验同样前置执行：`columns` 为空数组会被拒绝（`sheet has no columns`）；同一列对象在树中出现多次——例如被两个分组共享为子列——也会被拒绝（`column object reused in the column tree`）。
+
+**stream 路径兼容性。** 在无样式快速流上——显式 `mode: "stream"`、auto ≥ 50,000 行、或降级兜底——上两张表中的全部样式/布局字段都会被丢弃并打印 `console.warn`：`width`、列级 `style` / `headerStyle`、表级 `headerStyle` / `dataStyle`、`freezeRows`、`autoFilter`（连同 `FormatSpec` 本会自动注入的 `numFormat`——`decimals` 改为烧入存储值）。结构保留：多行表头、`merges` 与 `indexColumn` 不受影响。完整的分路径能力矩阵见 [Worker 与流式指南](/zh/packages/excel-exporter/guide/06-worker-stream)。
 
 ## IndexColumnOptions
 
@@ -59,13 +63,13 @@
 
 ## CellStyle
 
-| 字段         | 类型                                                   | 说明                                                                            |
-| ------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `font?`      | `{ bold?, italic?, size?, color?, name? }`             | 颜色为 6 位 RGB hex（如 `"FF0000"`）                                            |
-| `fill?`      | `{ pattern?: "solid" \| "none", fgColor?, bgColor? }`  | 填充                                                                            |
-| `alignment?` | `{ horizontal?, vertical?, wrapText?, textRotation? }` | 对齐（textRotation 0–180）                                                      |
-| `border?`    | `{ top?, bottom?, left?, right? }`                     | 边框，每边 `{ style: BorderStyle, color? }`——取值见 [BorderStyle](#borderstyle) |
-| `numFormat?` | `string`                                               | Excel 数字格式码                                                                |
+| 字段         | 类型                                                   | 说明                                                                                                                                                  |
+| ------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `font?`      | `{ bold?, italic?, size?, color?, name? }`             | 颜色为 6 位 RGB hex（如 `"FF0000"`）                                                                                                                  |
+| `fill?`      | `{ pattern?: "solid" \| "none", fgColor?, bgColor? }`  | 填充                                                                                                                                                  |
+| `alignment?` | `{ horizontal?, vertical?, wrapText?, textRotation? }` | 对齐：`horizontal` 取 `"left" \| "center" \| "right"`，`vertical` 取 `"top" \| "center" \| "bottom"`，`wrapText` 布尔，`textRotation` 为 0–180 的整数 |
+| `border?`    | `{ top?, bottom?, left?, right? }`                     | 边框，每边 `{ style: BorderStyle, color? }`——取值见 [BorderStyle](#borderstyle)                                                                       |
+| `numFormat?` | `string`                                               | Excel 数字格式码                                                                                                                                      |
 
 样式字段在导出前置校验——非法值以 `{ success: false }` 失败并给出定位到具体表/列的报错，而不是拖到后面变成晦涩的引擎错误或降级导出：颜色必须为 6 位 RGB hex（`"FF0000"`；`"red"` 与 `"#FF0000"` 都会被拒）；`border.*.style` 必须是上文 `BorderStyle` 之一；`font.size` 必须为有限正数；`alignment.textRotation` 必须是 0–180 的**整数**（`45.5` 会被拒绝而非四舍五入）。校验覆盖表级、列级（含分组列被忽略的样式）与 `indexColumn` 样式的全部出现点。
 

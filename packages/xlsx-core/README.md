@@ -26,10 +26,17 @@
     `serialToDate` / `dateToSerial`；
   - 类型化错误：`ModernXlsxError` 与错误码常量 `LEGACY_FORMAT` /
     `UNRECOGNIZED_FORMAT` / `PASSWORD_PROTECTED` / `WASM_INIT_FAILED`；
-  - 加载器一侧：`WasmLoader` 类、`defaultWasmUrl`，类型 `LoaderOptions`
+  - 加载器一侧：`WasmLoader` 类（公开面 `ensureLoaded()` /
+    `updateOptions()` / `isReady` / `supported` 两个 getter /
+    `getOptions()`，状态机本身是私有字段）、`defaultWasmUrl()`、
+    `getWasmLoader()` / `configureWasm()`，类型 `LoaderOptions`
     （`wasmUrl` / `workerUrl` / `parseWorkerUrl` / `timeoutMs` 默认 10s /
-    `maxRetries` 默认 3 / `workerTimeoutMs` 默认 120s 且必须为正——
-    0/负数是「立即超时」而非禁用）与 `LoadState`；另按名再导出约 25 个
+    `maxRetries` 默认 3——**总尝试次数，含首次**（1 次加载 + 2 次重试，
+    重试间隔 300ms/600ms）/ `workerTimeoutMs` 默认 120s 且必须为正——
+    0/负数是「立即超时」而非禁用）与 `LoadState`。URL 变更限制：WASM
+    加载成功后再改 `wasmUrl` 只在全新 JS realm 生效（刷新页面或
+    终止后重建的 worker——modern-xlsx 的 `initWasm` 幂等、首次成功即锁定），
+    两个业务包 README 有面向用户的完整说明。另按名再导出 24 个
     modern-xlsx 类型（`Worksheet`、`CellData`、`FontData`、`AlignmentData`
     等）。引擎运行时已打包进本包 `dist`。
 - **tsup esbuild 插件** —— `@marcusok/xlsx-core/tsup` 暴露两个插件
