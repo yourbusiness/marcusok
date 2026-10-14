@@ -1,5 +1,11 @@
 # @marcusok/excel-preview
 
+## 2.1.1
+
+### Patch Changes
+
+- 43ba9ed: An invalid initial `sheet` option (unknown name, out-of-range or non-integer index) now reports `Sheet not found: …` through `onError` — same wording and code as the instance method `setSheet()` — instead of silently falling back. The fallback rendering behavior is unchanged: the preview still renders the file's `activeTab`.
+
 ## 2.1.0
 
 ### Minor Changes
