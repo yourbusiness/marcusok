@@ -52,7 +52,7 @@ Optional — assets default to the files shipped next to the package entry (see 
 | `workerUrl`       | the shipped worker file | Override for a **same-origin** self-hosted copy — a cross-origin URL is rejected at `Worker` construction, so a plain CDN does not work here                                                                      |
 | `timeoutMs`       | `10_000`                | Per-attempt load timeout                                                                                                                                                                                          |
 | `maxRetries`      | `3`                     | Max load attempts (3 total incl. the first; 300ms/600ms backoff)                                                                                                                                                  |
-| `workerTimeoutMs` | `120_000`               | Worker export timeout. Keep it > 0 — there is no disable value: `0`/negative means "time out immediately", not "no timeout"                                                                                       |
+| `workerTimeoutMs` | `120_000`               | Worker export timeout; a timed-out export fails fast — no main-thread retry, no stream fallback. Keep it > 0 — there is no disable value: `0`/negative means "time out immediately", not "no timeout"             |
 | `parseWorkerUrl`  | —                       | Accepted by the shared `LoaderOptions` type but inert on this package: it points `@marcusok/excel-preview`'s parse worker at a self-hosted copy. This package's export worker is configured via `workerUrl` above |
 
 ## Other exported symbols

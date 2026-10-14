@@ -97,6 +97,8 @@ describe("exportInWorker timeout recovery", () => {
 
     expect(r1.success).toBe(false);
     expect(r1.error?.message).toMatch(/timed out after 120000ms/);
+    // 超时错误带 noFallback 标记：路由层据此跳过主线程重试（见 index.ts）
+    expect(r1.error).toMatchObject({ noFallback: true });
     expect(FakeWorker.instances[0].terminated).toBe(true);
 
     // The cached reference was dropped, so the next export gets a fresh worker
@@ -137,6 +139,9 @@ describe("exportInWorker timeout recovery", () => {
     expect(rb.error?.message).toMatch(
       /terminated after a concurrent export timed out/,
     );
+    // 连坐错误同样带 noFallback：共享 worker 已被超时负载占死，排队请求的
+    // 主线程重试只会叠加阻塞
+    expect(rb.error).toMatchObject({ noFallback: true });
     expect(FakeWorker.instances[0].terminated).toBe(true);
   });
 

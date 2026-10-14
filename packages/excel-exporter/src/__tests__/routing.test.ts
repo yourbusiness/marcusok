@@ -143,6 +143,8 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
   });
 
   it("worker failure retries on the main thread, preserving styles (terminal 1 exactly once)", async () => {
+    // 见下方 noFallback 用例：本用例锁定"普通 worker 失败仍走主线程重试"，
+    // 与超时类失败的快速失败形成一对互补契约。
     stubBrowserWorkerEnv();
     // exportInWorker catches worker errors and resolves with success:false;
     // exportExcel now retries on the main thread (modern-xlsx, styles kept)
@@ -251,6 +253,52 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
       expect(progress).toEqual([0, 1]);
     } finally {
       vi.unstubAllGlobals();
+      vi.mocked(exportInWorker).mockReset();
+    }
+  });
+
+  it("a timeout-class worker failure (noFallback) fails fast — no main-thread retry", async () => {
+    stubBrowserWorkerEnv();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // worker-exporter 对超时/连坐错误打的标记（真实路径在
+    // worker-timeout.test.ts 断言）：worker 挂死或负载超出 workerTimeoutMs 时，
+    // 主线程重跑同样的大构建正是 worker 路由要规避的冻结源——必须直接失败，
+    // 不得进入 retryOnMainThread（与 excel-preview 解析超时同口径）。
+    const timeoutErr = Object.assign(
+      new Error("export worker timed out after 120000ms (worker terminated)"),
+      { noFallback: true as const },
+    );
+    vi.mocked(exportInWorker).mockResolvedValue({
+      success: false,
+      error: timeoutErr,
+    });
+    try {
+      const progress: number[] = [];
+      const r = await exportExcel({
+        filename: "worker-timeout-nofallback",
+        download: false,
+        mode: "worker",
+        sheets: [
+          {
+            name: "S",
+            columns: [{ prop: "x", label: "X" }],
+            data: [{ x: 1 }],
+          },
+        ],
+        onProgress: (p) => progress.push(p),
+      });
+      // 原错误直传（引用不变），降级链被跳过
+      expect(r.success).toBe(false);
+      expect(r.error).toBe(timeoutErr);
+      // 主线程重试未发生：重试入口必打 "retrying on the main thread" 警告
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining("retrying on the main thread"),
+      );
+      // progress 契约：跳过降级链后终值 1 由本分支补发，恰一次
+      expect(progress).toEqual([0, 1]);
+    } finally {
+      vi.unstubAllGlobals();
+      warn.mockRestore();
       vi.mocked(exportInWorker).mockReset();
     }
   });

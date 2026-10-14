@@ -8,7 +8,7 @@ import type {
 } from "./types";
 import { WorkbookBuilder } from "./workbook-builder";
 import { exportAsStream } from "./streaming-builder";
-import { exportInWorker } from "./worker-exporter";
+import { exportInWorker, type NoFallbackError } from "./worker-exporter";
 import { triggerDownload, toBlobPart } from "./download";
 import { getWasmLoader } from "@marcusok/xlsx-core";
 import { tableExportToOptions, type TableExportOptions } from "./table-export";
@@ -780,7 +780,17 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
       return result;
     }
     // Worker export failed (e.g. WASM init error inside the worker) -> retry on
-    // the main thread before degrading to the fast stream.
+    // the main thread before degrading to the fast stream. Timeout-class
+    // failures (noFallback, see worker-exporter) are the exception: the worker
+    // was wedged or the workload legitimately exceeds workerTimeoutMs, so a
+    // main-thread rerun of the same large build is exactly the freeze the
+    // worker route exists to avoid (same policy as excel-preview's parse
+    // timeout). Fail fast with the original error; the progress contract's
+    // trailing 1 is emitted here since the degradation chain is skipped.
+    if ((result.error as NoFallbackError | undefined)?.noFallback) {
+      options.onProgress?.(1);
+      return { ...result, duration: performance.now() - start };
+    }
     return retryOnMainThread(result.error?.message ?? "worker export failed");
   } catch (e) {
     return retryOnMainThread((e as Error).message);

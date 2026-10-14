@@ -27,6 +27,22 @@ interface WorkerOkResponse {
   rowCount: number;
   engine: "modern-xlsx";
 }
+
+/**
+ * 超时类失败标记（exportInWorker 创建、路由层 index.ts 消费）：worker 超时
+ * 意味着它已挂死（wasm 初始化悬置/引擎死循环）或负载 legitimately 超出
+ * workerTimeoutMs——两条主线程重跑都避不开（同样的大负载同步阻塞主线程，
+ * 正是 worker 路由要规避的冻结源，且挂死场景大概率同样挂死）。与
+ * excel-preview 解析超时的 noFallback 同口径：直接失败，调用方重试即可
+ * （重试会重建新 worker）。其余失败（脚本加载/克隆错误/worker 内 WASM
+ * 失败）不预示主线程也会失败，仍走主线程重试，不带本标记。
+ */
+export type NoFallbackError = Error & { noFallback: true };
+
+function noFallbackError(message: string): NoFallbackError {
+  return Object.assign(new Error(message), { noFallback: true as const });
+}
+
 interface WorkerErrResponse {
   id: number;
   ok: false;
@@ -176,14 +192,18 @@ export async function exportInWorker(
           for (const [pid, p] of pending) {
             if (p.worker !== w) continue;
             pending.delete(pid);
+            // 连坐请求同样标 noFallback：共享 worker 已被 >timeoutMs 的大负载
+            // 占死，排队请求的主线程重试只会叠加阻塞（见 NoFallbackError）。
             p.reject(
-              new Error(
+              noFallbackError(
                 "worker terminated after a concurrent export timed out",
               ),
             );
           }
           reject(
-            new Error("export worker timed out after " + timeoutMs + "ms"),
+            noFallbackError(
+              `export worker timed out after ${timeoutMs}ms (worker terminated). Retry the export, raise workerTimeoutMs via configureWasm(), or split the input`,
+            ),
           );
         }, timeoutMs);
         pending.set(id, {

@@ -7,7 +7,12 @@ When the WASM path is unavailable, the library automatically degrades to the pur
 - The environment does not support `WebAssembly` (this only affects the main and Worker + Workbook paths; the ≥ 50,000-row stream path does not use WASM and is unaffected);
 - `modern-xlsx.wasm` fails to load (after `maxRetries` attempts, default 3);
 - The Worker path fails (e.g. the worker asset 404s) **and** the automatic main-thread retry also fails — on the Workbook route the retry runs modern-xlsx on the main thread first (styles preserved), so the stream is the last resort, not the immediate next step. On the ≥ 50,000-row stream route the retry is the fast stream itself (identical code, identical input), so a failure there is terminal — no third attempt;
+- A **worker timeout** never enters the chain at all (see below).
 - The build throws on a main-thread Workbook route (e.g. an internal modern-xlsx build error). The same error on a Node stream route (no `window`, explicit `mode: "stream"` or auto ≥ 50,000 rows) is terminal — the first attempt already ran the fast stream on the identical input, so there is nothing to retry or fall back to. Note: structural input errors (invalid/duplicate sheet names, out-of-bounds merges, non-numeric or negative `width` / fractional `freezeRows`, out-of-range `format.decimals`, …) never enter this chain — pre-flight validation rejects them before any route runs, so the export resolves with `success: false` without a fallback attempt.
+
+## The one failure that never degrades: worker timeout
+
+When the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminated and the export **fails fast** with the original timeout error — no main-thread retry, no stream fallback. The timeout means the worker is wedged (a hung WASM init, an engine loop) or the workload legitimately exceeds the budget; either way, rerunning the same large build on the main thread is exactly the freeze the worker route exists to avoid — the same policy `@marcusok/excel-preview` applies to its parse timeout. Requests queued behind the timed-out export on the shared worker are rejected with the same fast-fail semantics. Retry the export (a fresh worker is created), raise `workerTimeoutMs` via `configureWasm`, or split the input.
 
 ## Behavioral differences
 

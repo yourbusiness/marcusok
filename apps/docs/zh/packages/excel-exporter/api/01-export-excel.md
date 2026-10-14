@@ -52,7 +52,7 @@ configureWasm(options: LoaderOptions): void
 | `workerUrl`       | 随包发布的 worker  | 覆盖为**同源**自托管副本——跨域 URL 在 `Worker` 构造时即被浏览器拒绝，普通 CDN 在这里不可用                                                            |
 | `timeoutMs`       | `10_000`           | 单次加载超时                                                                                                                                          |
 | `maxRetries`      | `3`                | 最大加载尝试次数（默认共 3 次含首次，退避 300ms/600ms）                                                                                               |
-| `workerTimeoutMs` | `120_000`          | Worker 导出超时。必须保持 > 0——没有「禁用」取值：`0`/负数意味着「立即超时」而非「不超时」                                                             |
+| `workerTimeoutMs` | `120_000`          | Worker 导出超时；超时导出快速失败——不重试主线程、不落到流式兜底。必须保持 > 0——没有「禁用」取值：`0`/负数意味着「立即超时」而非「不超时」             |
 | `parseWorkerUrl`  | —                  | 共享 `LoaderOptions` 类型上存在但对本包无效：它为 `@marcusok/excel-preview` 的解析 worker 指定自托管地址；本包的导出 worker 用上方的 `workerUrl` 配置 |
 
 ## 其他导出符号
