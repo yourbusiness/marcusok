@@ -115,13 +115,25 @@ export function createPreview(
       }
       workbook = result.workbook;
       renderer = new SheetRenderer(container);
-      const initialSheet =
-        typeof options.sheet === "number"
-          ? options.sheet
-          : options.sheet !== undefined &&
-              result.workbook.sheets.some((s) => s.name === options.sheet)
-            ? options.sheet
-            : undefined;
+      // 初始 sheet 有效性校验：无效（名称不存在 / 索引越界或非整数）经 onError
+      // 上报后仍回退渲染 activeSheetIndex——与实例方法 setSheet 的口径一致
+      // （同 message、同 code），此前静默回退让拼错的 sheet 名无声丢失。
+      let initialSheet: string | number | undefined;
+      if (options.sheet !== undefined) {
+        const valid =
+          typeof options.sheet === "number"
+            ? Number.isInteger(options.sheet) &&
+              options.sheet >= 0 &&
+              options.sheet < result.workbook.sheets.length
+            : result.workbook.sheets.some((s) => s.name === options.sheet);
+        if (valid) initialSheet = options.sheet;
+        else {
+          onError?.({
+            code: "UNKNOWN",
+            message: `Sheet not found: ${String(options.sheet)}`,
+          });
+        }
+      }
       renderer.render(result.workbook, {
         sheet: initialSheet,
         showHeaders: options.showHeaders,
