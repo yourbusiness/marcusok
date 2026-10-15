@@ -258,9 +258,21 @@ export async function exportInWorker(
   }
 }
 
+/**
+ * 终止共享导出 worker 并拒绝全部在途请求。在途请求标 noFallback（与超时
+ * 连坐同口径，见 NoFallbackError）：主动终止通常发生在换 wasmUrl/workerUrl
+ * 或页面收尾时，此后路由层把同一大负载重跑到主线程既违背终止意图、又会
+ * 把 worker 路由要规避的主线程冻结原样补回来——直接失败，调用方重试即可
+ * （重试会以新配置重建 worker）。
+ */
 export function terminateWorker(): void {
   worker?.terminate();
   worker = null;
-  for (const [, p] of pending) p.reject(new Error("worker terminated"));
+  for (const [, p] of pending)
+    p.reject(
+      noFallbackError(
+        "export worker terminated via terminateWorker(); retry the export",
+      ),
+    );
   pending.clear();
 }

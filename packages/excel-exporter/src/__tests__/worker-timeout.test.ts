@@ -306,4 +306,32 @@ describe("exportInWorker error handling & payload stripping", () => {
       expect.stringContaining("function format"),
     );
   });
+
+  it("terminateWorker rejects in-flight requests as noFallback (与超时连坐同口径)", async () => {
+    stubBrowser();
+    configureWasm({ workerUrl: "/fake/export.worker.js" });
+    vi.useFakeTimers();
+
+    // FakeWorker 不回应 → 请求在途；terminateWorker 主动终止后必须直接失败
+    // （路由层见 noFallback 即不再主线程重跑），不能退化成主线程重建。
+    const promise = exportInWorker(
+      { filename: "terminate-inflight", download: false, sheets },
+      "workbook",
+    );
+    terminateWorker();
+    const r = await promise;
+    expect(r.success).toBe(false);
+    expect((r.error as { noFallback?: true } | undefined)?.noFallback).toBe(
+      true,
+    );
+    expect(r.error?.message).toMatch(/terminateWorker/);
+    // 缓存引用已清：下一次导出创建全新 worker
+    const next = exportInWorker(
+      { filename: "terminate-next", download: false, sheets },
+      "workbook",
+    );
+    await vi.advanceTimersByTimeAsync(120_000); // FakeWorker 依旧不回应，清尾
+    await next;
+    expect(FakeWorker.instances.length).toBe(2);
+  });
 });
