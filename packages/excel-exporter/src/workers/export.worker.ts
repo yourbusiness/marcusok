@@ -16,7 +16,7 @@ interface WorkerResponse {
   ok: boolean;
   bytes?: Uint8Array;
   rowCount?: number;
-  engine?: "modern-xlsx";
+  engine?: "modern-xlsx" | "fast-xlsx";
   error?: string;
   progress?: number;
   /** Phase-timing message (init/build), sent before the final response. */
@@ -79,7 +79,9 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       ok: true,
       bytes,
       rowCount,
-      engine: "modern-xlsx",
+      // 与主线程 exportInWorker 的结果构造同口径：stream 模式跑的是纯 JS
+      // 写出器，不是 WASM 引擎
+      engine: mode === "stream" ? "fast-xlsx" : "modern-xlsx",
     };
     (self as unknown as Worker).postMessage(resp, [bytes.buffer]);
   } catch (err) {

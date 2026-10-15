@@ -72,7 +72,7 @@ describe("non-finite numbers (NaN/Infinity)", () => {
         download: false,
         sheets: [baseSheet({ data: [{ a: NaN, b: Infinity }] })],
       });
-      expect(r.engine).toBe("modern-xlsx");
+      expect(r.engine).toBe("fast-xlsx");
       expect(r.mode).toBe("stream");
       expect(r.success).toBe(true);
       const wb = await readBuffer(new Uint8Array(await r.blob!.arrayBuffer()));

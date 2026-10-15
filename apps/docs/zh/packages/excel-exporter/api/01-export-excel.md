@@ -28,15 +28,15 @@ exportExcel(options: ExportOptions): Promise<ExportResult>
 
 ## ExportResult
 
-| 字段        | 类型            | 说明                                                                                                                                                                                     |
-| ----------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `success`   | `boolean`       | 是否成功                                                                                                                                                                                 |
-| `blob?`     | `Blob`          | 导出文件内容                                                                                                                                                                             |
-| `engine?`   | `"modern-xlsx"` | 实际使用的引擎                                                                                                                                                                           |
-| `mode?`     | `ExportMode`    | 实际使用的模式                                                                                                                                                                           |
-| `duration?` | `number`        | 完整导出耗时（ms）。主线程路径度量整次导出；worker 路径在主线程从调用 `exportInWorker` 起量（含 postMessage 前序列化与 worker 往返）直到 Blob 构建完成，因此**宽于** worker 内纯构建耗时 |
-| `rowCount?` | `number`        | 导出的数据行数——不含表头行                                                                                                                                                               |
-| `error?`    | `Error`         | `success` 为 `false` 时的失败原因。**同时**——与 `success: true` 一起——也会在经无样式快速流兜底**成功**的导出上设置，内容为降级原因；请先看 `success`：仅有 `error` 不代表导出失败        |
+| 字段        | 类型                           | 说明                                                                                                                                                                                     |
+| ----------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `success`   | `boolean`                      | 是否成功                                                                                                                                                                                 |
+| `blob?`     | `Blob`                         | 导出文件内容                                                                                                                                                                             |
+| `engine?`   | `"modern-xlsx" \| "fast-xlsx"` | 实际使用的引擎：`"modern-xlsx"`（Rust+WASM，完整样式）或 `"fast-xlsx"`（本包自带的纯 JS 无样式流式写出器——≥5 万行的 stream 路由与最终降级）。区分引擎请看本字段而非 `mode`               |
+| `mode?`     | `ExportMode`                   | 实际使用的模式                                                                                                                                                                           |
+| `duration?` | `number`                       | 完整导出耗时（ms）。主线程路径度量整次导出；worker 路径在主线程从调用 `exportInWorker` 起量（含 postMessage 前序列化与 worker 往返）直到 Blob 构建完成，因此**宽于** worker 内纯构建耗时 |
+| `rowCount?` | `number`                       | 导出的数据行数——不含表头行                                                                                                                                                               |
+| `error?`    | `Error`                        | `success` 为 `false` 时的失败原因。**同时**——与 `success: true` 一起——也会在经无样式快速流兜底**成功**的导出上设置，内容为降级原因；请先看 `success`：仅有 `error` 不代表导出失败        |
 
 ## configureWasm
 

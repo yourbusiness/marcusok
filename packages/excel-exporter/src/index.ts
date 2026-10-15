@@ -641,7 +641,8 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
         result = {
           success: true,
           blob: new Blob([toBlobPart(bytes)], { type: XLSX_MIME }),
-          engine: "modern-xlsx",
+          // fast stream 是本包自带的纯 JS 写出器（fflate），不经 WASM 引擎
+          engine: "fast-xlsx",
           mode: "stream",
           duration: performance.now() - start,
           rowCount,

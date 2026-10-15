@@ -48,7 +48,8 @@ describe("exportExcel mode routing (Node environment)", () => {
       sheets: [{ name: "S", columns: [{ prop: "id", label: "ID" }], data }],
     });
     expect(r.success).toBe(true);
-    expect(r.engine).toBe("modern-xlsx");
+    // Node auto-stream：纯 JS 写出器，engine 如实报 fast-xlsx
+    expect(r.engine).toBe("fast-xlsx");
     expect(r.mode).toBe("stream");
   });
 
@@ -93,7 +94,7 @@ describe("exportExcel mode routing (Node environment)", () => {
         ],
         onProgress: (p) => progress.push(p),
       });
-      expect(r.engine).toBe("modern-xlsx");
+      expect(r.engine).toBe("fast-xlsx");
       expect(r.mode).toBe("stream");
       expect(r.success).toBe(true);
       expect(progress).toEqual([0, 1]);
@@ -201,7 +202,8 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
         ],
       });
       expect(r.success).toBe(true);
-      expect(r.engine).toBe("modern-xlsx");
+      // 重试跑的是主线程 fast stream：纯 JS 写出器，engine 如实报 fast-xlsx
+      expect(r.engine).toBe("fast-xlsx");
       expect(r.mode).toBe("stream");
     } finally {
       vi.unstubAllGlobals();

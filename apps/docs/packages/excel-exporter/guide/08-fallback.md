@@ -18,7 +18,7 @@ When the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminat
 
 | Dimension                  | modern-xlsx path | stream fallback                                                                           |
 | -------------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
-| `ExportResult.engine`      | `"modern-xlsx"`  | `"modern-xlsx"` with `mode: "stream"` and `result.error` set (success stays `true`)       |
+| `ExportResult.engine`      | `"modern-xlsx"`  | `"fast-xlsx"` with `mode: "stream"` and `result.error` set (success stays `true`)         |
 | Cell styles                | full             | stripped (the fast stream emits minimal OOXML without a style part)                       |
 | Multi-row headers / merges | supported        | supported (merges are structure, not styles)                                              |
 | Width / freeze / filter    | supported        | not supported                                                                             |

@@ -323,8 +323,15 @@ export interface ExportOptions {
 export interface ExportResult {
   success: boolean;
   blob?: Blob;
-  /** Engine actually used. */
-  engine?: "modern-xlsx";
+  /**
+   * Engine actually used. `"modern-xlsx"` is the Rust+WASM engine (full
+   * styles); `"fast-xlsx"` is the package's own pure-JS style-less stream
+   * writer (the >=50k-row stream route and the terminal fallback). Distinguish
+   * them through this field, not `mode` — `mode: "stream"` covers both the
+   * worker-hosted and main-thread stream routes while `engine` names the code
+   * that produced the bytes.
+   */
+  engine?: "modern-xlsx" | "fast-xlsx";
   /** Mode actually used. */
   mode?: ExportMode;
   duration?: number; // ms

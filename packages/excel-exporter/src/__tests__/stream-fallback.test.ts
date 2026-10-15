@@ -48,7 +48,8 @@ describe("stream fallback (terminal degradation, WebAssembly unavailable)", () =
     const r = await exportWithFallback("fallback-direct", [basicSheet]);
 
     expect(r.success).toBe(true);
-    expect(r.engine).toBe("modern-xlsx");
+    // fast stream 是纯 JS 写出器：engine 如实报 fast-xlsx，不冒充 WASM 引擎
+    expect(r.engine).toBe("fast-xlsx");
     expect(r.mode).toBe("stream");
     expect(r.rowCount).toBe(2);
     expect(r.blob).toBeInstanceOf(Blob);

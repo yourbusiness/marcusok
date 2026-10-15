@@ -25,7 +25,7 @@ interface WorkerOkResponse {
   ok: true;
   bytes: Uint8Array;
   rowCount: number;
-  engine: "modern-xlsx";
+  engine: "modern-xlsx" | "fast-xlsx";
 }
 
 /**
@@ -242,7 +242,9 @@ export async function exportInWorker(
     return {
       success: true,
       blob,
-      engine: "modern-xlsx",
+      // stream 模式在 worker 内跑的也是本包纯 JS 写出器（不经 WASM 引擎），
+      // 与主线程 stream 路径同口径如实上报
+      engine: mode === "stream" ? "fast-xlsx" : "modern-xlsx",
       mode: mode === "stream" ? "stream" : "worker",
       duration: performance.now() - start,
       rowCount: workerRowCount,

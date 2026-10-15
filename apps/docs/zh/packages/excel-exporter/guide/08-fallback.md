@@ -18,7 +18,7 @@
 
 | 维度                  | modern-xlsx 路径 | 流式兜底                                                                                |
 | --------------------- | ---------------- | --------------------------------------------------------------------------------------- |
-| `ExportResult.engine` | `"modern-xlsx"`  | `"modern-xlsx"`，且 `mode: "stream"`、`result.error` 非空（`success` 仍为 `true`）      |
+| `ExportResult.engine` | `"modern-xlsx"`  | `"fast-xlsx"`，且 `mode: "stream"`、`result.error` 非空（`success` 仍为 `true`）        |
 | 单元格样式            | 完整             | 剥离（快速流输出不带样式部件的极简 OOXML）                                              |
 | 多行表头 / 合并       | 支持             | 支持（合并不是样式）                                                                    |
 | 列宽/冻结/筛选        | 支持             | 不支持                                                                                  |
