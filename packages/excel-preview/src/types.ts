@@ -160,9 +160,10 @@ export interface PreviewOptions {
   source: PreviewSource;
   /** 加密文件的密码（modern-xlsx Agile AES-256）。 */
   password?: string;
-  /** 初始 sheet（名称或 0-based 索引）；缺省 = 文件的 activeTab。名称不存在
-   * 或索引越界时静默回退 activeTab（不触发 onError——对照实例方法 setSheet
-   * 对无效入参会回调报错：初始选项容错、运行期切换严格，两者语义有意不同）。 */
+  /** 初始 sheet（名称或 0-based 索引）；缺省 = 文件的 activeTab。名称不存在、
+   * 索引越界或非整数时经 onError 上报 `Sheet not found: …`（与实例方法
+   * setSheet 同 message、同 code——初始选项与运行期切换同口径报错），随后
+   * 仍回退渲染 activeTab（该值本身已在解析层归一化，见 activeSheetIndex）。 */
   sheet?: string | number;
   /** 表头（行号列/列标头）显示开关；缺省 true。表头是预览自身 UI，无文件级
    * 声明可遵循（对照：showGridLines 确实读取文件的视图开关）。 */
