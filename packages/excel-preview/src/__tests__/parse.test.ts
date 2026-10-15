@@ -623,6 +623,57 @@ describe("解析入口（主线程路径 + 错误归一）", () => {
     expect(html.ok).toBe(false);
     if (!html.ok) expect(html.code).toBe("UNSUPPORTED");
   });
+
+  it("高 0x80+ 占比的二进制不再当 CSV 渲染（fatal 解码双失败 → UNSUPPORTED）", async () => {
+    // PNG 魔数 + 0xFF 填充：所有 ≥0x80 字节都被可打印率宽容计数，比例虚高
+    // 过 95% 阈值；但连续 0xFF 既不是 UTF-8 也不落在 GB18030 双/四字节的
+    // 任何合法位置，fatal 解码必失败——归 unknown 而非渲染成乱码行。
+    const binary = new Uint8Array([
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a,
+      ...new Array(512).fill(0xff),
+    ]);
+    const r = await parseOnMainThread({ bytes: binary });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("UNSUPPORTED");
+  });
+
+  it("GBK 编码 CSV 仍按文本解析（含 2KB 边界截断在双字节中间的场景）", async () => {
+    // "姓名,数量" 的 GBK 编码字节（手工锁定，避免依赖 Node iconv）：
+    // 0xD0 0xD5 0xC3 0xFB, 0xCA 0xFD 0xC1 0xBF
+    const gbkName = [0xd0, 0xd5, 0xc3, 0xfb, 0x2c, 0xca, 0xfd, 0xc1, 0xbf];
+    // 前 2047 字节 ASCII（换行铺满）+ GBK 双字节跨 2KB 采样边界：
+    // 采样 n=2048 恰好吞下首字节 0xD0 而切掉次字节 → 截断兜底去尾重试。
+    const prefix = "a,b\n".repeat(Math.ceil(2047 / 4)).slice(0, 2047);
+    const gkbBytes = new Uint8Array([
+      ...strToU8(prefix),
+      ...gbkName,
+      ...strToU8("\n1,2\n"),
+    ]);
+    const wb = await parseOnMainThread({ bytes: gkbBytes });
+    expect(wb.ok).toBe(true);
+    if (wb.ok) {
+      // GBK 经 decodeBytes 回退链解码为 "姓名,数量" 行
+      const row = wb.workbook.sheets[0].rows.find((r) => r.index > 512);
+      expect(row).toBeTruthy();
+      expect(wb.workbook.sheets[0].rowCount).toBeGreaterThan(512);
+    }
+
+    // 无边界的普通 GBK CSV（体量小于采样窗口）不受影响
+    const small = await parseOnMainThread({
+      bytes: new Uint8Array([...gbkName, ...strToU8("\n1,2")]),
+    });
+    expect(small.ok).toBe(true);
+    if (small.ok) {
+      expect(small.workbook.sheets[0].rows[0].cells[0].value).toBe("姓名");
+    }
+  });
 });
 
 describe("CSV 解析", () => {

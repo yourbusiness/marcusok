@@ -5,6 +5,35 @@
  */
 export type SniffedFormat = "zip" | "ole2" | "text" | "unknown";
 
+/**
+ * 采样段能否被 UTF-8 或 GB18030 以 fatal 语义完整解码（与 csv.ts 的
+ * decodeBytes 解码链同集合）。可打印率计数对 ≥0x80 字节宽容（多字节编码），
+ * 但连续 0xFF 一类的字节流不是任何合法编码——纯二进制（图标/字体/加密块）
+ * 的可打印率可以虚高到 95% 阈值之上，此前会被当 CSV 渲染成乱码而非
+ * UNSUPPORTED 报错。必须真正可解码才算文本。
+ *
+ * 截断兜底：采样截在多字节序列中间（2KB 边界切在 GB18030 双字节的中间）时
+ * fatal 解码必然失败——去掉尾部 4 字节（覆盖 GB18030 最长四字节序列）重试
+ * 一次，仍失败才否定。
+ */
+function looksDecodable(sample: Uint8Array): boolean {
+  const attempts = [sample, sample.subarray(0, Math.max(0, sample.length - 4))];
+  for (const bytes of attempts) {
+    if (bytes.length === 0) continue;
+    if (canDecode(bytes, "utf-8") || canDecode(bytes, "gb18030")) return true;
+  }
+  return false;
+}
+
+function canDecode(bytes: Uint8Array, encoding: string): boolean {
+  try {
+    new TextDecoder(encoding, { fatal: true }).decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function sniffFormat(bytes: Uint8Array): SniffedFormat {
   if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) return "zip";
   if (
@@ -44,5 +73,9 @@ export function sniffFormat(bytes: Uint8Array): SniffedFormat {
   ) {
     return "unknown";
   }
+  // 高可打印还须真可解码：0x80+ 字节占比虚高的二进制（如 0xFF 填充流，
+  // 连续 0xFF 不属于 UTF-8 也不是合法 GB18030 双/四字节的任何位置）在
+  // 两条 fatal 解码下都失败，归 unknown → UNSUPPORTED。
+  if (!looksDecodable(bytes.subarray(0, n))) return "unknown";
   return "text";
 }
