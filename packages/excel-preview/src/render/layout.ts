@@ -12,6 +12,9 @@ export const DEFAULT_ROW_HEIGHT_PT = 15;
 const MDW = 7; // max digit width, Calibri 11 @ 96dpi
 const HEAD_ROW_PX = 24; // 表头（列标）行高
 const HEAD_COL_PX = 40; // 表头（行号）列宽
+// coveredBy 逐格展开的面积上限（rowSpan × colSpan），超出即放弃展开，
+// 防全表合并卡死主线程（取值理由见 buildLayout 内注释）。
+const MAX_COVERED_CELLS = 1_000_000;
 
 export function charsToPx(width: number): number {
   return Math.round(width * MDW + 5);
@@ -85,6 +88,13 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
   for (const m of sheet.merges) {
     const anchor = `${m.row}:${m.col}`;
     mergeByAnchor.set(anchor, m);
+    // 面积钳制：coveredBy 在主线程逐格展开，全选合并（A1:XFD1048576 ≈
+    // 1.7e10 格）一类的畸形/超大合并会直接把页面卡死（布局构建不在 worker
+    // 内，超时保护管不到）。超上限只保留 anchor 索引（主格仍按跨度渲染），
+    // 覆盖格按自身内容渲染——Excel 语义下合并覆盖格本为空，代价仅是超大
+    // 合并内的零星残值可见，好过整页冻结。上限取 1M 格：远高于整列合并
+    // （A1:A100000 ≈ 10 万格）等模板常态，单次展开控制在百毫秒级。
+    if (m.rowSpan * m.colSpan > MAX_COVERED_CELLS) continue;
     for (let r = m.row; r < m.row + m.rowSpan; r++) {
       for (let c = m.col; c < m.col + m.colSpan; c++) {
         if (r === m.row && c === m.col) continue;

@@ -74,6 +74,56 @@ describe("layout 几何", () => {
     expect(anchors2).toEqual([]);
   });
 
+  // 回归：coveredBy 曾按 rowSpan × colSpan 逐格展开且无面积上限，一个
+  // A1:XFD1048576 全选合并（≈1.7e10 次 Map 写入）会在主线程直接卡死页面
+  // （布局构建在渲染层主线程，worker 超时保护管不到）。超上限的合并只保留
+  // anchor 索引、放弃逐格展开。
+  it("buildLayout：超大合并不做逐格展开，anchor 索引仍保留", () => {
+    const l = buildLayout({
+      name: "S",
+      visible: true,
+      showGridLines: true,
+      rightToLeft: false,
+      rowCount: 10_000,
+      colCount: 2_000,
+      rows: [],
+      colSpans: [],
+      // 2000 × 2000 = 4M 格，超过面积上限
+      merges: [{ row: 0, col: 0, rowSpan: 2_000, colSpan: 2_000 }],
+      frozenRows: 0,
+      frozenCols: 0,
+      styles: { fonts: [], fills: [], borders: [], xfs: [] },
+    });
+    expect(l.mergeByAnchor.get("0:0")).toEqual({
+      row: 0,
+      col: 0,
+      rowSpan: 2_000,
+      colSpan: 2_000,
+    });
+    expect(l.coveredBy.size).toBe(0);
+  });
+
+  it("buildLayout：面积上限边界的合并仍逐格展开（不误伤正常大合并）", () => {
+    // 1000 × 1000 = 1M 格，恰在上限：整列合并（A1:A100000 ≈ 10 万格）等
+    // Excel 模板常态必须继续展开，否则覆盖格的抑制渲染失效
+    const l = buildLayout({
+      name: "S",
+      visible: true,
+      showGridLines: true,
+      rightToLeft: false,
+      rowCount: 1_000,
+      colCount: 1_000,
+      rows: [],
+      colSpans: [],
+      merges: [{ row: 0, col: 0, rowSpan: 1_000, colSpan: 1_000 }],
+      frozenRows: 0,
+      frozenCols: 0,
+      styles: { fonts: [], fills: [], borders: [], xfs: [] },
+    });
+    expect(l.coveredBy.size).toBe(1_000_000 - 1); // 除 anchor 外全部登记
+    expect(l.coveredBy.get("999:999")).toBe("0:0");
+  });
+
   it("buildLayout：<col> 只写 width 不写 customWidth 也生效", () => {
     // 引擎对"未写 width 的 col"兜底 8.43、对"写了 width 无标志"保留原值且
     // customWidth=false——两形态无从靠标志区分，渲染一律采用 width
