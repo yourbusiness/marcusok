@@ -578,9 +578,40 @@ export async function exportExcel(
   }
 }
 
+/**
+ * 用户回调（onProgress/onPhase）异常隔离。回调是调用方代码，其抛错（常见如
+ * 回调驱动的 UI 组件已卸载）不得影响导出本体：首个 onProgress(0) 抛错会以
+ * 裸异常 reject、突破"永远 resolve 结构化结果"的契约；更隐蔽的是 worker
+ * 分支已成功拿到 Blob 后收尾的 onProgress(1) 抛错会落入 catch，把整份工作簿
+ * 在主线程全量重建甚至降级剥样式。在核心入口统一包一层后，主线程 / worker
+ * 消息回调 / 流式循环三条路径上的全部调用点行为一致：抛错仅 warn。
+ */
+function guardCallback<A extends unknown[]>(
+  cb: ((...args: A) => void) | undefined,
+): ((...args: A) => void) | undefined {
+  if (!cb) return cb;
+  return (...args: A) => {
+    try {
+      cb(...args);
+    } catch (e) {
+      console.warn("[excel-exporter] user callback threw; ignoring", e);
+    }
+  };
+}
+
 /** {@link exportExcel} 的路由与构建主体（overlay 接线在包装层完成）。 */
 async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
   const start = performance.now();
+
+  // 回调隔离必须先于首个 onProgress(0) 接线；null options 无回调可包，
+  // 且下方可选链与 validateInput 已覆盖该形态。
+  if (options !== null && typeof options === "object") {
+    options = {
+      ...options,
+      onProgress: guardCallback(options.onProgress),
+      onPhase: guardCallback(options.onPhase),
+    };
+  }
 
   // Leading 0 fires exactly once here, on every route (the stream fallback
   // included), so consumers always see the documented 0 -> ... -> 1 pair.
