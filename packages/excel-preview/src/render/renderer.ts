@@ -472,15 +472,25 @@ export class SheetRenderer {
     this.updateLayer(this.cellsLayer, mainRange, "m:", anchors);
 
     if (l.frozenRows > 0) {
+      // 冻结行带只钉 Y：列范围随主窗口收缩，anchor 列滚出窗口的宽合并
+      // （如冻结首行的 A1:H1 标题）须召回，否则合并格随滚动整格消失。
+      // 召回区排除冻结角（角块 [0,frozen)×[0,frozen) 全量渲染，无需召回）。
+      const frRange = {
+        rowStart: 0,
+        rowEnd: l.frozenRows,
+        colStart: Math.max(main.colStart, l.frozenCols),
+        colEnd: main.colEnd,
+      };
       this.updateLayer(
         this.frozenRowLayer,
-        {
+        frRange,
+        "fr:",
+        visibleMergeAnchors(l, frRange, {
           rowStart: 0,
           rowEnd: l.frozenRows,
-          colStart: Math.max(main.colStart, l.frozenCols),
-          colEnd: main.colEnd,
-        },
-        "fr:",
+          colStart: l.frozenCols,
+          colEnd: l.colCount,
+        }),
       );
       this.updateLayer(
         this.frozenCorner,
@@ -494,15 +504,23 @@ export class SheetRenderer {
       );
     }
     if (l.frozenCols > 0) {
+      // 冻结列带对称：只钉 X，行范围随主窗口收缩，纵向长合并同理召回。
+      const fcRange = {
+        rowStart: Math.max(main.rowStart, l.frozenRows),
+        rowEnd: main.rowEnd,
+        colStart: 0,
+        colEnd: l.frozenCols,
+      };
       this.updateLayer(
         this.frozenColLayer,
-        {
-          rowStart: Math.max(main.rowStart, l.frozenRows),
-          rowEnd: main.rowEnd,
+        fcRange,
+        "fcol:",
+        visibleMergeAnchors(l, fcRange, {
+          rowStart: l.frozenRows,
+          rowEnd: l.rowCount,
           colStart: 0,
           colEnd: l.frozenCols,
-        },
-        "fcol:",
+        }),
       );
     }
 
@@ -510,7 +528,8 @@ export class SheetRenderer {
   }
 
   /** 单象限差量渲染。prefix 区分象限 key 命名空间；anchors 为需增补召回的
-   * 合并主格（在窗口外，见 visibleMergeAnchors），仅主象限使用。 */
+   * 合并主格（在窗口外，见 visibleMergeAnchors），主象限与两个冻结带使用
+   * （冻结角全量渲染，无需召回）。 */
   private updateLayer(
     layer: HTMLElement,
     range: {

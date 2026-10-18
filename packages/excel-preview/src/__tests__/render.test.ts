@@ -526,6 +526,101 @@ describe("SheetRenderer", () => {
     r.destroy();
   });
 
+  // 回归：冻结行/列带的列/行范围跟随主窗口，此前 anchor 召回跳过一切触及
+  // 冻结区的合并（假设"冻结象限全量渲染"——只对冻结角成立），冻结首行 +
+  // A1:H1 宽合并标题在横向滚动越过 anchor 列后整格消失（报表常见形态）。
+  it("冻结行带内的宽合并：横向滚动越过主格列后不消失", async () => {
+    const model = await parse(sampleWorkbookBytes());
+    model.sheets[0] = {
+      ...model.sheets[0],
+      rowCount: 50,
+      colCount: 30,
+      frozenRows: 1,
+      frozenCols: 0,
+      colSpans: [],
+      merges: [{ row: 0, col: 0, rowSpan: 1, colSpan: 8 }],
+      rows: [
+        {
+          index: 1,
+          height: null,
+          hidden: false,
+          cells: [
+            { col: 0, type: "string", value: "合并标题", styleIndex: null },
+          ],
+        },
+        {
+          index: 2,
+          height: null,
+          hidden: false,
+          cells: [{ col: 0, type: "string", value: "数据", styleIndex: null }],
+        },
+      ],
+    };
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    // 层序：cells(0)/frozenCol(1)/frozenRow(2)/frozenCorner(3)/…
+    const titleInFrozenRowBand = () =>
+      [
+        ...container
+          .querySelectorAll(".xpv-layer")[2]
+          .querySelectorAll(".xpv-cell"),
+      ].find((c) => c.textContent?.includes("合并标题"));
+    expect(titleInFrozenRowBand()).toBeTruthy();
+    // 横向滚动使主窗口 colStart 越过 anchor 所在的 col 0
+    const viewport = container.querySelector(".xpv-viewport") as HTMLElement;
+    viewport.scrollLeft = 400;
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+    // 合并跨度（col 0-7）仍覆盖可视区，主格须被召回冻结行带继续渲染
+    expect(titleInFrozenRowBand()).toBeTruthy();
+    r.destroy();
+  });
+
+  it("冻结列带内的长合并：纵向滚动越过主格行后不消失", async () => {
+    const model = await parse(sampleWorkbookBytes());
+    model.sheets[0] = {
+      ...model.sheets[0],
+      rowCount: 100,
+      colCount: 10,
+      frozenRows: 0,
+      frozenCols: 1,
+      colSpans: [],
+      merges: [{ row: 0, col: 0, rowSpan: 30, colSpan: 1 }],
+      rows: [
+        {
+          index: 1,
+          height: null,
+          hidden: false,
+          cells: [
+            { col: 0, type: "string", value: "侧栏合并", styleIndex: null },
+          ],
+        },
+        {
+          index: 2,
+          height: null,
+          hidden: false,
+          cells: [{ col: 1, type: "string", value: "数据", styleIndex: null }],
+        },
+      ],
+    };
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    // 冻结列带是 layers[1]
+    const titleInFrozenColBand = () =>
+      [
+        ...container
+          .querySelectorAll(".xpv-layer")[1]
+          .querySelectorAll(".xpv-cell"),
+      ].find((c) => c.textContent?.includes("侧栏合并"));
+    expect(titleInFrozenColBand()).toBeTruthy();
+    const viewport = container.querySelector(".xpv-viewport") as HTMLElement;
+    viewport.scrollTop = 600;
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+    expect(titleInFrozenColBand()).toBeTruthy();
+    r.destroy();
+  });
+
   it("冻结列标/行号在静态层，非冻结区在平移带（冻结表头 sticky）", async () => {
     const model = await parse(sampleWorkbookBytes());
     const r = new SheetRenderer(container);

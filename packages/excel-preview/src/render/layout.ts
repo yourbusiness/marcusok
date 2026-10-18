@@ -156,24 +156,34 @@ export function computeVisibleRange(
 }
 
 /**
- * 与主区窗口相交的合并的主格（anchor）列表：渲染层据此**增补渲染**窗口外的
+ * 与给定窗口相交的合并的主格（anchor）列表：渲染层据此**增补渲染**窗口外的
  * 合并主格（主格的 width/height 直接按合并跨度跨越，覆盖格不逐格建 DOM，
  * 视口内的合并因此显示完整）。
  *
  * 此前召回是把整个合并矩形并入窗口 [r0,r1)/[c0,c1)——窗口与行号/列标表头
  * 都按扩大后的范围循环建 DOM，A1:A100000 一类整列合并（Excel 模板常态）
  * 会把行号表头全量建出（10 万~百万 DOM），虚拟滚动失效。改为只召回主格后
- * 表头恒为视口规模。冻结区象限不需要召回：其行/列范围本就是 [0, frozen)
- * 全量渲染，anchor 落在里面自然被覆盖（跨冻结线的异常合并除外，边角行为
- * 与旧实现等同）。
+ * 表头恒为视口规模。
+ *
+ * `anchorZone` 限定只召回 anchor 落在该区域内的合并：冻结行/列带的窗口跟随
+ * 主区滚动（冻结行带只钉 Y、列范围随主窗口收缩），"anchor 在冻结区内自然被
+ * 覆盖"的假设只对全量渲染的冻结角成立——冻结首行 + A1:H1 宽合并标题在横向
+ * 滚动越过 anchor 列后会整格消失。主象限不传 anchorZone，保持原口径（跳过
+ * 触及冻结区的合并；跨冻结线的异常合并为边角，行为不变）。
  */
 export function visibleMergeAnchors(
   layout: GridLayout,
   range: VisibleRange,
+  anchorZone?: VisibleRange,
 ): { row: number; col: number }[] {
   const out: { row: number; col: number }[] = [];
   for (const m of layout.merges) {
-    if (m.row < layout.frozenRows || m.col < layout.frozenCols) continue;
+    if (anchorZone) {
+      if (m.row < anchorZone.rowStart || m.row >= anchorZone.rowEnd) continue;
+      if (m.col < anchorZone.colStart || m.col >= anchorZone.colEnd) continue;
+    } else if (m.row < layout.frozenRows || m.col < layout.frozenCols) {
+      continue;
+    }
     const endR = m.row + m.rowSpan;
     const endC = m.col + m.colSpan;
     if (endR <= range.rowStart || m.row >= range.rowEnd) continue;
