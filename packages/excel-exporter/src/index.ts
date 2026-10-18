@@ -16,7 +16,11 @@ import {
   echartsExportToOptions,
   type EChartsExportOptions,
 } from "./echarts-export";
-import { validateSheetName, validateMerges } from "./format-utils";
+import {
+  validateSheetName,
+  validateMerges,
+  validateSheetLimits,
+} from "./format-utils";
 import { columnLabel, flattenColumnTree } from "./column-tree";
 import { applyIndexColumn, assertNoReservedIndexProp } from "./sheet-normalize";
 import {
@@ -284,13 +288,21 @@ function validateInput(options: ExportOptions): void {
         `[excel-exporter] sheet "${sheet.name}" must have a data array`,
       );
     }
-    const { leaves } = flattenColumnTree(sheet.columns);
+    const { leaves, headerRowCount } = flattenColumnTree(sheet.columns);
     // 保留列在这里**无条件**拦截（与是否启用 indexColumn 无关）：构建器对
     // INDEX_PROP 的特判是无条件的，放行只会让用户自带的该列被行号静默顶替
     // （数据丢失而 success 仍为 true）。原先该检查只在 applyIndexColumn 内，
     // 未启用 indexColumn 时它直接返回原表，静默路径正好漏在最外层入口上。
     assertNoReservedIndexProp(leaves);
     validateMerges(sheet, leaves.length);
+    // Excel 硬上限（1,048,576 行 × 16,384 列）：超限在 stream 路径会照常
+    // 写出并 zip 成功、Excel 打开即报修复而 success 仍为 true。本校验在序号
+    // 列注入之前运行，列数须自行加上 indexColumn 占用的一列。
+    validateSheetLimits(
+      sheet,
+      leaves.length + (sheet.indexColumn ? 1 : 0),
+      headerRowCount,
+    );
     // 样式数值字段（textRotation / font.size）前置校验，覆盖 sheet 级、列级
     //（含分组列）与 indexColumn 注入列的全部出现点。
     validateCellStyle(sheet.headerStyle, `sheet "${sheet.name}" headerStyle`);

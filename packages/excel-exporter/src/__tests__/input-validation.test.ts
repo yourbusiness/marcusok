@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
 import { exportAsStream } from "../streaming-builder";
 import { exportExcel } from "../index";
+import { validateSheetLimits } from "../format-utils";
 import type { SheetConfig } from "../types";
 // Node's fetch rejects file://, so sync-init the WASM (see setup.ts);
 // importing the module already runs the side-effectful bootstrap.
@@ -992,5 +993,85 @@ describe("indexColumn shape validation", () => {
         /indexColumn must be a boolean or an options object/,
       );
     }
+  });
+});
+
+// Excel 的硬上限（ECMA-376）：每表 1,048,576 行（表头占行）与 16,384 列。
+// 超限输入此前在 stream 路径照常写出全部 <row>、zip 成功，Excel 打开即报
+// 修复而 success 仍为 true——正是 validateInput 设计哲学要消灭的失败类型。
+describe("Excel sheet dimension limits", () => {
+  it("rejects data that overflows the 1,048,576-row limit (header included)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const r = await exportExcel({
+        filename: "too-many-rows",
+        download: false,
+        mode: "main",
+        sheets: [
+          baseSheet({
+            // 共享引用填充，只为过长度校验；校验通过前不会触碰元素
+            data: new Array(1_048_576).fill({ a: 1, b: 2 }),
+          }),
+        ],
+      });
+      expect(r.success).toBe(false);
+      expect(r.engine).toBeUndefined();
+      expect(r.error?.message).toMatch(/1,048,576-row limit/);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("rejects more than 16,384 effective columns, counting the injected index column", async () => {
+    const manyColumns = Array.from({ length: 16_384 }, (_, i) => ({
+      prop: `c${i}`,
+      label: `C${i}`,
+    }));
+    const r = await exportExcel({
+      filename: "too-many-cols",
+      download: false,
+      mode: "main",
+      // 16,384 用户列 + 序号列 = 16,385 有效列，越界
+      sheets: [baseSheet({ columns: manyColumns, indexColumn: true })],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.message).toMatch(/16,384-column limit/);
+  });
+
+  it("stream path rejects the same overflow", async () => {
+    await expect(
+      exportAsStream([
+        baseSheet({ data: new Array(1_048_576).fill({ a: 1, b: 2 }) }),
+      ]),
+    ).rejects.toThrow(/1,048,576-row limit/);
+    await expect(
+      exportAsStream([
+        baseSheet({
+          columns: Array.from({ length: 16_385 }, (_, i) => ({
+            prop: `c${i}`,
+            label: `C${i}`,
+          })),
+        }),
+      ]),
+    ).rejects.toThrow(/16,384-column limit/);
+  });
+
+  it("boundary values stay legal", () => {
+    const mk = (rows: number): SheetConfig => ({
+      name: "S",
+      columns: [{ prop: "a", label: "A" }],
+      data: new Array(rows).fill({ a: 1 }),
+    });
+    // 行：表头 1 行 + 数据 1,048,575 行 = 恰好 1,048,576，合法；多一行越界
+    expect(() => validateSheetLimits(mk(1_048_575), 1, 1)).not.toThrow();
+    expect(() => validateSheetLimits(mk(1_048_576), 1, 1)).toThrow(
+      /1,048,576-row limit/,
+    );
+    // 列：16,384 合法，16,385 越界
+    expect(() => validateSheetLimits(mk(1), 16_384, 1)).not.toThrow();
+    expect(() => validateSheetLimits(mk(1), 16_385, 1)).toThrow(
+      /16,384-column limit/,
+    );
   });
 });

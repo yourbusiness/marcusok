@@ -298,6 +298,40 @@ export function validateSheetName(name: string): void {
   }
 }
 
+// Excel 工作表硬上限（ECMA-376 / Excel 规格）：1,048,576 行 × 16,384 列。
+const EXCEL_MAX_ROWS = 1_048_576;
+const EXCEL_MAX_COLS = 16_384;
+
+/**
+ * Validate sheet dimensions against Excel's hard limits: 1,048,576 rows
+ * (header block included) and 16,384 columns. Beyond these the stream path
+ * would write every `<row>` and zip successfully, producing a workbook Excel
+ * opens with a repair prompt while the export reports success -- the failure
+ * class validateInput exists to eliminate. Checked identically on the
+ * Workbook and stream paths.
+ *
+ * `leafCount` / `headerRowCount` 必须是最终生效值：`exportExcel` 的前置校验在
+ * 序号列注入**之前**运行，须自行加上 indexColumn 占用的一列；构建器收到的是
+ * 已注入的 sheet，直接传 flattenColumnTree 的结果即可。
+ */
+export function validateSheetLimits(
+  sheet: SheetConfig,
+  leafCount: number,
+  headerRowCount: number,
+): void {
+  if (leafCount > EXCEL_MAX_COLS) {
+    throw new Error(
+      `[excel-exporter] sheet "${sheet.name}" has ${leafCount.toLocaleString("en-US")} columns, exceeding Excel's ${EXCEL_MAX_COLS.toLocaleString("en-US")}-column limit`,
+    );
+  }
+  const totalRows = headerRowCount + sheet.data.length;
+  if (totalRows > EXCEL_MAX_ROWS) {
+    throw new Error(
+      `[excel-exporter] sheet "${sheet.name}" has ${totalRows.toLocaleString("en-US")} rows (header + data), exceeding Excel's ${EXCEL_MAX_ROWS.toLocaleString("en-US")}-row limit`,
+    );
+  }
+}
+
 /**
  * Validate user-supplied merge ranges against the sheet's data area. A merge
  * with a zero/negative span or an out-of-bounds endpoint would produce a

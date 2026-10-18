@@ -4,6 +4,7 @@ import {
   displayValue,
   validateSheetName,
   validateMerges,
+  validateSheetLimits,
 } from "./format-utils";
 import {
   flattenColumnTree,
@@ -125,6 +126,9 @@ function buildWorksheetXml(
   // Reject invalid user merges before any XML is built: a reversed or
   // out-of-bounds range would otherwise zip a workbook Excel flags as corrupt.
   validateMerges(config, leaves.length);
+  // Same for the Excel dimension limits: without this the stream path zips an
+  // over-limit workbook Excel flags as corrupt while reporting success.
+  validateSheetLimits(config, leaves.length, headerRowCount);
   const letters = leaves.map((_, i) => columnName(i));
   const out: string[] = [];
 
