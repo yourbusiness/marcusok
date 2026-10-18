@@ -1,5 +1,12 @@
 # @marcusok/excel-preview
 
+## 2.1.3
+
+### Patch Changes
+
+- d69d0b0: Fix merged cells disappearing from frozen bands: the frozen row/column bands follow the main viewport on their unpinned axis, so a wide merge anchored inside the band (e.g. an `A1:H1` title in a frozen first row) vanished once scrolling moved its anchor out of the window. Band layers now recall off-window merge anchors the same way the main quadrant does.
+- f32c23c: Cap the per-merge cell expansion in layout building: a pathological whole-sheet merge (`A1:XFD1048576`, ~1.7e10 cells) previously froze the main thread while populating the covered-cell index. Merges over 1M cells now keep only their anchor entry (the anchor still renders at full span); normal large merges such as full-column merges are unaffected.
+
 ## 2.1.2
 
 ### Patch Changes

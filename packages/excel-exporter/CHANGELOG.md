@@ -1,5 +1,12 @@
 # @marcusok/excel-exporter
 
+## 3.2.1
+
+### Patch Changes
+
+- d0a78a5: Isolate user callback errors: a throwing `onProgress`/`onPhase` no longer rejects the export or triggers a wasted degradation rebuild (previously, a throw from the trailing `onProgress(1)` after a successful Worker build re-built the whole workbook on the main thread). Callback exceptions are now logged via `console.warn` and the export completes normally, consistently across the main / worker / stream routes.
+- 718fea7: Validate Excel's hard sheet limits (1,048,576 rows including the header block, 16,384 columns) up front on every path. Over-limit input previously zipped successfully on the stream path and produced a workbook Excel flags as corrupt while reporting `success: true`; it now fails fast with a structured `{ success: false, error }` and no fallback attempt.
+
 ## 3.2.0
 
 ### Minor Changes
