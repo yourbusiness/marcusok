@@ -30,7 +30,9 @@
 
 带 `children` 的列为分组列，无数据单元格，只贡献表头行。表头行数 = 1 + 列树最大深度（扁平列即 1 行）；叶子列表头纵向跨满剩余表头行，分组列表头横向跨其子树所有叶子列，合并由库自动生成（无需手工写 `merges`）。
 
-两条结构校验同样前置执行：`columns` 为空数组会被拒绝（`sheet has no columns`）；同一列对象在树中出现多次——例如被两个分组共享为子列——也会被拒绝（`column object reused in the column tree`）。
+三条结构校验同样前置执行：`columns` 为空数组会被拒绝（`sheet has no columns`）；同一列对象在树中出现多次——例如被两个分组共享为子列——会被拒绝（`column object reused in the column tree`）；`children` 引用成环也会被拒绝（`circular children reference in column tree`）。
+
+工作表尺寸同样在导出前对照 Excel 硬上限校验：每表 1,048,576 行（表头行计入）、16,384 列（注入的 `indexColumn` 占一列）。超限的表直接以 `{ success: false }` 收场，错误中写明表名与实际行列数——否则在 stream 路径上会照常写出并 zip 成功，直到 Excel 打开时才报修复提示。
 
 **stream 路径兼容性。** 在无样式快速流上——显式 `mode: "stream"`、auto ≥ 50,000 行、或降级兜底——上两张表中的全部样式/布局字段都会被丢弃并打印 `console.warn`：`width`、列级 `style` / `headerStyle`、表级 `headerStyle` / `dataStyle`、`freezeRows`、`autoFilter`（连同 `FormatSpec` 本会自动注入的 `numFormat`——`decimals` 改为烧入存储值）。结构保留：多行表头、`merges` 与 `indexColumn` 不受影响。完整的分路径能力矩阵见 [Worker 与流式指南](/zh/packages/excel-exporter/guide/06-worker-stream)。
 

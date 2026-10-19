@@ -30,7 +30,9 @@
 
 A column with `children` is a group: no data cells, header rows only. Header row count = 1 + the deepest column's tree depth (so 1 for a flat column list); leaf headers span the remaining header rows vertically, group headers span their leaf subtree horizontally — merges are generated automatically (no manual `merges` needed for headers).
 
-Two structural validations run up front: an empty `columns` array is rejected (`sheet has no columns`), and the same column object appearing more than once in the tree — e.g. one object shared as a child of two groups — is rejected (`column object reused in the column tree`).
+Three structural validations run up front: an empty `columns` array is rejected (`sheet has no columns`); the same column object appearing more than once in the tree — e.g. one object shared as a child of two groups — is rejected (`column object reused in the column tree`); and a `children` reference cycle is rejected (`circular children reference in column tree`).
+
+Sheet dimensions are validated against Excel's hard limits up front as well: 1,048,576 rows per sheet (header rows count toward it) and 16,384 columns (an injected `indexColumn` occupies one). An oversized sheet resolves `{ success: false }` with an error naming the sheet and its actual row/column counts — on the stream path it would otherwise zip successfully and only surface as Excel's repair prompt on open.
 
 **Stream-path compatibility.** On the style-less fast stream — explicit `mode: "stream"`, auto ≥ 50,000 rows, or the degraded fallback — every style/layout field in the two tables above is dropped with a `console.warn`: `width`, column `style` / `headerStyle`, sheet-level `headerStyle` / `dataStyle`, `freezeRows`, `autoFilter` (plus every `numFormat` a `FormatSpec` would auto-inject — decimals are baked into the stored value instead). Structure survives: multi-row headers, `merges` and `indexColumn` are preserved. The full per-route matrix lives in the [worker & stream guide](/packages/excel-exporter/guide/06-worker-stream).
 

@@ -33,7 +33,7 @@ const result = await exportExcel({
   onProgress: (p) => setProgress(p),
 });
 
-console.log(result); // engine: "modern-xlsx", mode: "stream", rowCount: 100000
+console.log(result); // engine: "fast-xlsx", mode: "stream", rowCount: 100000
 ```
 
 ## Notes

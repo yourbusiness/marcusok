@@ -41,7 +41,7 @@ const preview = createPreview(el, {
 
 ## CSV
 
-没有独立 API：非 ZIP 的文本形态输入自动按 CSV 解析（UTF-8 BOM 处理、中文导出的 GB18030 回退、`,` / `;` / tab / `|` 分隔符嗅探、RFC 4180 引号转义）。结果是单 sheet 的 `PreviewWorkbook`，符合 General 规则的数字单元格带 number 类型（右对齐语义）。
+没有独立 API：非 ZIP 的文本形态输入自动按 CSV 解析（UTF-8 BOM 处理、中文导出的 GB18030 回退、`,` / `;` / tab / `|` 分隔符嗅探、RFC 4180 引号转义）。结果是单 sheet 的 `PreviewWorkbook`（sheet 名固定为 `CSV`），符合 General 规则的数字单元格带 number 类型（右对齐语义）。
 
 ## 在线演示
 

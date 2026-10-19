@@ -55,7 +55,7 @@ The file is encrypted (Agile AES-256) and no password was supplied. Pass one —
 
 ### My `.xls` / `.ods` file is rejected outright
 
-That is deliberate in v1, and each case gets its own code: legacy `.xls` (BIFF8) is `LEGACY_FORMAT` (re-save as `.xlsx`), `.ods` and other ZIP-based suites are `CORRUPT` (a ZIP archive without an `xl/workbook.xml`), and SpreadsheetML / HTML-table exports are `UNSUPPORTED`. UTF-16 CSV lands in `UNSUPPORTED` as well — re-save it as UTF-8. The full table is in [Scope & Limits](/packages/excel-preview/guide/04-limits).
+That is deliberate, and each case gets its own code: legacy `.xls` (BIFF8) is `LEGACY_FORMAT` (re-save as `.xlsx`), `.ods` and other ZIP-based suites are `CORRUPT` (a ZIP archive without an `xl/workbook.xml`), and SpreadsheetML / HTML-table exports are `UNSUPPORTED`. UTF-16 CSV lands in `UNSUPPORTED` as well — re-save it as UTF-8. The full table is in [Scope & Limits](/packages/excel-preview/guide/04-limits).
 
 ### Does it read a Chinese `.csv` exported from Excel?
 
@@ -63,7 +63,7 @@ Yes. UTF-8 (with or without BOM) and GB18030 are detected automatically, and the
 
 ### `setSheet()` right after `createPreview()` does nothing
 
-That is the documented timing, not a bug: `createPreview` boots asynchronously, so `setSheet()` is a silent no-op and `getSheetNames()` returns `[]` until the parse resolves. Call them from `onParsed`, from your own UI, or let the tab bar drive them. `destroy()` likewise does **not** cancel an in-flight parse — it only suppresses the callbacks that parse would have fired. See [Quick Start](/packages/excel-preview/guide/01-quick-start).
+That is the documented timing, not a bug: `createPreview` boots asynchronously, so `setSheet()` is a silent no-op and `getSheetNames()` returns `[]` until the parse resolves. Call them from `onParsed`, from your own UI, or let the tab bar drive them. `destroy()` also aborts an in-flight parse (it does not merely silence the callbacks) — the cancellation is silent: it resolves as `ABORTED` and never surfaces via `onError`. See [Quick Start](/packages/excel-preview/guide/01-quick-start).
 
 ### A formula cell renders empty
 
@@ -113,7 +113,7 @@ No. The engine integration (WASM loader plus a stable surface over modern-xlsx) 
 
 ### Does `modern-xlsx`'s `engines.node >= 24` affect my app?
 
-No. The engine runtime is bundled **into** each package's `dist/` at build time, so consumers never execute upstream modern-xlsx code. Both business packages require Node `>= 22`, and browsers need WebAssembly support. The pinned `modern-xlsx` entry in their manifests exists purely so TypeScript consumers can resolve re-exported types — nothing from it loads at runtime.
+No. The engine runtime is bundled **into** each package's `dist/` at build time, so consumers never execute upstream modern-xlsx code. Both business packages require Node `>= 22`, and browsers need WebAssembly support. The pinned `modern-xlsx` entry in their manifests exists purely so TypeScript consumers can resolve re-exported types — nothing from it loads at runtime. At install time npm may still print an `EBADENGINE` warning for that transitive pin (its declared floor is Node 24); the warning is safe to ignore, and only an installer running with `engine-strict` would turn it into a failure.
 
 ### The exporter and the preview on one page
 

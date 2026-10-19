@@ -63,4 +63,4 @@ const result = await exportExcel({
 - The `enum` spec maps internal status codes to readable labels with a `"Unknown"` fallback;
 - `freezeRows + autoFilter` lets reviewers filter directly in Excel.
 
-Try it live in the [play](/play) with the sales dataset.
+Try it live in the [play](/play) — the basic export demo runs a 10k-row dataset through the same auto routing.

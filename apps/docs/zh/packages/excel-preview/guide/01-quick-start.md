@@ -67,4 +67,4 @@ const workbook = await parseWorkbookBytes(bytes, { password: "…" });
 
 - [资产与自托管](/zh/packages/excel-preview/guide/02-assets)——WASM/worker 文件如何定位、什么时候需要 `configureWasm`。
 - [格式忠实度](/zh/packages/excel-preview/guide/03-format-fidelity)——补偿层还原了什么、哪些是已知近似。
-- [能力边界](/zh/packages/excel-preview/guide/04-limits)——v1 明确不做的事。
+- [能力边界](/zh/packages/excel-preview/guide/04-limits)——本包明确不做的事。

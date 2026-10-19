@@ -122,7 +122,7 @@ Phase semantics:
 | Phase      | Description                                                                                                                                                                                                                                                                                                   |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `init`     | WASM init; reported on every main-path export (~0ms once loaded); Node's main-thread stream path and the main-thread stream fallback do not load WASM but still report a single 0ms to keep the phase sequence stable; on Worker + Workbook only when the worker initializes; not reported on Worker + stream |
-| `build`    | Workbook construction (reported once per actual attempt, including fallback)                                                                                                                                                                                                                                  |
+| `build`    | Workbook construction (one report per main-thread attempt, including a main-thread fallback retry — even when that attempt throws; a worker-internal failure reports no `build` phase)                                                                                                                        |
 | `download` | Browser download trigger (absent with `download: false`; absent in Node)                                                                                                                                                                                                                                      |
 
 > `onPhase` measures per-phase wall time only; `ExportResult.duration` measures the whole export on main-thread routes. On the worker route it is measured on the main thread from the call into the worker — including the pre-post serialization and the worker round-trip, through Blob construction — so it is wider than the pure in-worker build time.
@@ -142,7 +142,7 @@ const result = await exportExcel({ ..., download: false });
 interface ExportResult {
   success: boolean;
   blob?: Blob;
-  engine?: "modern-xlsx"; // engine actually used
+  engine?: "modern-xlsx" | "fast-xlsx"; // "fast-xlsx" = the style-less stream writer
   mode?: ExportMode; // mode actually used
   duration?: number; // total export duration in ms
   rowCount?: number;

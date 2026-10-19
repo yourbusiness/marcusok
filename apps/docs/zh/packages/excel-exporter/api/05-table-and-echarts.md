@@ -40,22 +40,22 @@ exportTable(options: TableExportOptions): Promise<ExportResult>
 
 `TableExportOptions` 在 `TableSheetInput` 之上追加了导出级字段：
 
-| 字段          | 类型                                               | 必填 | 说明                                                                  |
-| ------------- | -------------------------------------------------- | ---- | --------------------------------------------------------------------- |
-| `columns`     | `TableColumnInput[]`                               | 是   | 列描述符，会被归一为 `ColumnConfig`（见下）                           |
-| `data`        | `Record<string, unknown>[]`                        | 是   | 行对象，以解析出的 `prop` 为键                                        |
-| `filename`    | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                           |
-| `sheetName`   | `string`                                           | —    | 默认 `"Sheet1"`                                                       |
-| `freezeRows`  | `number`                                           | —    | 冻结的表头行数，校验为非负整数                                        |
-| `autoFilter`  | `boolean`                                          | —    | 表头筛选，范围覆盖最后一行表头加全部数据行                            |
-| `merges`      | `MergeRange[]`                                     | —    | 合并单元格范围，相对数据区域                                          |
-| `dataStyle`   | `CellStyle`                                        | —    | 全部数据单元格的基底样式，列级 `style` 在其上逐字段深合并             |
-| `indexColumn` | `boolean \| IndexColumnOptions`                    | —    | 注入最左侧序号列，`true` 表示全默认；`merges` 会自动右移              |
-| `mode`        | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                                                         |
-| `onProgress`  | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                               |
-| `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                |
-| `download`    | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                      |
-| `overlay`     | `boolean \| ProgressOverlayOptions`                | —    | 与 `exportExcel` 上语义一致：默认**开启**；`false` 关闭，传对象自定义 |
+| 字段          | 类型                                               | 必填 | 说明                                                                                                                                                              |
+| ------------- | -------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `columns`     | `TableColumnInput[]`                               | 是   | 列描述符，会被归一为 `ColumnConfig`（见下）                                                                                                                       |
+| `data`        | `Record<string, unknown>[]`                        | 是   | 行对象，以解析出的 `prop` 为键                                                                                                                                    |
+| `filename`    | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                                                                                                                       |
+| `sheetName`   | `string`                                           | —    | 默认 `"Sheet1"`                                                                                                                                                   |
+| `freezeRows`  | `number`                                           | —    | 自顶部冻结的工作表行数——通常是表头行数，但不与表头绑定（语义同 `SheetConfig.freezeRows`，见[核心类型](/zh/packages/excel-exporter/api/02-types)）；校验为非负整数 |
+| `autoFilter`  | `boolean`                                          | —    | 表头筛选，范围覆盖最后一行表头加全部数据行                                                                                                                        |
+| `merges`      | `MergeRange[]`                                     | —    | 合并单元格范围，相对数据区域                                                                                                                                      |
+| `dataStyle`   | `CellStyle`                                        | —    | 全部数据单元格的基底样式，列级 `style` 在其上逐字段深合并                                                                                                         |
+| `indexColumn` | `boolean \| IndexColumnOptions`                    | —    | 注入最左侧序号列，`true` 表示全默认；`merges` 会自动右移                                                                                                          |
+| `mode`        | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                                                                                                                                                     |
+| `onProgress`  | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                                                                                                                           |
+| `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                                                                                                            |
+| `download`    | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                                                                                                                  |
+| `overlay`     | `boolean \| ProgressOverlayOptions`                | —    | 与 `exportExcel` 上语义一致：默认**开启**；`false` 关闭，传对象自定义                                                                                             |
 
 ### TableColumnInput
 

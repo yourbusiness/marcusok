@@ -67,4 +67,4 @@ The model is plain JSON (structured-clone safe) and is exactly what the worker p
 
 - [Assets & self-hosting](/packages/excel-preview/guide/02-assets) — how the WASM/worker files resolve, and when you need `configureWasm`.
 - [Format fidelity](/packages/excel-preview/guide/03-format-fidelity) — what the compensation layer restores and the known approximations.
-- [Limits](/packages/excel-preview/guide/04-limits) — what v1 deliberately does not do.
+- [Limits](/packages/excel-preview/guide/04-limits) — what the package deliberately does not do.

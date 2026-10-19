@@ -67,4 +67,4 @@ const result = await exportExcel({
 - 状态列用 `enum` 把内部码映射为中文，兜底 `"未知"`；
 - `freezeRows + autoFilter` 让管理层在 Excel 里直接筛选。
 
-可以到 [在线演示](/zh/play) 选择 sales 数据集直接导出体验。
+可以到 [在线演示](/zh/play) 的基础导出演示体验——同样 1 万行数据、同样的自动路由。

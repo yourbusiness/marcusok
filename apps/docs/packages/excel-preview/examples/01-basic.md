@@ -41,7 +41,7 @@ A wrong (or missing) password surfaces as `onError` with code `PASSWORD_PROTECTE
 
 ## CSV
 
-No separate API: a non-ZIP, text-shaped input parses as CSV automatically (UTF-8 BOM handling, GB18030 fallback for Chinese exports, `,` / `;` / tab / `|` delimiter sniffing, RFC 4180 quoting). The result is a single-sheet `PreviewWorkbook` with number-typed cells where Excel's General rules would show them right-aligned.
+No separate API: a non-ZIP, text-shaped input parses as CSV automatically (UTF-8 BOM handling, GB18030 fallback for Chinese exports, `,` / `;` / tab / `|` delimiter sniffing, RFC 4180 quoting). The result is a single-sheet `PreviewWorkbook` (the sheet is named `CSV`) with number-typed cells where Excel's General rules would show them right-aligned.
 
 ## Live demo
 

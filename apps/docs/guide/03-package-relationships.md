@@ -73,7 +73,7 @@ The engine integration — WASM loading (browser fetch / Node sync-init, timeout
 - **Each package carries its own version, and the numbers are not aligned** — the two packages are released independently by Changesets (`.changeset/config.json` declares no `fixed` or `linked` groups). Do not read compatibility out of the version numbers: exporter 3.x and preview 2.x say nothing about each other.
 - **They are both released from this one repository**, by the same CI, on the same `main`. Anything published close together was built from the same workspace state, which is the real compatibility statement.
 - **There are no peer dependencies anywhere in the repo**, so there is no peer range for you to reconcile.
-- **Engine upgrades are package releases.** Bumping modern-xlsx happens once in the internal engine layer, then ships as a new version of whichever business package consumes it — there is no separate engine release and no cross-package version coupling.
+- **Engine upgrades are package releases.** A modern-xlsx bump lands in the internal engine layer and in the type-only pin each consuming business package keeps for type resolution (three manifests move together; the runtime version is decided solely by the engine layer), then ships as a new version of whichever business package consumes it — there is no separate engine release and no cross-package version coupling.
 
 ### How to judge whether two versions go together
 

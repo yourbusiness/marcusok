@@ -73,7 +73,7 @@ configurePreviewWasm({ wasmUrl, parseWorkerUrl }); // 预览包的 loader + pars
 - **各包独立版本号，数字互不对应**——两个包由 Changesets 独立发版（`.changeset/config.json` 无 `fixed` / `linked` 分组）。不要从版本号读兼容性：exporter 3.x 与 preview 2.x 互相之间什么也不说明。
 - **二者出自同一个仓库**，同一套 CI、同一个 `main`。时间相近的发布构建自同一工作区状态，这才是真正的兼容性陈述。
 - **全仓没有任何 `peerDependencies`**，没有 peer 版本区间需要你对齐。
-- **引擎升级即业务包发版。** modern-xlsx 的版本只在内部引擎层出现一次，随后以消费它的业务包的新版本发出——没有独立的引擎发布，也没有跨包版本联动。
+- **引擎升级即业务包发版。** modern-xlsx 的升级落在内部引擎层，同时落在各消费业务包为类型解析保留的 types-only 钉版里（三处 manifest 一起动；运行时版本由引擎层唯一决定），随后以消费它的业务包的新版本发出——没有独立的引擎发布，也没有跨包版本联动。
 
 ### 怎么判断两个版本搭配得上
 

@@ -55,7 +55,7 @@ Stream 路径支持多行表头（`children`）与数据区合并（`merges`）�
 
 ### `.xls` / `.ods` 文件被直接拒绝
 
-v1 有意如此，且每种情况有各自的错误码：旧版 `.xls`（BIFF8）为 `LEGACY_FORMAT`（请另存为 `.xlsx`）；`.ods` 等同样基于 ZIP 的办公套件为 `CORRUPT`（是没有 `xl/workbook.xml` 的 ZIP 包）；SpreadsheetML / HTML 表格导出为 `UNSUPPORTED`。UTF-16 的 CSV 同样落在 `UNSUPPORTED`——先另存为 UTF-8。完整对照表见[范围与限制](/zh/packages/excel-preview/guide/04-limits)。
+有意如此，且每种情况有各自的错误码：旧版 `.xls`（BIFF8）为 `LEGACY_FORMAT`（请另存为 `.xlsx`）；`.ods` 等同样基于 ZIP 的办公套件为 `CORRUPT`（是没有 `xl/workbook.xml` 的 ZIP 包）；SpreadsheetML / HTML 表格导出为 `UNSUPPORTED`。UTF-16 的 CSV 同样落在 `UNSUPPORTED`——先另存为 UTF-8。完整对照表见[范围与限制](/zh/packages/excel-preview/guide/04-limits)。
 
 ### 能读 Excel 导出的中文 CSV 吗？
 
@@ -63,11 +63,11 @@ v1 有意如此，且每种情况有各自的错误码：旧版 `.xls`（BIFF8�
 
 ### `createPreview` 之后立刻调 `setSheet()` 没有生效
 
-这是文档写明的时序，不是 bug：`createPreview` 是异步启动的，解析完成前 `setSheet()` 是静默空操作、`getSheetNames()` 返回 `[]`。请在 `onParsed` 里、或由你自己的 UI 调用，也可以直接用表格底部的工作表标签栏切换。另外 `destroy()` **不会**取消已在进行中的解析，它只是屏蔽该次解析本会触发的回调。详见[快速开始](/zh/packages/excel-preview/guide/01-quick-start)。
+这是文档写明的时序，不是 bug：`createPreview` 是异步启动的，解析完成前 `setSheet()` 是静默空操作、`getSheetNames()` 返回 `[]`。请在 `onParsed` 里、或由你自己的 UI 调用，也可以直接用表格底部的工作表标签栏切换。`destroy()` 还会**中止**已在进行中的解析（不只是屏蔽回调）——取消是静默的：以 `ABORTED` 收场，绝不会经 `onError` 上报。详见[快速开始](/zh/packages/excel-preview/guide/01-quick-start)。
 
 ### 公式单元格渲染为空
 
-公式单元格渲染的是文件中**缓存**的值——与 SheetJS、exceljs 同一惯例，预览从不计算公式。因此由非 Excel 写入器生成、且没有缓存值的文件会显示为空单元格；用 Excel 打开另存一次即可补上缓存。带缓存结果的公式会正常渲染（数值缓存为 `type: "number"`，字符串缓存为 `type: "formulaStr"`）。
+公式单元格渲染的是文件中**缓存**的值——与 SheetJS、exceljs 同一惯例，预览从不计算公式。因此由非 Excel 写入器生成、且没有缓存 `<v>` 值的文件会显示为空单元格；用 Excel 打开另存一次即可补上缓存。带缓存结果的公式会正常渲染（数值缓存为 `type: "number"`，字符串缓存为 `type: "formulaStr"`）。
 
 ### 预览大文件会卡死页面吗？
 
@@ -113,7 +113,7 @@ try {
 
 ### `modern-xlsx` 要求 `engines.node >= 24`，会影响我的应用吗？
 
-不会。引擎运行时在构建期已被**打进**各业务包的 `dist/`，消费方不会执行任何上游 modern-xlsx 代码。两个业务包自身要求 Node `>= 22`，浏览器侧需要支持 WebAssembly。manifest 里那条精确钉版的 `modern-xlsx` 依赖，只是为了 TypeScript 消费方能解析再导出的类型——运行时不加载它的任何代码。
+不会。引擎运行时在构建期已被**打进**各业务包的 `dist/`，消费方不会执行任何上游 modern-xlsx 代码。两个业务包自身要求 Node `>= 22`，浏览器侧需要支持 WebAssembly。manifest 里那条精确钉版的 `modern-xlsx` 依赖，只是为了 TypeScript 消费方能解析再导出的类型——运行时不加载它的任何代码。安装期 npm 仍可能为这条传递依赖打印 `EBADENGINE` 警告（它声明的地板是 Node 24）；该警告可安全忽略，只有开启 `engine-strict` 的安装器才会把它变成失败。
 
 ### 导出包与预览包同在一页
 

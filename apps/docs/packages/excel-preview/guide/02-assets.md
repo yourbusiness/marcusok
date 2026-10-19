@@ -9,7 +9,7 @@ The preview ships two runtime assets: the WASM engine binary (1.9MB, gzip ≈ 65
 | WASM binary  | `@marcusok/excel-preview/dist/modern-xlsx.wasm` | `new URL(<file>, import.meta.url)` — bundlers emit a hashed asset; Node resolves through node_modules |
 | Parse worker | `@marcusok/excel-preview/dist/parse.worker.js`  | Same pattern; the worker file is a single self-contained ESM (no sibling imports to 404)              |
 
-The main thread needs no WASM at all in the browser: parsing happens inside the worker (which initializes its own copy), and cell formatting — the only engine work done on the main thread — is pure JS. On Node (no Worker) the main thread initializes the WASM synchronously from disk, zero boilerplate.
+The main thread needs no WASM at all in the browser, as long as the worker loads: parsing happens inside the worker (which initializes its own copy), and cell formatting — the only engine work done on the main thread — is pure JS. If the worker fails to construct/load, the session falls back to the main thread permanently, and that route does load WASM (see [Quick Start](/packages/excel-preview/guide/01-quick-start)). On Node (no Worker) the main thread initializes the WASM synchronously from disk, zero boilerplate.
 
 The engine is bundled into this package's `dist` at build time (before 2.0 it shipped in a separate `xlsx-core` package). A page using both `excel-exporter` and `excel-preview` carries one engine copy per package on the main thread — identical binaries, usually deduplicated as an asset by content-hash naming and the HTTP cache. Each package's self-contained worker bundles its own copy by necessity — browser module workers cannot resolve bare specifiers.
 

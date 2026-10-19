@@ -9,7 +9,7 @@
 | WASM 二进制 | `@marcusok/excel-preview/dist/modern-xlsx.wasm` | `new URL(<file>, import.meta.url)`——打包器产出 hash 资产；Node 经 node_modules 定位 |
 | 解析 worker | `@marcusok/excel-preview/dist/parse.worker.js`  | 同一模式；worker 是单文件自包含 ESM（没有会 404 的兄弟导入）                        |
 
-浏览器里主线程完全不需要 WASM：解析在 worker 内（worker 自带一份引擎），主线程唯一的引擎调用是格式化——纯 JS。Node（无 Worker）下主线程从磁盘同步初始化 WASM，零样板。
+浏览器里主线程完全不需要 WASM（前提是 worker 加载成功）：解析在 worker 内（worker 自带一份引擎），主线程唯一的引擎调用是格式化——纯 JS。worker 构造/加载失败时会整会话回退主线程，该路径会自己加载 WASM（见[快速上手](/zh/packages/excel-preview/guide/01-quick-start)）。Node（无 Worker）下主线程从磁盘同步初始化 WASM，零样板。
 
 引擎在构建期打包进本包 `dist`（2.0 之前曾以独立的 `xlsx-core` 包分发）。同页使用 `excel-exporter` 与 `excel-preview` 时主线程各持一份引擎副本——两份二进制完全相同，通常被内容 hash 命名与 HTTP 缓存去重成一份资产。各包的自包含 worker 因浏览器 module worker 无法解析裸导入，必然各带一份——这是与导出包一致的既有事实。
 

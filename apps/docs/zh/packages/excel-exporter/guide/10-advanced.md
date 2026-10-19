@@ -121,10 +121,10 @@ await exportExcel({
 | 阶段       | 说明                                                                                                                                                                                                                  |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `init`     | WASM 初始化；main 路径每次导出上报（已加载约 0ms）；Node 主线程的 stream 路径不加载 WASM，但会上报一次 0ms 以保持阶段序列一致；Worker + Workbook 仅 Worker 初始化时上报；Worker + stream 不上报；流式兜底上报一次 0ms |
-| `build`    | 工作簿构建（按实际构建次数报告，含兜底重试——失败后走流式兜底会再报告一次）                                                                                                                                            |
+| `build`    | 工作簿构建（每次主线程尝试各上报一次，含主线程兜底重试——即使该次尝试抛错也上报；在 worker **内部**失败的尝试不上报 `build`）                                                                                          |
 | `download` | 浏览器触发下载（`download: false` 时不报告；Node 下无此阶段）                                                                                                                                                         |
 
-> `onPhase` 只反映各阶段耗时，不影响 `ExportResult.duration`（主线程路由为整次导出总耗时；worker 路由的 duration 在主线程从调用 `exportInWorker` 起表，含 postMessage 前的序列化与 Worker 往返，直到 Blob 构造完成，因此比纯 Worker 内构建耗时更宽）。
+> `onPhase` 只度量各阶段的墙钟耗时；`ExportResult.duration` 在主线程路由度量整次导出的总耗时（worker 路由的 duration 在主线程从调用 `exportInWorker` 起表，含 postMessage 前的序列化与 Worker 往返，直到 Blob 构造完成，因此比纯 Worker 内构建耗时更宽——两个口径各管各的）。
 
 > 基于这对回调开箱可用的全屏遮罩见[进度遮罩](./11-overlay)。
 
@@ -141,7 +141,7 @@ const result = await exportExcel({ ..., download: false });
 interface ExportResult {
   success: boolean;
   blob?: Blob;
-  engine?: "modern-xlsx"; // 实际使用的引擎
+  engine?: "modern-xlsx" | "fast-xlsx"; // "fast-xlsx" = 无样式流式写出器
   mode?: ExportMode; // 实际使用的模式
   duration?: number; // 完整导出耗时 ms
   rowCount?: number;

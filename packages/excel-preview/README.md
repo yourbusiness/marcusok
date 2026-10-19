@@ -52,6 +52,14 @@ load, so use `duration.render` for a switch's own cost).
   code-carrying errors (`PASSWORD_PROTECTED`, `LEGACY_FORMAT` for legacy
   `.xls`, `ABORTED` for cancellations, …).
 
+## Low-level API
+
+`parseWorkbookBytes(bytes, { password, signal })` returns the plain,
+structured-clone-safe data model (`PreviewWorkbook`) with no DOM involved —
+for framework wrappers, SSR, or custom renderers. Custom renderers can also
+reuse `formatCellValue` (exported from the main entry), the same cell
+formatter the DOM renderer uses.
+
 ## Large files
 
 Parsing is not streaming (OOXML parts cross-reference each other), but it
@@ -59,14 +67,16 @@ happens entirely inside a Web Worker — the UI never freezes — and the DOM
 renderer virtualizes to viewport-only cells. Measured locally: ~1.5s parse for
 100k rows × 10 columns; scrolling cost is independent of file size.
 
-## Not in scope (v1)
+## Not in scope
 
 Editing, formula recalculation, legacy `.xls` (BIFF8) / `.ods`, charts,
 images, shapes, conditional formatting, rich-text runs (rendered as plain
-text), external hyperlink URLs (not rendered in v1), and a pure-JS fallback
-reader for environments without WebAssembly (v1 fails with a clear `WASM`
-error instead; CSV still parses without WebAssembly). See the
-docs site for the full [limits list](https://yourbusiness.github.io/marcusok/).
+text), external hyperlink URLs (not rendered), split panes (only freeze panes
+render), tab colors, and a pure-JS fallback
+reader for environments without WebAssembly (the preview fails with a clear
+`WASM` error instead; CSV still parses without WebAssembly). See the
+docs site for the full
+[limits list](https://yourbusiness.github.io/marcusok/packages/excel-preview/guide/04-limits).
 
 ## Assets
 
