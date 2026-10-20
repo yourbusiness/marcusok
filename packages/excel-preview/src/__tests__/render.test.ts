@@ -124,6 +124,65 @@ describe("layout 几何", () => {
     expect(l.coveredBy.get("999:999")).toBe("0:0");
   });
 
+  it("buildLayout：多合并展开受总量预算约束，耗尽后剩余合并只保留 anchor", () => {
+    // 回归：面积上限只封顶单条合并，3 × 999×999（各 998001 格，均不超
+    // 单条 1M 上限）的展开量会线性叠加。前两条共 1,996,002 格耗尽 2M 总量
+    // 预算（剩 3,998 < 998,001），第三条与单条超限同口径降级：anchor 索引
+    // 保留（主格仍按跨度渲染、可召回），覆盖格不再登记（按自身内容渲染）
+    const l = buildLayout({
+      name: "S",
+      visible: true,
+      showGridLines: true,
+      rightToLeft: false,
+      rowCount: 3_000,
+      colCount: 999,
+      rows: [],
+      colSpans: [],
+      merges: [0, 1, 2].map((i) => ({
+        row: i * 999,
+        col: 0,
+        rowSpan: 999,
+        colSpan: 999,
+      })),
+      frozenRows: 0,
+      frozenCols: 0,
+      styles: { fonts: [], fills: [], borders: [], xfs: [] },
+    });
+    expect(l.coveredBy.size).toBe(2 * (999 * 999 - 1));
+    expect(l.mergeByAnchor.size).toBe(3);
+    // 第三条（row 1998 起）的覆盖格与 anchor 邻格都未登记
+    expect(l.coveredBy.get("1998:0")).toBeUndefined();
+    expect(l.coveredBy.get("2997:0")).toBeUndefined();
+    // 前两条的登记不受影响
+    expect(l.coveredBy.get("0:1")).toBe("0:0");
+    expect(l.coveredBy.get("998:998")).toBe("0:0");
+  });
+
+  it("buildLayout：单合并超限不消耗总量预算，后续正常合并照常展开", () => {
+    // 单条超限合并在预算判断之前短路：否则一个畸形大合并会把文件里所有
+    // 正常小合并也拖进降级（覆盖格抑制渲染整体失效）
+    const l = buildLayout({
+      name: "S",
+      visible: true,
+      showGridLines: true,
+      rightToLeft: false,
+      rowCount: 10_000,
+      colCount: 2_000,
+      rows: [],
+      colSpans: [],
+      merges: [
+        { row: 0, col: 0, rowSpan: 2_000, colSpan: 2_000 }, // 4M > 单条上限
+        { row: 5_000, col: 0, rowSpan: 100, colSpan: 100 }, // 1 万格，正常
+      ],
+      frozenRows: 0,
+      frozenCols: 0,
+      styles: { fonts: [], fills: [], borders: [], xfs: [] },
+    });
+    expect(l.coveredBy.size).toBe(100 * 100 - 1);
+    expect(l.coveredBy.get("5099:99")).toBe("5000:0");
+    expect(l.mergeByAnchor.size).toBe(2);
+  });
+
   it("buildLayout：<col> 只写 width 不写 customWidth 也生效", () => {
     // 引擎对"未写 width 的 col"兜底 8.43、对"写了 width 无标志"保留原值且
     // customWidth=false——两形态无从靠标志区分，渲染一律采用 width

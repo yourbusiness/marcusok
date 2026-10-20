@@ -15,6 +15,14 @@ const HEAD_COL_PX = 40; // 表头（行号）列宽
 // coveredBy 逐格展开的面积上限（rowSpan × colSpan），超出即放弃展开，
 // 防全表合并卡死主线程（取值理由见 buildLayout 内注释）。
 const MAX_COVERED_CELLS = 1_000_000;
+// 全部合并的展开总量预算：单合并上限只封顶单条超大合并，多条压线合并
+// （各 ~1M 格、均不超单条上限）的展开量仍会线性叠加——实测 10 × 1M 合并
+// ≈ 5.5s 主线程阻塞 + 千万级 Map 条目，布局构建同样在主线程、worker 超时
+// 保护管不到。预算耗尽后剩余合并与单合并超限同口径降级（保留 anchor、
+// 放弃展开）。取 2M：≈ 20 条整列合并（A1:A100000 ≈ 10 万格），远超真实
+// 模板的覆盖总量常态，同时把最坏展开时间与 Map 内存封顶在单条上限的
+// 两倍以内。
+const MAX_TOTAL_COVERED_CELLS = 2_000_000;
 
 export function charsToPx(width: number): number {
   return Math.round(width * MDW + 5);
@@ -85,16 +93,24 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
 
   const mergeByAnchor = new Map<string, PreviewMerge>();
   const coveredBy = new Map<string, string>();
+  // 总量预算先于循环取足：单条超限合并在预算判断之前短路（不消耗预算），
+  // 否则一个畸形大合并会把文件里所有正常小合并也拖进降级
+  let coveredBudget = MAX_TOTAL_COVERED_CELLS;
   for (const m of sheet.merges) {
     const anchor = `${m.row}:${m.col}`;
     mergeByAnchor.set(anchor, m);
+    const area = m.rowSpan * m.colSpan;
     // 面积钳制：coveredBy 在主线程逐格展开，全选合并（A1:XFD1048576 ≈
     // 1.7e10 格）一类的畸形/超大合并会直接把页面卡死（布局构建不在 worker
     // 内，超时保护管不到）。超上限只保留 anchor 索引（主格仍按跨度渲染），
     // 覆盖格按自身内容渲染——Excel 语义下合并覆盖格本为空，代价仅是超大
     // 合并内的零星残值可见，好过整页冻结。上限取 1M 格：远高于整列合并
     // （A1:A100000 ≈ 10 万格）等模板常态，单次展开控制在百毫秒级。
-    if (m.rowSpan * m.colSpan > MAX_COVERED_CELLS) continue;
+    if (area > MAX_COVERED_CELLS) continue;
+    // 总量钳制：多条压线合并的叠加展开同样卡死主线程（见常量注释），
+    // 耗尽预算后与单条超限同口径降级
+    if (area > coveredBudget) continue;
+    coveredBudget -= area;
     for (let r = m.row; r < m.row + m.rowSpan; r++) {
       for (let c = m.col; c < m.col + m.colSpan; c++) {
         if (r === m.row && c === m.col) continue;
