@@ -52,6 +52,8 @@ export interface TableExportOptions extends TableSheetInput {
   onProgress?: (progress: number) => void;
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   download?: boolean;
+  /** 取消信号，语义同 {@link ExportOptions.signal}。 */
+  signal?: AbortSignal;
   /** 全屏进度遮罩（默认开启），语义同 {@link ExportOptions.overlay}。 */
   overlay?: boolean | ProgressOverlayOptions;
 }
@@ -164,6 +166,7 @@ export function tableExportToOptions(input: TableExportOptions): ExportOptions {
     onProgress,
     onPhase,
     download,
+    signal,
     // overlay 与上方 dataStyle/indexColumn 同属"继承自有、漏传静默失效"的字段：
     // 文档承诺三个入口同样生效的默认遮罩必须透传给 exportExcel。
     overlay,
@@ -187,6 +190,7 @@ export function tableExportToOptions(input: TableExportOptions): ExportOptions {
     ...(onProgress !== undefined && { onProgress }),
     ...(onPhase !== undefined && { onPhase }),
     ...(download !== undefined && { download }),
+    ...(signal !== undefined && { signal }),
     ...(overlay !== undefined && { overlay }),
   };
 }

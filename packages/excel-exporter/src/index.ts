@@ -8,7 +8,11 @@ import type {
 } from "./types";
 import { WorkbookBuilder } from "./workbook-builder";
 import { exportAsStream } from "./streaming-builder";
-import { exportInWorker, type NoFallbackError } from "./worker-exporter";
+import {
+  exportInWorker,
+  isAbortError,
+  type NoFallbackError,
+} from "./worker-exporter";
 import { triggerDownload, toBlobPart } from "./download";
 import { getWasmLoader } from "@marcusok/xlsx-core";
 import { tableExportToOptions, type TableExportOptions } from "./table-export";
@@ -621,6 +625,21 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
   // comment below promises; validateInput reports it properly instead.
   options?.onProgress?.(0);
 
+  /** 用户取消：统一的结构化失败，且不再进入降级链。 */
+  const aborted = (): ExportResult => {
+    options?.onProgress?.(1);
+    const err = new Error("[excel-exporter] export aborted by the caller");
+    err.name = "AbortError";
+    return { success: false, error: err, duration: performance.now() - start };
+  };
+  const abortedError = (): boolean =>
+    options !== null &&
+    typeof options === "object" &&
+    options.signal?.aborted === true;
+  const isAbort = (e: unknown): boolean => isAbortError(e) || abortedError();
+
+  if (abortedError()) return aborted();
+
   // Invalid input fails here on every route (same messages as before; the
   // build paths keep their own checks for direct callers). The trailing 1 is
   // still emitted so the 0 -> 1 progress contract holds for failed exports.
@@ -663,10 +682,12 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
   const runOnMainThread = async (
     forceStream = false,
   ): Promise<ExportResult> => {
+    if (abortedError()) throw new Error("aborted");
     const useStream = forceStream || picked.workerMode === "stream";
     if (!useStream) {
       const initStart = performance.now();
       await loader.ensureLoaded();
+      if (abortedError()) throw new Error("aborted");
       options.onPhase?.("init", performance.now() - initStart);
     } else {
       // Fast stream does not use WASM; report an empty init phase so the
@@ -680,6 +701,7 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
         const { bytes, rowCount } = await exportAsStream(
           options.sheets,
           options.onProgress,
+          options.signal,
         );
         result = {
           success: true,
@@ -692,6 +714,7 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
         };
       } else {
         const builder = await WorkbookBuilder.create();
+        if (abortedError()) throw new Error("aborted");
         options.sheets.forEach((s) => builder.addSheet(s));
         const bytes = await builder.toBuffer();
         result = {
@@ -708,6 +731,9 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
       // back to the stream still shows how long it spent before failing.
       options.onPhase?.("build", performance.now() - buildStart);
     }
+    // The Workbook build awaits toBuffer(), so an abort can arrive after the
+    // pre-build check; do not report success/download for it.
+    if (abortedError()) return aborted();
     options.onProgress?.(1);
     // Node has no document: triggerDownload would be a no-op, so neither the
     // click nor the "download" phase is reported (matches ExportPhase docs).
@@ -725,6 +751,7 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
   // runOnMainThread emits it on success, the catch below on failure.
   // (Declared after runOnMainThread — it closes over it.)
   const finishWithStream = async (reason: string): Promise<ExportResult> => {
+    if (abortedError()) return aborted();
     console.warn(
       `[excel-exporter] Falling back to the style-less fast stream. Reason: ${reason}`,
     );
@@ -739,6 +766,7 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
         ),
       };
     } catch (e) {
+      if (isAbort(e)) return aborted();
       options.onProgress?.(1);
       return {
         success: false,
@@ -761,12 +789,14 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
    * sub-route (runOnMainThread on success, or finishWithStream's catch).
    */
   const retryOnMainThread = async (reason: string): Promise<ExportResult> => {
+    if (abortedError()) return aborted();
     console.warn(
       `[excel-exporter] Worker path failed (${reason}); retrying on the main thread to preserve styles`,
     );
     try {
       return await runOnMainThread();
     } catch (e) {
+      if (isAbort(e)) return aborted();
       // When the worker was on the stream route, the main-thread retry just ran
       // the very same fast stream on the very same input: a third attempt via
       // finishWithStream would fail deterministically, so fail here instead of
@@ -795,6 +825,7 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
     try {
       return await runOnMainThread();
     } catch (e) {
+      if (isAbort(e)) return aborted();
       // 与下方 retryOnMainThread 的防护对齐：首次尝试已经是 fast stream
       // （Node stream 路由）时，finishWithStream 重试等于对同一输入重跑一遍
       // 确定性失败的构建——直接失败，不再白付第二次构建的时间与告警。
@@ -814,6 +845,9 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
   try {
     const result = await exportInWorker(options, picked.workerMode!);
     if (result.success) {
+      // A cancellation that raced the final worker response still wins: do
+      // not report success/download for an export the caller aborted.
+      if (abortedError()) return aborted();
       // Terminal 1 on success only: the failure route hands the sequence to
       // the degradation chain, which emits it exactly once (the types.ts
       // contract) -- emitting it here too duplicated the trailing 1.
@@ -823,6 +857,7 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
       }
       return result;
     }
+    if (isAbort(result.error)) return aborted();
     // Worker export failed (e.g. WASM init error inside the worker) -> retry on
     // the main thread before degrading to the fast stream. Timeout-class
     // failures (noFallback, see worker-exporter) are the exception: the worker
@@ -837,6 +872,7 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
     }
     return retryOnMainThread(result.error?.message ?? "worker export failed");
   } catch (e) {
+    if (isAbort(e)) return aborted();
     return retryOnMainThread((e as Error).message);
   }
 }

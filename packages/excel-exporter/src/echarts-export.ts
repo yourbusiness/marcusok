@@ -59,6 +59,8 @@ export interface EChartsExportOptions extends EChartsSheetInput {
   onProgress?: (progress: number) => void;
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   download?: boolean;
+  /** 取消信号，语义同 {@link ExportOptions.signal}。 */
+  signal?: AbortSignal;
   /** 全屏进度遮罩（默认开启），语义同 {@link ExportOptions.overlay}。 */
   overlay?: boolean | ProgressOverlayOptions;
 }
@@ -408,6 +410,7 @@ export function echartsExportToOptions(
     onProgress,
     onPhase,
     download,
+    signal,
     // 同 tableExportToOptions：overlay 是文档承诺三入口生效的字段，漏传会让
     // 默认遮罩在本入口静默丢失。
     overlay,
@@ -430,6 +433,7 @@ export function echartsExportToOptions(
     ...(onProgress !== undefined && { onProgress }),
     ...(onPhase !== undefined && { onPhase }),
     ...(download !== undefined && { download }),
+    ...(signal !== undefined && { signal }),
     ...(overlay !== undefined && { overlay }),
   };
 }

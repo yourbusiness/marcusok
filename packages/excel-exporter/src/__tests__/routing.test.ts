@@ -10,6 +10,9 @@ import "./setup";
 // exportExcel is still exercised (the Node-path cases below never reach it).
 vi.mock("../worker-exporter", () => ({
   exportInWorker: vi.fn(),
+  // index.ts uses this helper to keep cancellation out of the degradation
+  // chain; mirror the real implementation for the mocked boundary.
+  isAbortError: (e: unknown) => e instanceof Error && e.name === "AbortError",
 }));
 
 function stubBrowserWorkerEnv(): void {

@@ -114,7 +114,7 @@ describe("exportInWorker timeout recovery", () => {
     expect(FakeWorker.instances[1].terminated).toBe(true);
   });
 
-  it("rejects sibling requests dispatched to the terminated worker", async () => {
+  it("queues sibling requests and gives them a fresh worker after a timeout", async () => {
     stubBrowser();
     configureWasm({ workerUrl: "/fake/export.worker.js" });
     vi.useFakeTimers();
@@ -127,22 +127,111 @@ describe("exportInWorker timeout recovery", () => {
       { filename: "sibling-b", download: false, sheets },
       "workbook",
     );
-    await vi.advanceTimersByTimeAsync(120_000);
-    const [ra, rb] = await Promise.all([a, b]);
+    // b is queued on the main thread, not dispatched to the wedged worker.
+    expect(FakeWorker.instances.length).toBe(1);
 
-    // The timed-out request reports the timeout; its sibling on the same
-    // worker is rejected (and its timer cleared) so its caller degrades to
-    // the main-thread retry immediately instead of hanging for its own 120s.
+    await vi.advanceTimersByTimeAsync(120_000);
+    const ra = await a;
     expect(ra.success).toBe(false);
     expect(ra.error?.message).toMatch(/timed out after 120000ms/);
-    expect(rb.success).toBe(false);
-    expect(rb.error?.message).toMatch(
-      /terminated after a concurrent export timed out/,
-    );
-    // 连坐错误同样带 noFallback：共享 worker 已被超时负载占死，排队请求的
-    // 主线程重试只会叠加阻塞
-    expect(rb.error).toMatchObject({ noFallback: true });
+    expect(ra.error).toMatchObject({ noFallback: true });
     expect(FakeWorker.instances[0].terminated).toBe(true);
+
+    // a's timeout dispatches b to a fresh worker and only THEN starts b's
+    // clock, so the sibling is not failed just for waiting in the queue.
+    expect(FakeWorker.instances.length).toBe(2);
+    await vi.advanceTimersByTimeAsync(120_000);
+    const rb = await b;
+    expect(rb.success).toBe(false);
+    expect(rb.error?.message).toMatch(/timed out after 120000ms/);
+    expect(rb.error?.message).not.toMatch(/concurrent export timed out/);
+    expect(rb.error).toMatchObject({ noFallback: true });
+    expect(FakeWorker.instances[1].terminated).toBe(true);
+  });
+
+  it("aborts a queued request without touching the active one", async () => {
+    stubBrowser();
+    configureWasm({ workerUrl: "/fake/export.worker.js" });
+    vi.useFakeTimers();
+
+    const active = exportInWorker(
+      { filename: "abort-active", download: false, sheets },
+      "workbook",
+    );
+    const ac = new AbortController();
+    const queued = exportInWorker(
+      { filename: "abort-queued", download: false, sheets, signal: ac.signal },
+      "workbook",
+    );
+    expect(FakeWorker.instances.length).toBe(1);
+
+    ac.abort();
+    const rq = await queued;
+    expect(rq.success).toBe(false);
+    expect(rq.error?.name).toBe("AbortError");
+    expect(FakeWorker.instances[0].terminated).toBe(false);
+
+    const w = FakeWorker.instances[0];
+    const payload = w.posted[0] as { id: number };
+    w.onmessage!({
+      data: {
+        id: payload.id,
+        ok: true,
+        bytes: new Uint8Array([1]),
+        rowCount: 1,
+      },
+    });
+    const ra = await active;
+    expect(ra.success).toBe(true);
+  });
+
+  it("aborts the active request, terminates its worker, and re-dispatches the queue", async () => {
+    stubBrowser();
+    configureWasm({ workerUrl: "/fake/export.worker.js" });
+    vi.useFakeTimers();
+
+    const ac = new AbortController();
+    const a = exportInWorker(
+      { filename: "abort-a", download: false, sheets, signal: ac.signal },
+      "workbook",
+    );
+    const b = exportInWorker(
+      { filename: "abort-b", download: false, sheets },
+      "workbook",
+    );
+    ac.abort();
+    const ra = await a;
+    expect(ra.success).toBe(false);
+    expect(ra.error?.name).toBe("AbortError");
+    expect(FakeWorker.instances[0].terminated).toBe(true);
+
+    expect(FakeWorker.instances.length).toBe(2);
+    const w2 = FakeWorker.instances[1];
+    const payload = w2.posted[0] as { id: number };
+    w2.onmessage!({
+      data: {
+        id: payload.id,
+        ok: true,
+        bytes: new Uint8Array([1]),
+        rowCount: 1,
+      },
+    });
+    const rb = await b;
+    expect(rb.success).toBe(true);
+  });
+
+  it("never constructs a worker for an already-aborted signal", async () => {
+    stubBrowser();
+    configureWasm({ workerUrl: "/fake/export.worker.js" });
+    const ac = new AbortController();
+    ac.abort();
+    const r = await exportInWorker(
+      { filename: "abort-first", download: false, sheets, signal: ac.signal },
+      "workbook",
+    );
+    expect(r.success).toBe(false);
+    expect(r.error?.name).toBe("AbortError");
+    expect(FakeWorker.instances.length).toBe(0);
   });
 
   it("cleans up immediately when postMessage throws (no delayed worker kill)", async () => {
@@ -218,12 +307,12 @@ describe("exportInWorker error handling & payload stripping", () => {
     FakeWorker.instances = [];
   });
 
-  it("onerror terminates the worker, drops the cached instance, and rejects only its own pending requests", async () => {
+  it("onerror terminates the worker, drops the cached instance, and re-dispatches queued requests", async () => {
     stubBrowser();
     configureWasm({ workerUrl: "/fake/export.worker.js" });
     vi.useFakeTimers();
 
-    // 两个请求派发到同一个共享 worker；脚本加载失败（如 404/CSP）时
+    // a 派发到共享 worker，b 在主线程排队；脚本加载失败（如 404/CSP）时
     // ErrorEvent.message 通常为空串，错误折叠为兜底文案。
     const a = exportInWorker(
       { filename: "onerror-a", download: false, sheets },
@@ -237,13 +326,28 @@ describe("exportInWorker error handling & payload stripping", () => {
     const w = FakeWorker.instances[0];
     w.onerror!({ message: "" });
 
-    const [ra, rb] = await Promise.all([a, b]);
+    const ra = await a;
     expect(ra.success).toBe(false);
     expect(ra.error?.message).toBe("worker error");
-    expect(rb.success).toBe(false);
     expect(w.terminated).toBe(true);
 
-    // 缓存引用已丢弃：下一个导出创建全新 worker（而非复用已死实例）
+    // b 从未派发到已死 worker：它被重新派发到新实例并可正常完成。
+    expect(FakeWorker.instances.length).toBe(2);
+    const w2 = FakeWorker.instances[1];
+    const payload = w2.posted[0] as { id: number };
+    w2.onmessage!({
+      data: {
+        id: payload.id,
+        ok: true,
+        bytes: new Uint8Array([1]),
+        rowCount: 1,
+      },
+    });
+    const rb = await b;
+    expect(rb.success).toBe(true);
+    expect(rb.rowCount).toBe(1);
+
+    // 缓存引用已丢弃/替换：下一个导出复用健康的 w2，而不是再新建。
     const c = exportInWorker(
       { filename: "onerror-c", download: false, sheets },
       "workbook",
@@ -253,6 +357,7 @@ describe("exportInWorker error handling & payload stripping", () => {
     const rc = await c;
     expect(rc.success).toBe(false);
     expect(rc.error?.message).toMatch(/timed out after 120000ms/);
+    expect(w2.terminated).toBe(true);
   });
 
   it("strips function-form formats (incl. nested columns) with a warning before postMessage", async () => {

@@ -66,24 +66,21 @@ export interface CellStyle {
  * main-thread retries after a worker failure.
  *
  * Date semantics: `date`/`datetime` interpret values by their **UTC
- * components**. The workbook path serializes via modern-xlsx's `dateToSerial`
- * (UTC wall clock) and the stream path formats the same UTC components
- * into strings, so all paths agree in every timezone. Date-only ISO strings
- * ("2025-01-05") parse as UTC midnight per ECMA-262; prefer them (or
- * `Date.UTC(...)`) over locally-constructed Dates, whose UTC components can
- * fall on the previous day in non-UTC timezones.
+ * components**. Both routes store the same Excel serial number (`dateToSerial`
+ * in the Workbook builder and fast-xlsx) and attach a numFmt — the Workbook
+ * path via the cell style, the stream path via its minimal styles.xml — so
+ * stored values and display agree across the 50k threshold and in every
+ * timezone. Date-only ISO strings ("2025-01-05") parse as UTC midnight per
+ * ECMA-262; prefer them (or `Date.UTC(...)`) over locally-constructed Dates,
+ * whose UTC components can fall on the previous day in non-UTC timezones.
  *
- * Pattern tokens: the stream path (>= 50,000 rows, explicit stream mode, or
- * the fallback) lower-cases the whole pattern first, then parses only
- * `yyyy`/`MM`/`dd`/`HH`/`mm`/`ss` (`mm` resolves to minutes vs month by
- * context; `yy` and the single-letter `M`/`d` are NOT tokens) and emits
- * everything else as-is — lower-cased, and with quoted literals NOT
- * interpreted — so `yyyy"年"M"月"d"日"` renders as `2026"年"m"月"d"日"` while
- * the Workbook path hands the same pattern to Excel as a numFormat and renders
- * `2026年7月1日`. Superset tokens are likewise only partially passed through:
- * `mmm` parses its `mm` prefix and emits a stray `m` (`"mmm"` -> `"09m"`),
- * where Excel renders the month abbreviation. Stick to the six tokens for
- * cross-threshold consistency.
+ * Pattern tokens: the pattern is handed to Excel as a number format on both
+ * routes, so Excel's full format-code semantics (quoted literals, `mmm`,
+ * `dddd`, `yy`, etc.) apply identically; there is no reduced token subset.
+ *
+ * Number semantics: both routes store the full numeric value; `decimals` and
+ * `thousands` are display-only numFmt settings on both. Crossing the 50k
+ * threshold therefore no longer rounds the stored value or drops separators.
  */
 export type FormatSpec =
   | { type: "enum"; map: Record<string, string>; fallback?: string }
@@ -137,20 +134,10 @@ export interface ColumnConfig {
    * Value formatter: FormatSpec (worker-compatible) or function (main-thread
    * routes only; stripped with a warning on worker routes — see FormatSpec).
    *
-   * Cross-path precision: a `{ type: "number" }` spec without `decimals`
-   * defaults to 0, but only the stream path (>= STREAM_THRESHOLD, 50,000 rows)
-   * bakes `toFixed(0)` into the stored cell value. The Workbook path keeps full
-   * precision and renders decimals via numFormat, so the same spec can store
-   * `9999.99` (Workbook) vs `10000` (stream). Always set `decimals` explicitly
-   * for cross-threshold consistency (see docs/excel-export-design.md 4.8).
-   *
-   * Cross-path `thousands`: the Workbook path renders the separator via an
-   * auto-injected `#,##0` numFormat; the stream path (>=50k rows /
-   * degraded exports) cannot use numFormat and keeps the cell a *number*, so
-   * they render `9999.99` without separators. Baking separators into the value
-   * would turn data cells into text and break downstream calculations, so the
-   * difference is intentional — do not rely on visible separators above the
-   * 50k threshold.
+   * Cross-path number semantics: both routes store the full-precision numeric
+   * value and render `decimals`/`thousands` through an Excel numFmt (the stream
+   * path emits a minimal styles.xml), so the same spec stores the same value
+   * and shows the same separators on both sides of the 50k threshold.
    *
    * Missing values: `null`/`undefined` (and blank/whitespace-only strings —
    * the most common missing-value shape coming out of databases, forms and CSV
@@ -303,6 +290,17 @@ export interface ExportOptions {
   onPhase?: (phase: ExportPhase, durationMs: number) => void;
   /** Trigger browser download (default true). Set false to only return a Blob. */
   download?: boolean;
+  /**
+   * Optional cancellation signal. Aborting resolves the export with
+   * `success: false` and an `AbortError` (never rejects) and skips the
+   * degradation chain. Worker-route requests are cancelled by terminating the
+   * active worker; queued requests are removed. On main-thread routes the
+   * synchronous build/stream loop cannot be interrupted mid-chunk — abort is
+   * observed at await boundaries (before/after WASM init and before the build
+   * starts), so an abort during a long synchronous build takes effect when
+   * that build returns.
+   */
+  signal?: AbortSignal;
   /**
    * Full-screen progress overlay during the export (default **on**).
    *
