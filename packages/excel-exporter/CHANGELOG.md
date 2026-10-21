@@ -1,5 +1,17 @@
 # @marcusok/excel-exporter
 
+## 3.3.0
+
+### Minor Changes
+
+- 3037793: Keep date and number semantics identical across the 50k-row threshold. The fast stream now emits a minimal `styles.xml` for `FormatSpec` columns: dates/datetimes are stored as Excel serial numbers plus a numFmt (instead of formatted text), and `decimals`/`thousands` are display-only numFmt settings rather than being baked into stored values. Cell/layout styling remains Workbook-only.
+- bcb4e28: Add `signal?: AbortSignal` to export options (including `exportTable`/`exportEcharts`) and rework the shared export worker queue. Requests are now serialized through a main-thread FIFO queue, a timeout starts when a request is dispatched (queue wait excluded), and a timed-out/aborted request no longer rejects unrelated queued exports — they continue on a fresh worker. Aborting resolves a structured `AbortError` and skips the degradation chain.
+
+### Patch Changes
+
+- 3037793: Validate and write merge ranges in linear time. Overlap detection, `addMergeCell` deduplication and repeated validation were quadratic: 40,000 disjoint merges took ~12.8s on the Workbook path and ~2.2s on the stream path. The new sweep-line validator plus batched merge insertion bring the same export down to ~0.26s/~0.11s, and avoid a user-input-driven denial-of-service surface.
+- d883ceb: Support local WASM files in Node: `configureWasm({ wasmUrl })` now accepts a plain filesystem path or a `file:` URL in addition to HTTP(S) URLs. The binary is read synchronously (matching zero-config auto-init), and a missing/unreadable configured file fails with the real fs/compile reason instead of a misleading `fetch failed`.
+
 ## 3.2.2
 
 ### Patch Changes
