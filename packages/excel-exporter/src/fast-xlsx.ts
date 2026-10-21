@@ -1,7 +1,8 @@
 import { strToU8, zipSync } from "fflate";
 import type { SheetConfig } from "./types";
 import {
-  displayValue,
+  columnNumFmt,
+  streamCellValue,
   validateSheetName,
   validateMerges,
   validateSheetLimits,
@@ -98,16 +99,86 @@ function appendCell(
   ref: string,
   value: string | number | boolean,
   intern: (value: string) => number,
+  styleIndex = 0,
 ): void {
+  // style 0 is the default xf and is omitted to keep unstyled output compact.
+  const s = styleIndex > 0 ? ` s="${styleIndex}"` : "";
   if (typeof value === "number") {
-    out.push(`<c r="${ref}" t="n"><v>${value}</v></c>`);
+    out.push(`<c r="${ref}"${s} t="n"><v>${value}</v></c>`);
     return;
   }
   if (typeof value === "boolean") {
-    out.push(`<c r="${ref}" t="b"><v>${value ? 1 : 0}</v></c>`);
+    out.push(`<c r="${ref}"${s} t="b"><v>${value ? 1 : 0}</v></c>`);
     return;
   }
-  out.push(`<c r="${ref}" t="s"><v>${intern(value)}</v></c>`);
+  out.push(`<c r="${ref}"${s} t="s"><v>${intern(value)}</v></c>`);
+}
+
+/**
+ * Minimal workbook-global style table for the stream path.
+ *
+ * The style-less path used to bake date/number formatting into stored values
+ * (dates became strings, decimals were rounded), so crossing 50k rows changed
+ * cell types. This registry emits one cellXf per distinct number-format code
+ * (custom numFmt ids from 164) and nothing else — fonts/fills/borders stay
+ * default, so cell styling is still unsupported, but stored values match the
+ * Workbook path. Returns null when no column needs a format (the styles part
+ * is then omitted entirely).
+ */
+interface StyleRegistry {
+  xfFor(numFmt: string): number;
+  xml(): string | null;
+}
+
+function createStyleRegistry(): StyleRegistry {
+  const numFmtIds = new Map<string, number>();
+  const xfByNumFmt = new Map<string, number>();
+  const xfs: number[] = [0];
+
+  return {
+    xfFor(numFmt: string): number {
+      const existing = xfByNumFmt.get(numFmt);
+      if (existing !== undefined) return existing;
+      let id = numFmtIds.get(numFmt);
+      if (id === undefined) {
+        id = 164 + numFmtIds.size;
+        numFmtIds.set(numFmt, id);
+      }
+      const xf = xfs.length;
+      xfs.push(id);
+      xfByNumFmt.set(numFmt, xf);
+      return xf;
+    },
+    xml(): string | null {
+      if (numFmtIds.size === 0) return null;
+      const numFmts = [...numFmtIds]
+        .map(
+          ([code, id]) =>
+            `<numFmt numFmtId="${id}" formatCode="${escapeXml(code)}"/>`,
+        )
+        .join("");
+      const cellXfs = xfs
+        .map((id) =>
+          id === 0
+            ? '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+            : `<xf numFmtId="${id}" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`,
+        )
+        .join("");
+      return (
+        XML_DECL +
+        `<styleSheet xmlns="${MAIN_NS}">` +
+        `<numFmts count="${numFmtIds.size}">${numFmts}</numFmts>` +
+        '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
+        '<fills count="2"><fill><patternFill patternType="none"/></fill>' +
+        '<fill><patternFill patternType="gray125"/></fill></fills>' +
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+        `<cellXfs count="${xfs.length}">${cellXfs}</cellXfs>` +
+        '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+        `</styleSheet>`
+      );
+    },
+  };
 }
 
 // stringTable/totalExpected/processedRows 由 exportFastXlsx 的唯一调用点
@@ -118,7 +189,9 @@ function buildWorksheetXml(
   stringTable: SharedStringTable,
   totalExpected: number,
   processedRows: { count: number },
+  styles: StyleRegistry,
   onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
 ): string {
   validateSheetName(config.name);
   const { leaves, headerGrid, headerMerges, headerRowCount } =
@@ -130,6 +203,12 @@ function buildWorksheetXml(
   // over-limit workbook Excel flags as corrupt while reporting success.
   validateSheetLimits(config, leaves.length, headerRowCount);
   const letters = leaves.map((_, i) => columnName(i));
+  // Style indexes are workbook-global; resolve one per leaf column, not per
+  // cell (the registry dedupes identical format codes).
+  const columnStyles = leaves.map((col) => {
+    const numFmt = columnNumFmt(col);
+    return numFmt ? styles.xfFor(numFmt) : 0;
+  });
   const out: string[] = [];
 
   // Header rows (1..headerRowCount); cells covered by a header merge are skipped.
@@ -162,17 +241,25 @@ function buildWorksheetXml(
       const v =
         columnProp(leaves[colIndex]) === INDEX_PROP
           ? rowIndex + start
-          : displayValue(leaves[colIndex], item);
+          : streamCellValue(leaves[colIndex], item);
       // Skip empty cells: null/missing fields normalize to "" (see toStr), and
       // interning every "" would cost an sst entry plus a cell reference per
       // empty field. A missing <c> element reads as an empty cell in Excel.
       if (v === "") continue;
-      appendCell(out, `${letters[colIndex]}${rowNumber}`, v, (s) =>
-        stringTable.intern(s),
+      appendCell(
+        out,
+        `${letters[colIndex]}${rowNumber}`,
+        v,
+        (s) => stringTable.intern(s),
+        columnStyles[colIndex],
       );
     }
     out.push(`</row>`);
     processedRows.count++;
+    // Cooperative cancellation: the loop is synchronous, so this only observes
+    // a signal that was already aborted by another thread/context; checking at
+    // the same 1,000-row cadence keeps the hot loop overhead negligible.
+    if (processedRows.count % 1000 === 0) throwIfAborted(signal);
     // 钳制最后一批：总行数为 1000 整数倍时，末个 checkpoint 的值恰为 1，
     // 会与 exportExcel 的 terminal 1 重复（onProgress 的 1 须只出现一次，
     // 见 types.ts 契约）——到齐终点时跳过，把 1 留给 terminal。
@@ -215,14 +302,25 @@ function buildWorksheetXml(
  * It intentionally trades streaming memory for throughput: the worksheet XML
  * is assembled once in memory and zipped synchronously with fflate. That is
  * the right trade for the supported 50k-100k+ export envelope and is what
- * makes the public API hit its sub-second targets. For feature parity with the
- * modern-xlsx stream path, layout/styling features are still skipped with the
- * same warnings.
+ * makes the public API hit its sub-second targets. Layout/cell styling
+ * features (width/font/fill/border/alignment/freeze/filter) are still skipped
+ * with the same warnings; number formats (date/datetime/number FormatSpec) are
+ * supported through a minimal styles.xml so stored values match the Workbook
+ * path.
  */
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  const err = new Error("[excel-exporter] export aborted by the caller");
+  err.name = "AbortError";
+  throw err;
+}
+
 export function exportFastXlsx(
   sheets: SheetConfig[],
   onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
 ): FastXlsxResult {
+  throwIfAborted(signal);
   const totalExpected = sheets.reduce((sum, s) => sum + s.data.length, 0);
   const processed = { count: 0 };
   const worksheetXmls: string[] = [];
@@ -230,6 +328,7 @@ export function exportFastXlsx(
   const workbookRels: string[] = [];
   const contentOverrides: string[] = [];
   const stringTable = createSharedStringTable();
+  const styles = createStyleRegistry();
 
   // A zero-sheet workbook violates ECMA-376 (Excel flags it as corrupt);
   // reject before building anything, same as the duplicate-name guard below
@@ -244,6 +343,7 @@ export function exportFastXlsx(
   const seenSheetNames = new Set<string>();
 
   sheets.forEach((config, index) => {
+    throwIfAborted(signal);
     const sheetNumber = index + 1;
     // 本检查先于 buildWorksheetXml 里的 validateSheetName 执行：非字符串 name
     // 不能在此处 toLowerCase 出裸 TypeError，原样入 set，把清晰报错留给表名校验。
@@ -285,7 +385,9 @@ export function exportFastXlsx(
         stringTable,
         totalExpected,
         processed,
+        styles,
         onProgress,
+        signal,
       ),
     );
     workbookSheets.push(
@@ -301,14 +403,25 @@ export function exportFastXlsx(
     );
   });
 
-  const sharedStringsIndex = sheets.length + 1;
+  let nextRelId = sheets.length + 1;
   const hasSharedStrings = stringTable.parts.length > 0;
   if (hasSharedStrings) {
     workbookRels.push(
-      `<Relationship Id="rId${sharedStringsIndex}" Type="${OFFICE_REL}/sharedStrings" Target="sharedStrings.xml"/>`,
+      `<Relationship Id="rId${nextRelId++}" Type="${OFFICE_REL}/sharedStrings" Target="sharedStrings.xml"/>`,
     );
     contentOverrides.push(
       `<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>`,
+    );
+  }
+  // 只有存在 date/number FormatSpec 时才输出 styles.xml；纯文本/无格式导出
+  // 的产物与旧版完全一致。
+  const stylesXml = styles.xml();
+  if (stylesXml) {
+    workbookRels.push(
+      `<Relationship Id="rId${nextRelId++}" Type="${OFFICE_REL}/styles" Target="styles.xml"/>`,
+    );
+    contentOverrides.push(
+      `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`,
     );
   }
 
@@ -346,6 +459,9 @@ export function exportFastXlsx(
   });
   if (sharedStringsXml) {
     files["xl/sharedStrings.xml"] = strToU8(sharedStringsXml);
+  }
+  if (stylesXml) {
+    files["xl/styles.xml"] = strToU8(stylesXml);
   }
 
   const bytes = zipSync(files, { level: 1 });

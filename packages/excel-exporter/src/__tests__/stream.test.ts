@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
+import { dateToSerial } from "@marcusok/xlsx-core";
 import { exportAsStream } from "../streaming-builder";
+import { exportExcel } from "../index";
+import type { SheetConfig } from "../types";
 import { readBuffer } from "./setup";
 
 describe("exportAsStream round-trip", () => {
@@ -112,7 +115,7 @@ describe("exportAsStream round-trip", () => {
     expect(wb.getSheet("B")!.rowCount).toBe(2);
   });
 
-  it("formats date/datetime columns by pattern into readable strings", async () => {
+  it("stores date/datetime as serials with a numFmt style", async () => {
     const { bytes } = await exportAsStream([
       {
         name: "Dates",
@@ -124,8 +127,8 @@ describe("exportAsStream round-trip", () => {
           },
           { prop: "dt", label: "DateTime", format: { type: "datetime" } },
         ],
-        // UTC-constructed so the expected strings hold in every timezone
-        // (stream formats UTC components, matching the workbook serial).
+        // UTC-constructed: dateToSerial uses UTC components, same as the
+        // Workbook path.
         data: [
           {
             d: new Date(Date.UTC(2025, 0, 5, 14, 30)),
@@ -136,9 +139,73 @@ describe("exportAsStream round-trip", () => {
     ]);
     const wb = await readBuffer(bytes);
     const ws = wb.getSheet("Dates")!;
-    // pattern honored; default datetime pattern applied
-    expect(ws.cell("A2").value).toBe("05/01/2025");
-    expect(ws.cell("B2").value).toBe("2025-01-05 14:30");
+    // 存储层是真日期序列号，不再是格式化文本；显示格式由 numFmt 承担。
+    expect(Number(ws.cell("A2").value)).toBeCloseTo(
+      dateToSerial(new Date(Date.UTC(2025, 0, 5, 14, 30))),
+      10,
+    );
+    expect(Number(ws.cell("B2").value)).toBeCloseTo(
+      dateToSerial(new Date(Date.UTC(2025, 0, 5, 14, 30))),
+      10,
+    );
+    const files = unzipSync(bytes);
+    const styles = strFromU8(files["xl/styles.xml"]);
+    expect(styles).toContain('formatCode="dd/MM/yyyy"');
+    expect(styles).toContain('formatCode="yyyy-MM-dd HH:mm"');
+    const sheetXml = strFromU8(files["xl/worksheets/sheet1.xml"]);
+    expect(sheetXml).toMatch(/<c r="A2" s="\d+"/);
+    expect(sheetXml).toMatch(/<c r="B2" s="\d+"/);
+  });
+
+  it("keeps date/number cell values identical across Workbook and stream paths", async () => {
+    const sheet: SheetConfig = {
+      name: "Cross",
+      columns: [
+        {
+          prop: "d",
+          label: "D",
+          format: { type: "date", pattern: "yyyy-MM-dd" },
+        },
+        {
+          prop: "n",
+          label: "N",
+          format: { type: "number", decimals: 2, thousands: true },
+        },
+      ],
+      data: [
+        {
+          d: new Date(Date.UTC(2025, 0, 5)),
+          n: 1234.567,
+        },
+      ],
+    };
+    const main = await exportExcel({
+      filename: "cross-main",
+      download: false,
+      mode: "main",
+      sheets: [sheet],
+    });
+    const stream = await exportExcel({
+      filename: "cross-stream",
+      download: false,
+      mode: "stream",
+      sheets: [sheet],
+    });
+    expect(main.success).toBe(true);
+    expect(stream.success).toBe(true);
+    const mainWs = (
+      await readBuffer(new Uint8Array(await main.blob!.arrayBuffer()))
+    ).getSheet("Cross")!;
+    const streamWs = (
+      await readBuffer(new Uint8Array(await stream.blob!.arrayBuffer()))
+    ).getSheet("Cross")!;
+    // 存储值一致：日期都是序列号、金额都保留完整精度（显示由 numFmt 负责）。
+    expect(Number(streamWs.cell("A2").value)).toBeCloseTo(
+      Number(mainWs.cell("A2").value),
+      10,
+    );
+    expect(streamWs.cell("B2").value).toBe(mainWs.cell("B2").value);
+    expect(streamWs.cell("B2").value).toBe(1234.567);
   });
 
   it("writes a spec-correct sharedStrings table (count = total refs, uniqueCount = uniques)", async () => {
@@ -237,6 +304,9 @@ describe("exportAsStream round-trip", () => {
     expect(ws.rowCount).toBe(3); // header + 2 data rows
     expect(ws.cell("A3").value).toBe("x");
     expect(String(ws.cell("B3").value)).toBe("2");
-    expect(ws.cell("C3").value).toBe("2025-01-05");
+    expect(Number(ws.cell("C3").value)).toBeCloseTo(
+      dateToSerial(new Date(Date.UTC(2025, 0, 5))),
+      10,
+    );
   });
 });

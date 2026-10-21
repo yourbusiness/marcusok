@@ -75,6 +75,39 @@ describe.runIf(RUN_PERF)(
       expect(dt).toBeLessThan(1000 * SLACK);
     });
 
+    it("40k rows with 40k disjoint merges < 3000ms", async () => {
+      // 回归：merge 校验与 addMergeCell 都曾是 O(n²)（旧实现 ~12.8s）。
+      // 正常报表不会每条数据都合并，但模板类文件可能达到数万条。
+      const n = 40_000;
+      const data = Array.from({ length: n }, (_, i) => ({ a: `r${i}`, b: i }));
+      const merges = Array.from({ length: n }, (_, i) => ({
+        row: i,
+        col: 0,
+        rowspan: 1,
+        colspan: 2,
+      }));
+      const t0 = performance.now();
+      const r = await exportExcel({
+        filename: "merge-heavy",
+        download: false,
+        mode: "main",
+        sheets: [
+          {
+            name: "s",
+            columns: [
+              { prop: "a", label: "A" },
+              { prop: "b", label: "B" },
+            ],
+            data,
+            merges,
+          },
+        ],
+      });
+      const dt = performance.now() - t0;
+      expect(r.success).toBe(true);
+      expect(dt).toBeLessThan(3000 * SLACK);
+    });
+
     it("format function overhead does not dominate", async () => {
       const data = Array.from({ length: 10_000 }, (_, i) => ({ id: i }));
       const base = { name: "s", columns: [{ prop: "id", label: "ID" }], data };

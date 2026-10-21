@@ -187,22 +187,23 @@ export class WorkbookBuilder {
     }
 
     // Header merges: rows are already sheet-relative (0-based).
-    headerMerges.forEach((m) => {
+    const mergeRanges = headerMerges.map((m) => {
       const start = encodeCellRef(m.row, m.col);
       const end = encodeCellRef(m.row + m.rowSpan - 1, m.col + m.colSpan - 1);
-      ws.addMergeCell(`${start}:${end}`);
+      return `${start}:${end}`;
     });
 
     // Data merges: MergeRange is data-relative (row 0 = first data row); add
     // headerRowCount to reach the sheet.
-    config.merges?.forEach((m) => {
+    for (const m of config.merges ?? []) {
       const start = encodeCellRef(headerRowCount + m.row, m.col);
       const end = encodeCellRef(
         headerRowCount + m.row + m.rowspan - 1,
         m.col + m.colspan - 1,
       );
-      ws.addMergeCell(`${start}:${end}`);
-    });
+      mergeRanges.push(`${start}:${end}`);
+    }
+    addMergeRanges(ws, mergeRanges);
 
     return this;
   }
@@ -230,6 +231,34 @@ export class WorkbookBuilder {
     const bytes = await this.toBuffer();
     return new Blob([toBlobPart(bytes)], { type: XLSX_MIME });
   }
+}
+
+/**
+ * 批量写入合并区间。
+ *
+ * `ws.addMergeCell` 内部用 `mergeCells.includes(range)` 去重（modern-xlsx
+ * 1.2.0 实测），逐条调用是 O(n²)：4 万条互不重叠的合并在该循环上要耗
+ * 10s+。引擎把合并数组存在 `data.worksheet.mergeCells`；此处先按 Set
+ * 去重后一次性 push，保持"重复项忽略"的语义。该字段是引擎私有实现，
+ * 因此做能力探测并保留逐条 addMergeCell 的兜底（引擎按 1.2.0 精确钉版，
+ * 升级时若结构变化只是回退到旧性能，不会失效）。
+ */
+function addMergeRanges(ws: Worksheet, ranges: string[]): void {
+  if (ranges.length === 0) return;
+  const internal = ws as unknown as {
+    data?: { worksheet?: { mergeCells?: unknown } };
+  };
+  const target = internal.data?.worksheet?.mergeCells;
+  if (Array.isArray(target)) {
+    const seen = new Set(target as string[]);
+    for (const range of ranges) {
+      if (seen.has(range)) continue;
+      (target as string[]).push(range);
+      seen.add(range);
+    }
+    return;
+  }
+  for (const range of ranges) ws.addMergeCell(range);
 }
 
 /**

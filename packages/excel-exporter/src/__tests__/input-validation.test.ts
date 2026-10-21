@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
 import { exportAsStream } from "../streaming-builder";
 import { exportExcel } from "../index";
-import { validateSheetLimits } from "../format-utils";
+import { validateMerges, validateSheetLimits } from "../format-utils";
 import type { SheetConfig } from "../types";
 // Node's fetch rejects file://, so sync-init the WASM (see setup.ts);
 // importing the module already runs the side-effectful bootstrap.
@@ -121,6 +121,30 @@ describe("merge range validation", () => {
         }),
       ]),
     ).rejects.toThrow(/overlaps merge #0/);
+  });
+
+  it("validates a large disjoint merge list without quadratic blowup", () => {
+    // 旧实现逐条与全部前序 merge 比较（40k 条约 1s，导出端到端 10s+）。
+    // 扫描线版本应是毫秒级；阈值放宽到 500ms，只拦截复杂度回归。
+    const n = 40_000;
+    const merges = Array.from({ length: n }, (_, i) => ({
+      row: i,
+      col: 0,
+      rowspan: 1,
+      colspan: 2,
+    }));
+    const sheet: SheetConfig = {
+      name: "S",
+      columns: [
+        { prop: "a", label: "A" },
+        { prop: "b", label: "B" },
+      ],
+      data: new Array(n).fill({ a: 1, b: 2 }),
+      merges,
+    };
+    const t0 = performance.now();
+    expect(() => validateMerges(sheet, 2)).not.toThrow();
+    expect(performance.now() - t0).toBeLessThan(500);
   });
 
   it("workbook path (via exportExcel) reports the same failure", async () => {

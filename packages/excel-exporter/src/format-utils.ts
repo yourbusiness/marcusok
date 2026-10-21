@@ -196,9 +196,70 @@ export function formatDateByPattern(value: unknown, pattern: string): string {
 }
 
 /**
+ * Number format code a column's FormatSpec needs on the stream path, or null
+ * when the column produces text (enum/padding/function/no format). The
+ * fast-xlsx writer emits a minimal styles.xml for these codes, so dates stay
+ * real serial numbers and decimals/thousands render exactly like the
+ * Workbook path instead of being baked into the stored value.
+ */
+export function columnNumFmt(col: ColumnConfig): string | null {
+  const spec = typeof col.format === "object" ? col.format : null;
+  return spec ? numFormatForSpec(spec) : null;
+}
+
+/** Normalize a resolved raw value to a stream cell value (same rules as the
+ * Workbook path: finite numbers stay numeric, booleans stay booleans,
+ * everything else becomes its visible string form). */
+function normalizeStreamValue(value: unknown): string | number | boolean {
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : toStr(value);
+  if (typeof value === "boolean") return value;
+  return toStr(value);
+}
+
+/**
+ * Streaming-path cell resolver. Returns the **stored** value (not a display
+ * string) so fast-xlsx can pair it with a numFmt style:
+ * - date/datetime: Excel serial number (UTC components, same `dateToSerial`
+ *   as the Workbook path); invalid dates fall back to their visible string.
+ * - number: full-precision number (decimals/thousands live in the numFmt).
+ * - enum/padding/function/no format: the same normalized value as before.
+ * Empty results are returned as `""`; the writer skips them (no cell).
+ *
+ * `displayValue` is kept unchanged for public callers that need the rendered
+ * string form; this function is the storage-level counterpart used by
+ * fast-xlsx.
+ */
+export function streamCellValue(
+  col: ColumnConfig,
+  row: Record<string, unknown>,
+): string | number | boolean {
+  const spec = typeof col.format === "object" ? col.format : null;
+  if (spec) {
+    if (spec.type === "date" || spec.type === "datetime") {
+      const raw = row == null ? undefined : row[columnProp(col) ?? ""];
+      if (raw == null || isBlankString(raw)) return "";
+      const d = toJsDate(raw);
+      return d === null ? toStr(raw) : dateToSerial(d);
+    }
+    if (spec.type === "number") {
+      const raw = row == null ? undefined : row[columnProp(col) ?? ""];
+      if (raw == null || isBlankString(raw)) return "";
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : toStr(raw);
+    }
+    return normalizeStreamValue(
+      applyFormat(row == null ? undefined : row[columnProp(col) ?? ""], spec),
+    );
+  }
+  return normalizeStreamValue(resolveCellFormat(col, row));
+}
+
+/**
  * Resolve a column value to its display form: typed (number/boolean) when the
- * cell supports it, or a pattern-formatted string for dates. Used by the
- * streaming path, which lacks numFormat support.
+ * cell supports it, or a pattern-formatted string for dates. Used by public
+ * callers that need rendered text; fast-xlsx uses {@link streamCellValue}
+ * (storage-level values + numFmt) instead.
  */
 export function displayValue(
   col: ColumnConfig,
@@ -357,9 +418,26 @@ export function validateMerges(sheet: SheetConfig, leafCount: number): void {
     );
   }
   if (!merges?.length) return;
+
+  const atOf = (i: number): string => {
+    const m = merges[i];
+    return `merge #${i} {row: ${m.row}, col: ${m.col}, rowspan: ${m.rowspan}, colspan: ${m.colspan}}`;
+  };
+
+  // 第一遍只做形状/边界校验。重叠检测放到排序后的扫描线里，避免原来
+  // 对每条 merge 扫描全部前序项（O(n²)：4 万条不重叠合并仅校验就要 ~1s，
+  // 导出端到端 12.8s；合并来自用户输入时也是算法级 DoS 面）。
+  interface Pending {
+    index: number;
+    row: number;
+    col: number;
+    endRow: number;
+    endCol: number;
+  }
+  const pending: Pending[] = [];
   for (let i = 0; i < merges.length; i++) {
     const m = merges[i];
-    const at = `merge #${i} {row: ${m.row}, col: ${m.col}, rowspan: ${m.rowspan}, colspan: ${m.colspan}}`;
+    const at = atOf(i);
     if (
       !Number.isInteger(m.row) ||
       !Number.isInteger(m.col) ||
@@ -390,18 +468,71 @@ export function validateMerges(sheet: SheetConfig, leafCount: number): void {
         `[excel-exporter] sheet "${sheet.name}" ${at}: row ${m.row} + rowspan ${m.rowspan} exceeds the ${sheet.data.length} data rows`,
       );
     }
-    for (let j = 0; j < i; j++) {
-      const o = merges[j];
-      const overlaps =
-        m.row < o.row + o.rowspan &&
-        o.row < m.row + m.rowspan &&
-        m.col < o.col + o.colspan &&
-        o.col < m.col + m.colspan;
-      if (overlaps) {
+    pending.push({
+      index: i,
+      row: m.row,
+      col: m.col,
+      endRow: m.row + m.rowspan,
+      endCol: m.col + m.colspan,
+    });
+  }
+
+  // 按行排序后，只需要和"仍覆盖当前行"的合并比列区间。活动集合用
+  // 最小堆按 endRow 到期淘汰；典型（互不重叠）输入下活动集合很小，
+  // 最坏情况也会在发现首个重叠时立即抛错。稳定性由 index 兜底，保证
+  // 错误消息仍指向原数组下标。
+  pending.sort((a, b) => a.row - b.row || a.col - b.col || a.index - b.index);
+  const active = new Set<Pending>();
+  const heap: Pending[] = [];
+  const endRowLess = (a: Pending, b: Pending): boolean => a.endRow < b.endRow;
+  const heapPush = (item: Pending): void => {
+    heap.push(item);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!endRowLess(heap[i], heap[parent])) break;
+      [heap[i], heap[parent]] = [heap[parent], heap[i]];
+      i = parent;
+    }
+  };
+  const heapPop = (): Pending => {
+    const top = heap[0];
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const left = i * 2 + 1;
+        const right = left + 1;
+        let smallest = i;
+        if (left < heap.length && endRowLess(heap[left], heap[smallest]))
+          smallest = left;
+        if (right < heap.length && endRowLess(heap[right], heap[smallest]))
+          smallest = right;
+        if (smallest === i) break;
+        [heap[i], heap[smallest]] = [heap[smallest], heap[i]];
+        i = smallest;
+      }
+    }
+    return top;
+  };
+
+  for (const cur of pending) {
+    while (heap.length > 0 && heap[0].endRow <= cur.row) {
+      active.delete(heapPop());
+    }
+    for (const other of active) {
+      if (cur.col < other.endCol && other.col < cur.endCol) {
+        // 消息语义与旧实现一致：报告"后出现（原数组下标更大）的那条"
+        // 与"先出现的那条"重叠。
+        const offender = cur.index > other.index ? cur : other;
+        const overlapped = cur.index > other.index ? other : cur;
         throw new Error(
-          `[excel-exporter] sheet "${sheet.name}" ${at} overlaps merge #${j}; merged ranges must be disjoint`,
+          `[excel-exporter] sheet "${sheet.name}" ${atOf(offender.index)} overlaps merge #${overlapped.index}; merged ranges must be disjoint`,
         );
       }
     }
+    active.add(cur);
+    heapPush(cur);
   }
 }

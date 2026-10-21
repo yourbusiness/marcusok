@@ -19,6 +19,7 @@ export interface StreamResult {
 export async function exportAsStream(
   sheets: SheetConfig[],
   onProgress?: (p: number) => void,
+  signal?: AbortSignal,
 ): Promise<StreamResult> {
-  return exportFastXlsx(sheets, onProgress);
+  return exportFastXlsx(sheets, onProgress, signal);
 }
