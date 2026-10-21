@@ -14,7 +14,7 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 | 50k rows  | Fast stream | ~400ms   | < 500ms          |
 | 100k rows | Fast stream | ~780ms   | < 1000ms         |
 
-> The large-file path no longer relies on modern-xlsx's `StreamingXlsxWriter`; it synchronously compresses a minimal OOXML workbook with `fflate`. It finishes the 100k×6-column scenario in ~0.8s and avoids the super-linear cliff of `Workbook.toBuffer()` beyond ~55k rows.
+> The large-file path no longer relies on modern-xlsx's `StreamingXlsxWriter`; it synchronously compresses a minimal OOXML workbook with `fflate`. It finishes the 100k×6-column scenario in ~0.8s and avoids the super-linear cliff of `Workbook.toBuffer()` beyond ~55k rows. The cliff was also verified out-of-band in independent Node processes: the 100k Workbook path lands around ~21s cold, versus the ~17.5s Chrome figure above — the same engine-level cliff in two environments.
 
 ## Installation
 

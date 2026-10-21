@@ -4,17 +4,17 @@ Read-only xlsx preview in the browser, built on the same WASM engine as [@marcus
 
 ## Capabilities
 
-| Capability             | Description                                                                                                                                                                            |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Formats                | `.xlsx` / `.xlsm` (ZIP/OOXML), password-protected workbooks (`password` option), and `.csv` (UTF-8 / GB18030, delimiter sniffing)                                                      |
-| Worker parsing         | The whole parse + model build runs in a shared Web Worker (~1.5s for 100k rows × 10 cols, measured); the final model handoff is a ~50–300ms main-thread task at 10k–100k rows          |
-| Virtual scrolling      | DOM renderer mounts only viewport cells (plus a buffer); merged cells spanning the viewport are recalled as a whole                                                                    |
-| Layout fidelity        | Column widths, row heights, hidden rows/columns, merged cells, frozen panes (four-quadrant layers), sheet tabs (hidden sheets kept out)                                                |
-| Style fidelity         | Fonts, solid / pattern / gradient fills, borders, alignment (wrap / indent / rotation), grid-line switch from the file                                                                 |
-| Theme & indexed colors | Recovered by a self-parsing overlay over `styles.xml` + `theme1.xml` — the engine's read path drops `theme`/`tint`/`indexed` colors                                                    |
-| Number-format fidelity | Excel's actual builtin table (not the ECMA strings), negative-sign / accounting-parens / currency-literal compensation, elapsed `[h]:mm:ss`, minute-adjacent `mm`, date1904 shift      |
-| Cancellation           | `destroy()` aborts an in-flight parse; the low-level `parseWorkbookBytes` accepts an `AbortSignal`. Cancellation is silent — it resolves as `ABORTED` and never surfaces via `onError` |
-| Errors                 | Friendly, code-carrying errors: `PASSWORD_PROTECTED`, `LEGACY_FORMAT` (legacy .xls), `CORRUPT`, `UNSUPPORTED`, `WASM`, `UNKNOWN`                                                       |
+| Capability             | Description                                                                                                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Formats                | `.xlsx` / `.xlsm` (ZIP/OOXML), password-protected workbooks (`password` option), and `.csv` (UTF-8 / GB18030, delimiter sniffing)                                                                                                                            |
+| Worker parsing         | The whole parse + model build runs in a shared Web Worker (~1.5s for 100k rows × 10 cols, measured); the final model handoff is a ~50–300ms main-thread task at 10k–100k rows                                                                                |
+| Virtual scrolling      | DOM renderer mounts only viewport cells (plus a buffer); merged cells spanning the viewport are recalled as a whole                                                                                                                                          |
+| Layout fidelity        | Column widths, row heights, hidden rows/columns, merged cells, frozen panes (four-quadrant layers), sheet tabs (hidden sheets kept out)                                                                                                                      |
+| Style fidelity         | Fonts, solid / pattern / gradient fills, borders, alignment (wrap / indent / rotation), grid-line switch from the file                                                                                                                                       |
+| Theme & indexed colors | Recovered by a self-parsing overlay over `styles.xml` + `theme1.xml` — the engine's read path drops `theme`/`tint`/`indexed` colors                                                                                                                          |
+| Number-format fidelity | Excel's actual builtin table (not the ECMA strings), negative-sign / accounting-parens / currency-literal compensation, elapsed `[h]:mm:ss`, minute-adjacent `mm`, date1904 shift                                                                            |
+| Cancellation           | `destroy()` aborts an in-flight parse; the low-level `parseWorkbookBytes` accepts an `AbortSignal`. In `createPreview` cancellation is silent (the boot path just stops; `onError` is not fired); `parseWorkbookBytes` rejects with an `ABORTED`-coded error |
+| Errors                 | Friendly, code-carrying errors: `PASSWORD_PROTECTED`, `LEGACY_FORMAT` (legacy .xls), `CORRUPT`, `UNSUPPORTED`, `WASM`, `UNKNOWN`                                                                                                                             |
 
 ## Install
 

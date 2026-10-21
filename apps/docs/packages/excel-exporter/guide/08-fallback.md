@@ -16,15 +16,15 @@ When the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminat
 
 ## Behavioral differences
 
-| Dimension                  | modern-xlsx path | stream fallback                                                                           |
-| -------------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
-| `ExportResult.engine`      | `"modern-xlsx"`  | `"fast-xlsx"` with `mode: "stream"` and `result.error` set (success stays `true`)         |
-| Cell styles                | full             | stripped (the fast stream emits minimal OOXML without a style part)                       |
-| Multi-row headers / merges | supported        | supported (merges are structure, not styles)                                              |
-| Width / freeze / filter    | supported        | not supported                                                                             |
-| FormatSpec                 | supported        | supported (enum/padding/number/date; dates stay serials)                                  |
-| Number formats             | `numFormat`      | minimal `styles.xml` numFmt (decimals/thousands display-only)                             |
-| Warning                    | —                | console prints `[excel-exporter] Falling back to the style-less fast stream. Reason: ...` |
+| Dimension                  | modern-xlsx path                                   | stream fallback                                                                                                                                                     |
+| -------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ExportResult.engine`      | `"modern-xlsx"`                                    | `"fast-xlsx"` with `mode: "stream"` and `result.error` set (success stays `true`)                                                                                   |
+| Cell styles                | full                                               | stripped (the fast stream emits minimal OOXML; when a FormatSpec date/number column exists it still includes a minimal `styles.xml` containing only numFmt entries) |
+| Multi-row headers / merges | supported                                          | supported (merges are structure, not styles)                                                                                                                        |
+| Width / freeze / filter    | supported                                          | not supported                                                                                                                                                       |
+| FormatSpec                 | supported                                          | supported (enum/padding/number/date; dates stay serials)                                                                                                            |
+| Number formats             | `CellStyle.numFormat` and FormatSpec-derived codes | FormatSpec-derived numFmt only, in a minimal `styles.xml` (decimals/thousands display-only; `CellStyle.numFormat` is dropped)                                       |
+| Warning                    | —                                                  | console prints `[excel-exporter] Falling back to the style-less fast stream. Reason: ...`                                                                           |
 
 ## Detecting the fallback
 

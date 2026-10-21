@@ -19,17 +19,17 @@ Worker path behavior:
 
 Known stream limitations:
 
-| Feature                        | Stream path                                      |
-| ------------------------------ | ------------------------------------------------ |
-| Multi-row headers (`children`) | supported (header auto-merge)                    |
-| Cell merges (`merges`)         | supported (data area)                            |
-| Cell styles (`style`)          | not supported                                    |
-| Header styles (`headerStyle`)  | not supported                                    |
-| Column width (`width`)         | not supported                                    |
-| Freeze / auto-filter           | not supported                                    |
-| Custom number formats          | supported via minimal `styles.xml` (numFmt only) |
-| Date formats                   | stored as serials + numFmt (same as Workbook)    |
-| Progress callback              | reported every 1000 rows                         |
+| Feature                        | Stream path                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| Multi-row headers (`children`) | supported (header auto-merge)                                                         |
+| Cell merges (`merges`)         | supported (data area)                                                                 |
+| Cell styles (`style`)          | not supported                                                                         |
+| Header styles (`headerStyle`)  | not supported                                                                         |
+| Column width (`width`)         | not supported                                                                         |
+| Freeze / auto-filter           | not supported                                                                         |
+| FormatSpec number/date formats | supported via minimal `styles.xml` (numFmt only; `CellStyle.numFormat` is dropped)    |
+| Date formats                   | stored as serials + numFmt (same code as Workbook unless `style.numFormat` conflicts) |
+| Progress callback              | reported every 1000 rows                                                              |
 
 Skipped features (cell styles, header styles, column width, freeze, ...) print `[excel-exporter] stream mode: features not supported (...)` in the console.
 

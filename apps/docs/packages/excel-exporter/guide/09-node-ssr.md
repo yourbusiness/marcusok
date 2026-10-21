@@ -2,7 +2,7 @@
 
 In Node servers (including SSR) you don't need browser assets and there is **no initialization boilerplate**: the engine locates the shipped `modern-xlsx.wasm` on disk (in this package's own `dist/`, pnpm-symlink-safe) and initializes it synchronously on first use. The explicit `initWasmSync` bootstrap from earlier versions is no longer required — keep it only if you want the one-off read+compile at startup instead of the first request.
 
-> Auto-initialization does a one-off synchronous file read plus WASM compile (measured ~20ms on this repo's dev machine, Node 22: ~4ms to read the 1.9MB binary, ~15ms to compile), charged to the first export. To move that cost to process startup instead, use the explicit init below.
+> Auto-initialization does a one-off synchronous file read plus WASM compile (measured ~5ms on the repo's pinned Node 24.21.0; older Node 22 runtimes are slower), charged to the first export. To move that cost to process startup instead, use the explicit init below.
 
 ## Environment differences
 

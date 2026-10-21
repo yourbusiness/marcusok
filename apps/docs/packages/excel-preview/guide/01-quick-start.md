@@ -18,6 +18,8 @@ preview.destroy();
 
 That's the entire setup. Parsing happens in a Web Worker by default; the same pipeline runs on the main thread — no code change — whenever no worker is usable: Node/SSR (no Worker **or** no `window` global), or a worker that failed to construct/load (a cross-origin script URL, a 404 — the fallback is then permanent for the session; see [Assets & Self-hosting](/packages/excel-preview/guide/02-assets)).
 
+Give the container a definite height (e.g. `#preview { height: 500px; }` or a flex/grid track). The preview root is `height: 100%` with a 200px minimum and scrolls inside the container; a container without a resolved height falls back to that minimum.
+
 ## Options you will actually use
 
 ```ts

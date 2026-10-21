@@ -139,7 +139,7 @@ Common `numFormat` tweaks used with the numeric presets:
 | `"¥"#,##0.00`        | `¥12,999.99`           |
 | `yyyy"年"M"月"d"日"` | `2026年7月1日`         |
 
-Literal text in a format code goes in double quotes; everything else follows Excel's format-code syntax. These codes are rendered by Excel through `numFormat`, so they apply on the styled (Workbook) routes only — the stream path drops styles wholesale and falls back to the column's `FormatSpec` pattern, which does **not** interpret quoted literals (see [Value Formatting](/packages/excel-exporter/guide/04-formatting)).
+Literal text in a format code goes in double quotes; everything else follows Excel's format-code syntax. `CellStyle.numFormat` is part of the cell style, so it applies on the styled (Workbook) routes only. The stream path drops it; a column's number/date display there comes solely from its `FormatSpec` (`{ type: "date", pattern }` / `{ type: "number", decimals, thousands }`), which is emitted as a numFmt in the stream's minimal `styles.xml` and therefore **does** interpret quoted literals. A column without a `FormatSpec` has no custom number format on the stream path. On the Workbook path an explicit `style.numFormat` wins over a FormatSpec-derived code, so if a FormatSpec column also sets `style.numFormat`, keep the two codes equal (or omit `style.numFormat`) to preserve cross-path display parity.
 
 ## Custom CellStyle
 
@@ -223,7 +223,7 @@ await exportExcel({
 });
 ```
 
-The merge is **field-level**, not wholesale: `dataStyle` provides the base layer and a column's `style` overrides only the fields it sets — a table-wide border survives a column that only sets `numFormat`, and vice versa. This is deliberately different from `headerStyle`, which replaces wholesale. Like all styling, `dataStyle` is dropped with a warning on the stream path (≥ 50,000 rows / degraded exports).
+The merge is **field-level**, not wholesale: `dataStyle` provides the base layer and a column's `style` overrides only the fields it sets — a table-wide border survives a column that only sets `numFormat`, and vice versa. The merge goes one level deep for `font` / `fill` / `alignment` / `border`; inside `border`, a side object (`border.bottom`, …) is replaced as a whole, so setting only `{ style: "medium" }` drops the base side's `color` unless you spread it back in. This is deliberately different from `headerStyle`, which replaces wholesale. Like all styling, `dataStyle` is dropped with a warning on the stream path (≥ 50,000 rows / degraded exports).
 
 ## Header styling: sheet default, column override
 
@@ -276,7 +276,7 @@ sheets: [
 - Works on **every export path** (workbook / worker / stream): it is structure, not styling, so even the style-less stream keeps the numbers.
 - The header label defaults to `"序号"` and the width to `6`; use the object form to customize them and the styles.
 - Existing `merges` are shifted one column right automatically, so they keep pointing at their original targets.
-- Values never read `data`; a user column declaring the reserved `__index__` prop is rejected with a clear error.
+- Values never read `data`; through `exportExcel` (or `applyIndexColumn`) a user column declaring the reserved `__index__` prop is rejected with a clear error. The low-level `WorkbookBuilder` / `exportAsStream` entries do not run that check — there a hand-written `__index__` leaf **is** the row-number column, and its data is replaced by row numbers.
 - Styling follows the same rules as any column: header via `indexColumn.headerStyle` (over sheet `headerStyle`), data cells via `indexColumn.style` (merged over sheet `dataStyle`).
 
 See the [API reference](../api/02-types) for the full option list.
@@ -285,7 +285,7 @@ See the [API reference](../api/02-types) for the full option list.
 
 - **Styles render on the Workbook routes only**: auto mode under 50,000 rows (main thread, or Worker + Workbook for 20,000–49,999 rows in a browser). The stream path (≥ 50,000 rows, or a degraded export) strips all styling — `style` / `headerStyle` / `dataStyle` / `width` / `freezeRows` — with a console warning. Do not rely on styles for large-file exports.
 - **Colors are 6-digit RGB hex without `#`** (`"1F4E79"`), matching modern-xlsx's type contract.
-- **Reusing a preset is free**: the engine deduplicates structurally identical styles into a single style index, so referencing `StylePresets.currency` from N columns does not bloat the file — no need to share objects manually.
+- **Reusing a preset is free**: `WorkbookBuilder` caches structurally identical styles by `JSON.stringify` and reuses one style index, so referencing `StylePresets.currency` from N columns does not bloat the file — no need to share objects manually. (The caching is in this package's builder; modern-xlsx's `StyleBuilder` itself appends a new record on every call.)
 
 ## Relationship to FormatSpec
 

@@ -194,11 +194,11 @@ the upstream package and refresh the page manually.
   field (`pnpm@9.12.0`); run it via corepack (or equivalent) so different pnpm
   versions don't rewrite the lockfile and produce huge diffs.
 - play uses Vite 8, which requires Node >= 22.12 (declared in play's
-  `package.json` `engines`; the repo `.nvmrc` pins the Node 22 major).
+  `package.json` `engines`; the repo `.nvmrc` pins Node 24.21.0 for development).
 - vitest 4.1.x aligns with vite 8 (peer supports `^6 || ^7 || ^8`). Note the
-  repo carries two vite majors: play and the root toolchain use vite 8, while
-  the docs site's vitepress 1.6 brings its own vite 5 — the two never meet in
-  one build.
+  repo carries two vite majors: play uses vite 8, while the docs site's
+  vitepress 1.6 brings its own vite 5 — the two never meet in one build. (The
+  root `package.json` does not depend on Vite directly.)
 
 ## HMR
 

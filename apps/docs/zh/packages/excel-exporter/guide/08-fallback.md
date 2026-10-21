@@ -16,15 +16,15 @@
 
 ## 行为差异
 
-| 维度                  | modern-xlsx 路径 | 流式兜底                                                                                |
-| --------------------- | ---------------- | --------------------------------------------------------------------------------------- |
-| `ExportResult.engine` | `"modern-xlsx"`  | `"fast-xlsx"`，且 `mode: "stream"`、`result.error` 非空（`success` 仍为 `true`）        |
-| 单元格样式            | 完整             | 剥离（快速流输出不带样式部件的极简 OOXML）                                              |
-| 多行表头 / 合并       | 支持             | 支持（合并不是样式）                                                                    |
-| 列宽/冻结/筛选        | 支持             | 不支持                                                                                  |
-| FormatSpec            | 支持             | 支持（enum/padding/number/date；日期保持序列号）                                        |
-| 数字格式              | `numFormat`      | 最小 `styles.xml` numFmt（decimals/thousands 为纯显示）                                 |
-| 警告                  | —                | console 打印 `[excel-exporter] Falling back to the style-less fast stream. Reason: ...` |
+| 维度                  | modern-xlsx 路径                                 | 流式兜底                                                                                                          |
+| --------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `ExportResult.engine` | `"modern-xlsx"`                                  | `"fast-xlsx"`，且 `mode: "stream"`、`result.error` 非空（`success` 仍为 `true`）                                  |
+| 单元格样式            | 完整                                             | 剥离（快速流输出极简 OOXML；若存在 FormatSpec 日期/数字列，仍会包含仅含 numFmt 条目的最小 `styles.xml`）          |
+| 多行表头 / 合并       | 支持                                             | 支持（合并不是样式）                                                                                              |
+| 列宽/冻结/筛选        | 支持                                             | 不支持                                                                                                            |
+| FormatSpec            | 支持                                             | 支持（enum/padding/number/date；日期保持序列号）                                                                  |
+| 数字格式              | `CellStyle.numFormat` 与 FormatSpec 推导的格式码 | 仅 FormatSpec 推导的 numFmt，写入最小 `styles.xml`（decimals/thousands 为纯显示；`CellStyle.numFormat` 会被丢弃） |
+| 警告                  | —                                                | console 打印 `[excel-exporter] Falling back to the style-less fast stream. Reason: ...`                           |
 
 ## 如何感知兜底
 

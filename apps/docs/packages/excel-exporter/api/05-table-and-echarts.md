@@ -11,7 +11,7 @@ Two convenience entry points that accept the data shapes you already have — a 
 
 Consequences worth knowing:
 
-- The shared [`ExportOptions`](/packages/excel-exporter/api/01-export-excel#exportoptions) fields these two types do declare — `filename`, `mode`, `onProgress`, `onPhase`, `download`, `signal`, `overlay` — behave exactly as they do on the main entry (same routing, same progress contract, same `{ success, blob, engine, mode, duration, rowCount, error }` result).
+- The shared [`ExportOptions`](/packages/excel-exporter/api/01-export-excel#exportoptions) fields these two types do declare — `filename`, `mode`, `onProgress`, `onPhase`, `download`, `signal`, `overlay` — behave exactly as they do on the main entry **once conversion succeeds** (same routing, same progress contract, same result fields). A conversion error happens before `exportExcel` and returns only `{ success: false, error }`: no progress callbacks, no `duration`/`engine`/`mode`/`rowCount`, and no overlay.
 - `overlay` is declared on both types and forwarded by both converters, with the same semantics as on `exportExcel`: default **on**, `false` to opt out, an options object to customize (see the [Progress Overlay guide](/packages/excel-exporter/guide/11-overlay)).
 - Both wrappers are single-sheet: each produces a `sheets` array of exactly one entry.
 
@@ -52,7 +52,7 @@ Exports one sheet from a `columns + data` pair, with column descriptors in the s
 | `dataStyle`   | `CellStyle`                                        | —        | Base style for every data cell; a column `style` deep-merges over it field by field                                                                                                                                              |
 | `indexColumn` | `boolean \| IndexColumnOptions`                    | —        | Inject a leading row-number column; `true` for defaults. Merges shift right automatically                                                                                                                                        |
 | `mode`        | `"auto" \| "main" \| "worker" \| "stream"`         | —        | Default `"auto"`                                                                                                                                                                                                                 |
-| `onProgress`  | `(progress: number) => void`                       | —        | 0 → 1, with the leading 0 and trailing 1 each fired once on every route                                                                                                                                                          |
+| `onProgress`  | `(progress: number) => void`                       | —        | 0 → 1 after a successful conversion, with the leading 0 and trailing 1 each fired once on every route (conversion errors fire no progress callbacks)                                                                             |
 | `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                                                                                                                                                                            |
 | `download`    | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                                                                                                                                                                                    |
 | `signal`      | `AbortSignal`                                      | —        | Same cancellation semantics as on `exportExcel`; resolves an `AbortError` result and skips the degradation chain                                                                                                                 |
@@ -176,28 +176,28 @@ if (!result.success) console.error(result.error);
 exportEcharts(options: EChartsExportOptions): Promise<ExportResult>
 ```
 
-Exports one sheet from a small, explicit structural subset of an ECharts option. The adapter does not depend on the ECharts runtime or its type system, so you can pass the option object you already built — but only a documented subset is understood, and everything outside it is rejected rather than guessed.
+Exports one sheet from a small, explicit structural subset of an ECharts option. The adapter does not depend on the ECharts runtime or its type system, so you can pass the option object you already built — but only the documented structural shapes are understood. Unsupported structural shapes (dataset mode, multiple axes, object/array data points under a category axis, mixed scatter and name/value data, duplicate headers) are rejected explicitly rather than guessed; unrelated option fields (e.g. `title`, `legend`) are ignored, and in the item layout an unrecognized object datum falls back to the positional name with a `null` value.
 
 ### EChartsExportOptions
 
 `EChartsExportOptions` extends `EChartsSheetInput` with the export-level fields:
 
-| Field            | Type                                               | Required | Description                                                                      |
-| ---------------- | -------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
-| `option`         | `EChartsOptionInput`                               | yes      | The (subset of an) ECharts option to convert                                     |
-| `filename`       | `string`                                           | yes      | Download name; `.xlsx` is appended unless already present                        |
-| `sheetName`      | `string`                                           | —        | Default `"图表数据"`                                                             |
-| `layout`         | `"wide" \| "long"`                                 | —        | Default `"wide"`; only meaningful for the category layout                        |
-| `categoryHeader` | `string`                                           | —        | Default `"类目"`                                                                 |
-| `seriesHeader`   | `string`                                           | —        | Default `"系列"`                                                                 |
-| `nameHeader`     | `string`                                           | —        | Default `"名称"`                                                                 |
-| `valueHeader`    | `string`                                           | —        | Default `"数值"`                                                                 |
-| `mode`           | `"auto" \| "main" \| "worker" \| "stream"`         | —        | Default `"auto"`                                                                 |
-| `onProgress`     | `(progress: number) => void`                       | —        | 0 → 1, with the leading 0 and trailing 1 each fired once on every route          |
-| `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                            |
-| `download`       | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                                    |
-| `signal`         | `AbortSignal`                                      | —        | Same cancellation semantics as on `exportExcel`                                  |
-| `overlay`        | `boolean \| ProgressOverlayOptions`                | —        | Same as on `exportExcel`: default **on**; `false` disables, an object customizes |
+| Field            | Type                                               | Required | Description                                                                                                                                          |
+| ---------------- | -------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `option`         | `EChartsOptionInput`                               | yes      | The (subset of an) ECharts option to convert                                                                                                         |
+| `filename`       | `string`                                           | yes      | Download name; `.xlsx` is appended unless already present                                                                                            |
+| `sheetName`      | `string`                                           | —        | Default `"图表数据"`                                                                                                                                 |
+| `layout`         | `"wide" \| "long"`                                 | —        | Default `"wide"`; only meaningful for the category layout                                                                                            |
+| `categoryHeader` | `string`                                           | —        | Default `"类目"`                                                                                                                                     |
+| `seriesHeader`   | `string`                                           | —        | Default `"系列"`                                                                                                                                     |
+| `nameHeader`     | `string`                                           | —        | Default `"名称"`                                                                                                                                     |
+| `valueHeader`    | `string`                                           | —        | Default `"数值"`                                                                                                                                     |
+| `mode`           | `"auto" \| "main" \| "worker" \| "stream"`         | —        | Default `"auto"`                                                                                                                                     |
+| `onProgress`     | `(progress: number) => void`                       | —        | 0 → 1 after a successful conversion, with the leading 0 and trailing 1 each fired once on every route (conversion errors fire no progress callbacks) |
+| `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                                                                                                |
+| `download`       | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                                                                                                        |
+| `signal`         | `AbortSignal`                                      | —        | Same cancellation semantics as on `exportExcel`                                                                                                      |
+| `overlay`        | `boolean \| ProgressOverlayOptions`                | —        | Same as on `exportExcel`: default **on**; `false` disables, an object customizes                                                                     |
 
 ### EChartsOptionInput and friends
 
@@ -359,6 +359,6 @@ result.success; // false
 result.error; // Error: [excel-exporter] ECharts dataset mode is not supported ...
 ```
 
-This matches `exportExcel`, which already reports its own failures as `{ success: false, error }`: the conversion errors simply happen _before_ `exportExcel` is reached, so the wrappers catch them and wrap them in the same shape. The same bad input therefore fails identically whether it arrives through a convenience wrapper or through a hand-built `ExportOptions`.
+This matches `exportExcel`, which already reports its own failures as `{ success: false, error }`: the conversion errors simply happen _before_ `exportExcel` is reached, so the wrappers catch them and wrap them in the same shape. The same bad input therefore still resolves with a structured failure on both paths, but the details differ: conversion errors are reported by the adapter (with adapter-specific messages and only `success`/`error`), while a hand-built `ExportOptions` fails inside `exportExcel` validation (with its own message and, for validation failures, a `duration`).
 
 Note that `result.error` alone is not proof of failure: an export that succeeded via the style-less stream fallback returns `success: true` **with** an `error` carrying the degradation reason (e.g. `Fallback: styles stripped (fast stream)`), so degradation can be monitored programmatically. Check `success` first; then read `error` / `engine` / `mode` to learn how the file was actually produced rather than assuming a particular route. See [ExportResult](/packages/excel-exporter/api/01-export-excel#exportresult).

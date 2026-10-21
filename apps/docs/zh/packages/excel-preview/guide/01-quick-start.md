@@ -18,6 +18,8 @@ preview.destroy();
 
 这就是全部接入。浏览器内解析默认走 Web Worker；只要 worker 不可用，同一条管线就自动在主线程跑——业务代码零改动。触发条件：Node/SSR（无 Worker **或**无 `window` 全局），或 worker 构造/加载失败（跨域脚本 URL、404 等——该会话内永久回退，见[资产与自托管](/zh/packages/excel-preview/guide/02-assets)）。
 
+请给容器一个确定的高度（如 `#preview { height: 500px; }`，或 flex/grid 轨道）。预览根节点是 `height: 100%`、最小 200px，并在容器内部滚动；容器高度无法解析时会回退到该最小值。
+
 ## 常用选项
 
 ```ts

@@ -11,7 +11,7 @@
 
 由此带来几点值得注意的结论：
 
-- 这两个类型确实声明的公共 [`ExportOptions`](/zh/packages/excel-exporter/api/01-export-excel#exportoptions) 字段——`filename`、`mode`、`onProgress`、`onPhase`、`download`、`signal`、`overlay`——语义与主入口完全一致（同样的路由、同样的进度契约、同样的 `{ success, blob, engine, mode, duration, rowCount, error }` 结果）。
+- 这两个类型确实声明的公共 [`ExportOptions`](/zh/packages/excel-exporter/api/01-export-excel#exportoptions) 字段——`filename`、`mode`、`onProgress`、`onPhase`、`download`、`signal`、`overlay`——在**转换成功之后**与主入口完全一致（同样的路由、同样的进度契约、同样的结果字段）。转换期错误发生在进入 `exportExcel` 之前，只返回 `{ success: false, error }`：不触发任何进度回调，也没有 `duration`/`engine`/`mode`/`rowCount`，更不会显示遮罩。
 - `overlay` 在两个类型上均有声明、两个转换函数也都会透传，语义与 `exportExcel` 上完全一致：默认**开启**，`false` 关闭，传对象则自定义（见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)）。
 - 两个入口都是单 sheet：各自产出的 `sheets` 数组有且只有一项。
 
@@ -52,7 +52,7 @@ exportTable(options: TableExportOptions): Promise<ExportResult>
 | `dataStyle`   | `CellStyle`                                        | —    | 全部数据单元格的基底样式，列级 `style` 在其上逐字段深合并                                                                                                         |
 | `indexColumn` | `boolean \| IndexColumnOptions`                    | —    | 注入最左侧序号列，`true` 表示全默认；`merges` 会自动右移                                                                                                          |
 | `mode`        | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                                                                                                                                                     |
-| `onProgress`  | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                                                                                                                           |
+| `onProgress`  | `(progress: number) => void`                       | —    | 0 → 1（转换成功后），所有路径上首尾 0 与 1 各上报一次；转换期错误不会触发任何进度回调                                                                             |
 | `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                                                                                                            |
 | `download`    | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                                                                                                                  |
 | `signal`      | `AbortSignal`                                      | —    | 取消语义同 `exportExcel`：解析为 `AbortError` 失败结果并跳过降级链                                                                                                |
@@ -84,13 +84,13 @@ exportTable(options: TableExportOptions): Promise<ExportResult>
 
 | 情形                       | 错误文案                                                                                                   |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 叶子/分组列缺可用表头文案  | `[excel-exporter] table column "<prop 或 group-N>" has no usable header. Provide label, header, or title.` |
+| 叶子/分组列缺可用表头文案  | `[excel-exporter] table column "<prop or group-N>" has no usable header. Provide label, header, or title.` |
 | 叶子列有表头但缺可用字段名 | `[excel-exporter] table column #<index> has no usable prop. Provide prop, key, or dataIndex.`              |
 | `children` 构成环          | `[excel-exporter] circular children reference in table columns`                                            |
 
 几个实操中会碰到的细节：
 
-- 表头先于字段名检查，所以两者都缺的列先报表头错误。该文案里的 `<prop 或 group-N>` 在有解析出的 `prop` 时就是它，否则是占位符 `group-<index>`（首个顶层列为 `group-0`）。
+- 表头先于字段名检查，所以两者都缺的列先报表头错误。该文案里的 `<prop or group-N>` 在有解析出的 `prop` 时就是它，否则是占位符 `group-<index>`（首个顶层列为 `group-0`）。
 - `<index>` 是该列在**同层兄弟**中的位置——坏掉的子列报的是它在 `children` 里的下标，不是绝对位置。
 - 空串不算表头：表头必须是非空字符串，或有限数字（会被转成字符串）。`label: ""` 会抛错。
 - 环检测之所以存在，是因为这个转换跑在 `exportExcel` 拍平列树**之前**：没有它，循环 `children` 会表现为栈溢出，而不是一条可读的错误。
@@ -176,28 +176,28 @@ if (!result.success) console.error(result.error);
 exportEcharts(options: EChartsExportOptions): Promise<ExportResult>
 ```
 
-由 ECharts option 的一个小型、明确的结构子集导出一张 sheet。适配层不依赖 ECharts 运行时及其类型系统，因此可以直接把已经构造好的 option 对象传进来——但只认文档化的子集，子集之外一律明确拒绝，不做猜测。
+由 ECharts option 的一个小型、明确的结构子集导出一张 sheet。适配层不依赖 ECharts 运行时及其类型系统，因此可以直接把已经构造好的 option 对象传进来——但只认文档化的**结构性形态**。不支持的结构性形态（`dataset` 模式、多根轴、类目轴下的对象/数组数据点、散点与 name/value 混用、表头重复）会被明确拒绝，不做猜测；无关的 option 字段（如 `title`、`legend`）会被忽略，item 布局下无法识别的对象数据点会以位置序号作为名称、数值置 `null` 兜底。
 
 ### EChartsExportOptions
 
 `EChartsExportOptions` 在 `EChartsSheetInput` 之上追加了导出级字段：
 
-| 字段             | 类型                                               | 必填 | 说明                                                                  |
-| ---------------- | -------------------------------------------------- | ---- | --------------------------------------------------------------------- |
-| `option`         | `EChartsOptionInput`                               | 是   | 待转换的（ECharts option 子集）                                       |
-| `filename`       | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                           |
-| `sheetName`      | `string`                                           | —    | 默认 `"图表数据"`                                                     |
-| `layout`         | `"wide" \| "long"`                                 | —    | 默认 `"wide"`，仅对类目布局有意义                                     |
-| `categoryHeader` | `string`                                           | —    | 默认 `"类目"`                                                         |
-| `seriesHeader`   | `string`                                           | —    | 默认 `"系列"`                                                         |
-| `nameHeader`     | `string`                                           | —    | 默认 `"名称"`                                                         |
-| `valueHeader`    | `string`                                           | —    | 默认 `"数值"`                                                         |
-| `mode`           | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                                                         |
-| `onProgress`     | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                               |
-| `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                |
-| `download`       | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                      |
-| `signal`         | `AbortSignal`                                      | —    | 取消语义同 `exportExcel`                                              |
-| `overlay`        | `boolean \| ProgressOverlayOptions`                | —    | 与 `exportExcel` 上语义一致：默认**开启**；`false` 关闭，传对象自定义 |
+| 字段             | 类型                                               | 必填 | 说明                                                                                  |
+| ---------------- | -------------------------------------------------- | ---- | ------------------------------------------------------------------------------------- |
+| `option`         | `EChartsOptionInput`                               | 是   | 待转换的（ECharts option 子集）                                                       |
+| `filename`       | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加                                           |
+| `sheetName`      | `string`                                           | —    | 默认 `"图表数据"`                                                                     |
+| `layout`         | `"wide" \| "long"`                                 | —    | 默认 `"wide"`，仅对类目布局有意义                                                     |
+| `categoryHeader` | `string`                                           | —    | 默认 `"类目"`                                                                         |
+| `seriesHeader`   | `string`                                           | —    | 默认 `"系列"`                                                                         |
+| `nameHeader`     | `string`                                           | —    | 默认 `"名称"`                                                                         |
+| `valueHeader`    | `string`                                           | —    | 默认 `"数值"`                                                                         |
+| `mode`           | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`                                                                         |
+| `onProgress`     | `(progress: number) => void`                       | —    | 0 → 1（转换成功后），所有路径上首尾 0 与 1 各上报一次；转换期错误不会触发任何进度回调 |
+| `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                                |
+| `download`       | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                                      |
+| `signal`         | `AbortSignal`                                      | —    | 取消语义同 `exportExcel`                                                              |
+| `overlay`        | `boolean \| ProgressOverlayOptions`                | —    | 与 `exportExcel` 上语义一致：默认**开启**；`false` 关闭，传对象自定义                 |
 
 ### EChartsOptionInput 及相关类型
 
@@ -359,6 +359,6 @@ result.success; // false
 result.error; // Error: [excel-exporter] ECharts dataset mode is not supported ...
 ```
 
-这与 `exportExcel` 一致——主入口本就以 `{ success: false, error }` 上报自身失败：转换错误只是发生在进入 `exportExcel` **之前**，于是封装把它们捕获并包装成同一种形态。因此同一份坏输入，无论走便捷封装还是手工拼 `ExportOptions`，失败形态都相同。
+这与 `exportExcel` 一致——主入口本就以 `{ success: false, error }` 上报自身失败：转换错误只是发生在进入 `exportExcel` **之前**，于是封装把它们捕获并包装成同一种形态。因此同一份坏输入在两条入口上都会得到结构化的失败结果，但细节不同：转换期错误由适配层报出（消息是适配层专属，且结果只有 `success`/`error`）；手工拼 `ExportOptions` 则由 `exportExcel` 的校验报错（消息不同，校验失败时还带 `duration`）。
 
 还需注意：**仅凭 `result.error` 不能断定导出失败**——经无样式快速流兜底**成功**的导出返回的是 `success: true` 且**带有** `error`（内容为降级原因，如 `Fallback: styles stripped (fast stream)`），正因如此降级率可以被程序化监控。请先看 `success`，再读 `error` / `engine` / `mode` 了解文件实际由哪条路径产出，不要假定特定引擎。另见 [ExportResult](/zh/packages/excel-exporter/api/01-export-excel#exportresult)。

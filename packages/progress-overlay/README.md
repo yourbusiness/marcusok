@@ -60,8 +60,9 @@ Progress granularity is the caller's: only callers that emit intermediate values
 | `--mxe-track`        | 进度条轨道色               |
 | `--mxe-fill`         | 进度条填充/-spinner 描边色 |
 
-样式经一次性 `<style id="mxe-overlay-style">` 注入 `document.head`
-**末尾**（首次 show 时），因此宿主侧同特异性的自定义规则会被它覆盖——
+样式经一次性 `<style id="mxe-overlay-style">` 注入容器所在的 root node
+**末尾**（容器在 ShadowRoot 内则注入该 ShadowRoot，否则注入
+`document.head`；首次 show 时），因此宿主侧同特异性的自定义规则会被它覆盖——
 覆盖变量请用更高特异性的选择器（如 `.app-root .mxe-overlay { … }`）。
 例：
 

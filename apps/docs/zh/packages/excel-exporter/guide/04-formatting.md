@@ -56,7 +56,9 @@ columns: [
 }
 ```
 
-函数签名：`(value: unknown, row: Record<string, unknown>) => string | number | boolean`。函数无法穿过结构化克隆，各路径行为不同：main 路径（浏览器 < 20,000 行 / Node < 50,000 行，或任意行数下显式 `mode: "main"`）、Node 的 stream 路径（≥ 50,000 行，同样在主线程执行）、以及 worker 失败后的主线程重试（原始 options 里的函数仍在——被剥离的只是发给 worker 的副本）都正常执行；浏览器 worker 路径（auto ≥ 20,000 行，或显式 `mode: "worker"` / `mode: "stream"`）会**剥离函数并打印 `console.warn`**，该列以原始值导出（不报错、不回落 main）。需要 worker 路径保留格式时改为 FormatSpec。
+函数签名：`(value: unknown, row: Record<string, unknown>) => string | number | boolean`。函数无法穿过结构化克隆，各路径行为不同：main 路径（浏览器 < 20,000 行 / Node < 50,000 行，或任意行数下显式 `mode: "main"`）、Node 的 stream 路径（auto ≥ 50,000 行或显式 `mode: "stream"`，同样在主线程执行）、以及 worker 失败后的主线程重试（原始 options 里的函数仍在——被剥离的只是发给 worker 的副本）都正常执行；浏览器 worker 路径（auto ≥ 20,000 行，或显式 `mode: "worker"` / `mode: "stream"`）会**剥离函数并打印 `console.warn`**，该列以原始值导出（不报错、不回落 main）。需要 worker 路径保留格式时改为 FormatSpec。
+
+函数抛错不会被隔离：异常会从构建过程抛出，并可能触发降级/失败链，因此请在函数内部处理坏值。返回 `null` / `undefined`（或空串）会渲染为空单元格。
 
 ## 跨模式精度注意事项
 
@@ -64,12 +66,12 @@ columns: [
 
 - **存储值**：`number` 在两条路径都保留完整精度；`decimals`/`thousands` 是纯显示 numFmt。`date`/`datetime` 在两条路径存同一个 Excel 序列号。
 - **显示**：Workbook 路径通过单元格样式附加 numFmt；Stream 路径为每个不同格式码输出一个 cellXf。跨 50,000 行不再改变单元格类型或存储值。
-- **单元格/布局样式**（字体、填充、边框、宽度、冻结、筛选）仍仅 Workbook 路径支持；Stream 只恢复数字格式。
+- **单元格/布局样式**（字体、填充、边框、宽度、冻结、筛选）仍仅 Workbook 路径支持；Stream 只恢复由 FormatSpec 推导的数字/日期格式。
 - **缺失值在所有路径渲染为空单元格**，`number`、`padding` 与 `enum` 一视同仁：`null`/`undefined` 与空串/纯空白串（数据库、表单、CSV 导入中最常见的缺失值形态）绝不会变成 `0`、`"00000"` 或 `enum` 的 `fallback`。
 
 ## 日期值
 
-`date` / `datetime` 接受 `Date` 对象、可解析字符串或时间戳。两条路径都写入日期序列号，并把 pattern 作为 numFmt 附加（Workbook：单元格样式；Stream：最小 `styles.xml`），因此单元格类型与显示跨阈值一致。
+`date` / `datetime` 接受 `Date` 对象、可解析字符串或时间戳。两条路径都写入日期序列号，并把 pattern 作为 numFmt 附加（Workbook：单元格样式；Stream：最小 `styles.xml`），因此单元格类型与显示跨阈值一致——**前提是没有同时设置冲突的 `CellStyle.numFormat`**。Workbook 路径上显式的 `style.numFormat` 优先于 FormatSpec 推导出的格式码；Stream 路径忽略 `CellStyle.numFormat`，始终使用 FormatSpec pattern。保持两者一致（或省略 `style.numFormat`）才能维持跨路径显示一致。
 
 **pattern**：两条路径都把 pattern 作为数字格式交给 Excel 渲染，`yy`、单字母 `m`/`d`、`AM/PM`、引号字面量等完整格式码语义一致，不再有六 token 子集限制。
 

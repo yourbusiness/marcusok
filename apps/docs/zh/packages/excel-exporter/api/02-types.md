@@ -34,7 +34,7 @@
 
 工作表尺寸同样在导出前对照 Excel 硬上限校验：每表 1,048,576 行（表头行计入）、16,384 列（注入的 `indexColumn` 占一列）。超限的表直接以 `{ success: false }` 收场，错误中写明表名与实际行列数——否则在 stream 路径上会照常写出并 zip 成功，直到 Excel 打开时才报修复提示。
 
-**stream 路径兼容性。** 在快速流上——显式 `mode: "stream"`、auto ≥ 50,000 行、或降级兜底——单元格/布局样式会被丢弃并打印 `console.warn`：`width`、列级 `style` / `headerStyle`、表级 `headerStyle` / `dataStyle`、`freezeRows`、`autoFilter`。但 `FormatSpec` 的日期/数字 numFmt **不会**被丢弃：stream 路径会输出最小 `styles.xml`，日期保持序列号，`decimals`/`thousands` 在两条路径上都是纯显示设置。结构保留：多行表头、`merges` 与 `indexColumn` 不受影响。完整的分路径能力矩阵见 [Worker 与流式指南](/zh/packages/excel-exporter/guide/06-worker-stream)。
+**stream 路径兼容性。** 在快速流上——显式 `mode: "stream"`、auto ≥ 50,000 行、或降级兜底——单元格/布局样式会被丢弃并打印 `console.warn`：`width`、列级 `style` / `headerStyle`（含 `style.numFormat`）、表级 `headerStyle` / `dataStyle`、`freezeRows`、`autoFilter`。但 `FormatSpec` 的日期/数字 numFmt **不会**被丢弃：stream 路径会输出最小 `styles.xml`，日期保持序列号，`decimals`/`thousands` 在两条路径上都是纯显示设置。结构保留：多行表头、`merges` 与 `indexColumn` 不受影响。完整的分路径能力矩阵见 [Worker 与流式指南](/zh/packages/excel-exporter/guide/06-worker-stream)。
 
 ## IndexColumnOptions
 
@@ -48,9 +48,9 @@
 | `style?`       | `CellStyle` | —        | 序号列数据单元格样式；与表级 `dataStyle` 的合并规则同普通列           |
 | `headerStyle?` | `CellStyle` | —        | 序号列表头样式；优先于表级 `headerStyle`                              |
 
-序号列的值由行号生成、从不读取 `data`；用户列声明保留 prop `__index__` 会被明确报错拒绝。已有 `merges` 自动右移一列，仍指向原目标。
+序号列的值由行号生成、从不读取 `data`。经 `exportExcel` / `applyIndexColumn` 处理时，用户列声明保留 prop `__index__` 会被明确报错拒绝；底层构建器不执行该检查——直连时手写的 `__index__`（或旧别名 `key`）叶子列会被当作行号列，其数据值会被行号替换。已有 `merges` 自动右移一列，仍指向原目标。
 
-`exportExcel` 会在模式路由之前自动展开该字段（且只展开一次），这正是它「在所有路径生效」的原因。底层入口 `WorkbookBuilder.addSheet()` 与 `exportAsStream()` **不会**自动展开——它们只认识已展开的 `__index__` 列，直连时请先调用 `applyIndexColumn(sheet)`（随包导出，保留字 `INDEX_PROP` 一并导出）。否则 `indexColumn` 会被静默忽略。
+`exportExcel` 会在模式路由之前自动展开该字段（且只展开一次），这正是它「在所有路径生效」的原因。底层入口 `WorkbookBuilder.addSheet()` 与 `exportAsStream()` **不会**自动展开——它们只认识已展开的 `__index__` 列，直连时请先调用 `applyIndexColumn(sheet)`（随包导出，保留字 `INDEX_PROP` 一并导出）。否则 `indexColumn` 会被静默忽略。`WorkbookBuilder` 直连路径也不执行上表 `name` 行的大小写不敏感重名规则：它只拿到引擎的精确重名检查，因此 `Report` / `REPORT` 可以同时存在。（`exportAsStream` 与 `exportExcel` 一样会做小写化的重名检查。）
 
 ## MergeRange
 
@@ -73,7 +73,7 @@
 | `border?`    | `{ top?, bottom?, left?, right? }`                     | 边框，每边 `{ style: BorderStyle, color? }`——取值见 [BorderStyle](#borderstyle)                                                                       |
 | `numFormat?` | `string`                                               | Excel 数字格式码                                                                                                                                      |
 
-样式字段在导出前置校验——非法值以 `{ success: false }` 失败并给出定位到具体表/列的报错，而不是拖到后面变成晦涩的引擎错误或降级导出：颜色必须为 6 位 RGB hex（`"FF0000"`；`"red"` 与 `"#FF0000"` 都会被拒）；`border.*.style` 必须是上文 `BorderStyle` 之一；`font.size` 必须为有限正数；`alignment.textRotation` 必须是 0–180 的**整数**（`45.5` 会被拒绝而非四舍五入）。校验覆盖表级、列级（含分组列被忽略的样式）与 `indexColumn` 样式的全部出现点。
+样式字段在导出前置校验——非法值以 `{ success: false }` 失败并给出定位到具体表/列的报错，而不是拖到后面变成晦涩的引擎错误或降级导出：颜色必须为 6 位 RGB hex（`"FF0000"`；`"red"` 与 `"#FF0000"` 都会被拒）；`border.*.style` 必须是上文 `BorderStyle` 之一；`font.size` 必须为有限正数；`alignment.textRotation` 必须是 0–180 的**整数**（`45.5` 会被拒绝而非四舍五入）。校验覆盖表级、列级（含分组列被忽略的样式）与 `indexColumn` 样式的全部出现点。校验范围仅限上述字段：`numFormat`、`fill.pattern`、对齐枚举值与 `font.name` 不做前置校验，会直接传给引擎。
 
 ## BorderStyle
 

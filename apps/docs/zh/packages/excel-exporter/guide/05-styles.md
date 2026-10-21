@@ -139,7 +139,7 @@ indexColumn: {
 | `"¥"#,##0.00`        | `¥12,999.99`       |
 | `yyyy"年"M"月"d"日"` | `2026年7月1日`     |
 
-格式码中的字面量文本用双引号包裹；其余遵循 Excel 格式码语法。这些格式码由 Excel 通过 `numFormat` 渲染，因此只在带样式的（Workbook）路径生效——Stream 路径会整段丢弃样式并回落到该列的 `FormatSpec` pattern，而 pattern **不解析**引号字面量（见[值格式化](/zh/packages/excel-exporter/guide/04-formatting)）。
+格式码中的字面量文本用双引号包裹；其余遵循 Excel 格式码语法。`CellStyle.numFormat` 属于单元格样式，因此只在带样式的（Workbook）路径生效。Stream 路径会丢弃它；该列在 Stream 上的数字/日期显示完全来自其 `FormatSpec`（`{ type: "date", pattern }` / `{ type: "number", decimals, thousands }`），后者会作为 numFmt 写入 Stream 的最小 `styles.xml`，因此**会**正确解释引号字面量。没有 `FormatSpec` 的列在 Stream 路径上没有自定义数字格式。Workbook 路径上显式的 `style.numFormat` 优先于 FormatSpec 推导出的格式码，因此若某列同时设置了两者，请保持两个格式码一致（或省略 `style.numFormat`），以维持跨路径显示一致。
 
 ## 自定义 CellStyle
 
@@ -223,7 +223,7 @@ await exportExcel({
 });
 ```
 
-合并是**字段级**的，不是整体替换：`dataStyle` 提供基底，列级 `style` 只覆盖它声明了的字段——整表边框不会被一个只设置了 `numFormat` 的列冲掉，反之亦然。这与 `headerStyle` 的整体替换语义是刻意不同的。与其他样式一样，`dataStyle` 在流式路径（≥ 50,000 行 / 降级导出）会被丢弃并告警。
+合并是**字段级**的，不是整体替换：`dataStyle` 提供基底，列级 `style` 只覆盖它声明了的字段——整表边框不会被一个只设置了 `numFormat` 的列冲掉，反之亦然。合并只深入一层：`font` / `fill` / `alignment` / `border` 各自做字段合并；但 `border` 内部的单个边对象（`border.bottom` 等）是整体替换的，只写 `{ style: "medium" }` 会丢掉基底的 `color`，需要自己把基底边对象展开回来。这与 `headerStyle` 的整体替换语义是刻意不同的。与其他样式一样，`dataStyle` 在流式路径（≥ 50,000 行 / 降级导出）会被丢弃并告警。
 
 ## 表头样式：表级默认、列级覆盖
 
@@ -276,7 +276,7 @@ sheets: [
 - **所有导出路径**（workbook / worker / stream）均支持：它是结构而非样式，连无样式流式路径也保留序号。
 - 表头文案默认「序号」、列宽默认 6；对象形态用于自定义它们与样式。
 - 已有 `merges` 自动右移一列，仍指向原目标。
-- 序号值从不读取 `data`；用户列声明保留 prop `__index__` 会被明确报错拒绝。
+- 序号值从不读取 `data`；经 `exportExcel`（或 `applyIndexColumn`）处理时，用户列声明保留 prop `__index__` 会被明确报错拒绝。底层 `WorkbookBuilder` / `exportAsStream` 不执行该检查——直连时手写的 `__index__` 叶子列**就是**行号列，其数据会被行号替换。
 - 样式规则与普通列一致：表头走 `indexColumn.headerStyle`（优先于表级 `headerStyle`），数据单元格走 `indexColumn.style`（与表级 `dataStyle` 合并）。
 
 完整选项见 [API 参考](../api/02-types)。
@@ -285,7 +285,7 @@ sheets: [
 
 - **样式仅在 Workbook 路径渲染**：auto 模式 50,000 行以下（主线程，或浏览器 20,000–49,999 行的 Worker + Workbook）。流式路径（≥ 50,000 行或降级导出）会剥离全部样式——`style` / `headerStyle` / `dataStyle` / `width` / `freezeRows`——并输出 console 告警。大文件导出不要依赖样式。
 - **颜色是 6 位 RGB hex、不带 `#`**（`"1F4E79"`），与 modern-xlsx 的类型约定一致。
-- **复用预设零成本**：引擎对结构相同的样式去重、共享同一样式索引，N 个列引用 `StylePresets.currency` 不会膨胀文件——无需手工共享对象。
+- **复用预设零成本**：`WorkbookBuilder` 会按 `JSON.stringify` 缓存结构相同的样式并复用同一样式索引，N 个列引用 `StylePresets.currency` 不会膨胀文件——无需手工共享对象。（去重发生在本包的构建器里；modern-xlsx 的 `StyleBuilder` 本身每次调用都会追加新记录。）
 
 ## 与 FormatSpec 的关系
 

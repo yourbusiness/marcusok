@@ -25,6 +25,8 @@ function createPreview(
 | `onParsed`      | `(info: PreviewParsedInfo) => void`         | —                | 渲染就绪回调：首次解析渲染完成后与**每次 sheet 切换完成后**都会触发（`duration.parse` 复用首次解析耗时，`duration.total` 则一直从首次加载起累计——要衡量本次切换本身的耗时请用 `duration.render`）；上报 sheet 列表、规模与耗时             |
 | `onError`       | `(error: PreviewError) => void`             | —                | 失败回调（错误码见下）                                                                                                                                                                                                                     |
 
+**容器尺寸。** 渲染器会追加一个 `width: 100%; height: 100%`、`min-height: 200px` 的根节点，并在其中滚动。请给容器一个确定的高度（例如 `height: 500px`，或 flex/grid 轨道）；否则百分比高度无法解析，预览只会回退到 200px 的最小高度，而不是填满预期区域。
+
 `PreviewParsedInfo`：
 
 ```ts
