@@ -122,6 +122,39 @@ describe("WasmLoader Node auto-init (initWasmSync path)", () => {
     expect(initWasmMock).toHaveBeenCalledWith("https://cdn.example/x.wasm");
   });
 
+  it("reads a configured file: URL synchronously (Node/Electron self-hosting)", async () => {
+    const loader = new WasmLoader({ wasmUrl: "file:///tmp/custom.wasm" });
+    await loader.ensureLoaded();
+    expect(loader.isReady).toBe(true);
+    expect(readFileSyncMock).toHaveBeenCalledWith(
+      new URL("file:///tmp/custom.wasm"),
+    );
+    expect(initWasmSyncMock).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+    expect(initWasmMock).not.toHaveBeenCalled();
+  });
+
+  it("reads a configured plain path synchronously", async () => {
+    const loader = new WasmLoader({ wasmUrl: "/tmp/custom-modern-xlsx.wasm" });
+    await loader.ensureLoaded();
+    expect(loader.isReady).toBe(true);
+    expect(readFileSyncMock).toHaveBeenCalledWith(
+      "/tmp/custom-modern-xlsx.wasm",
+    );
+    expect(initWasmMock).not.toHaveBeenCalled();
+  });
+
+  it("fails with the real fs reason for an unreadable configured local file", async () => {
+    readFileSyncMock.mockImplementation(() => {
+      throw new Error("ENOENT: no such file or directory");
+    });
+    const loader = new WasmLoader({ wasmUrl: "/tmp/missing.wasm" });
+    await expect(loader.ensureLoaded()).rejects.toThrow(
+      /Failed to load the configured WASM file "\/tmp\/missing\.wasm".*ENOENT/,
+    );
+    // No fetch fallback for an explicitly configured local file.
+    expect(initWasmMock).not.toHaveBeenCalled();
+  });
+
   it("never auto-inits outside Node (browser-like global scope)", async () => {
     // process is the environment gate; without it the loader must take the
     // fetch path even with no URL configured.

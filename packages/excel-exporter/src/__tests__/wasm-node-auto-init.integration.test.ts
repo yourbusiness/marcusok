@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 // synchronously, and a small export must come back styled-engine
 // ("modern-xlsx" mode "main", not the style-less stream fallback).
 import { exportExcel, getWasmLoader } from "../index";
+import { WasmLoader, defaultWasmUrl } from "@marcusok/xlsx-core";
 
 describe("Node auto-init (integration, real wasm binary)", () => {
   it("loads the real modern-xlsx.wasm from node_modules with zero configuration", async () => {
@@ -15,6 +16,23 @@ describe("Node auto-init (integration, real wasm binary)", () => {
     await loader.ensureLoaded();
 
     expect(loader.isReady).toBe(true);
+  });
+
+  it("accepts an explicitly configured file: wasmUrl in Node", async () => {
+    // Self-hosted / Electron deployments pass a local path; Node's fetch
+    // rejects file: URLs, so the loader must read it synchronously.
+    const fresh = new WasmLoader({ wasmUrl: defaultWasmUrl() });
+    await fresh.ensureLoaded();
+    expect(fresh.isReady).toBe(true);
+  });
+
+  it("reports the real fs reason for a missing configured file", async () => {
+    const fresh = new WasmLoader({
+      wasmUrl: new URL("./does-not-exist.wasm", import.meta.url),
+    });
+    await expect(fresh.ensureLoaded()).rejects.toThrow(
+      /Failed to load the configured WASM file .*does-not-exist\.wasm/,
+    );
   });
 
   it("exports through the modern-xlsx engine without any configuration", async () => {

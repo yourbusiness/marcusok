@@ -58,6 +58,18 @@ export function defaultWasmUrl(): URL {
   return new URL("./modern-xlsx.wasm", import.meta.url);
 }
 
+/**
+ * Node 下可当作本地文件读取的 wasm 位置：file: URL、普通相对/绝对路径、
+ * Windows 盘符路径。带其他 scheme 的字符串（https:/data:/blob:）仍走 fetch。
+ */
+function isNodeFileLikeWasm(url: string | URL): boolean {
+  if (url instanceof URL) return url.protocol === "file:";
+  const s = String(url);
+  if (/^[A-Za-z]:[\\/]/.test(s)) return true; // Windows drive path
+  if (!/^[A-Za-z][A-Za-z0-9+.-]*:/.test(s)) return true; // plain path
+  return s.toLowerCase().startsWith("file:");
+}
+
 export class WasmLoader {
   private state: LoadState = "idle";
   private promise: Promise<void> | null = null;
@@ -206,31 +218,46 @@ export class WasmLoader {
   }
 
   /**
-   * Node auto-init: when no wasmUrl is configured and we run on Node, read
-   * this package's own `dist/modern-xlsx.wasm` from disk and initialize
+   * Node auto-init: on Node, read the wasm from disk and initialize it
    * synchronously (Node's fetch rejects the file:// URL the browser default
    * would produce). This removes any init boilerplate from Node consumers —
    * nothing to call, nothing to copy.
    *
-   * Resolution order within this method:
+   * With no wasmUrl configured, resolution order is:
    *  1. `./modern-xlsx.wasm` next to the bundled entry (the business
    *     packages' dist/, which re-ship the binary).
    *  2. `../dist/modern-xlsx.wasm` — the binary's location when this module
    *     runs from src/ (repo tests, source-aliased monorepo consumers).
    *
-   * Returns false in browsers, when a URL is configured, or on any failure,
-   * so the standard initWasm path (and its stream degradation) is untouched.
+   * A configured local path or `file:` URL is read directly (Electron /
+   * self-hosted Node deployments); HTTP(S)/data URLs stay on the fetch path.
+   * Returns false in browsers, for fetch-style URLs, or when the zero-config
+   * lookup fails; an explicitly configured local file that cannot be read
+   * throws with the real fs/compile reason instead of degrading to a
+   * misleading fetch error.
    *
    * Node built-ins MUST stay dynamically imported: this module also ships in
    * browser bundles, where a static `import "node:fs"` would fail to resolve.
    */
   private async tryNodeAutoInit(): Promise<boolean> {
-    if (this.opts.wasmUrl !== undefined) return false;
     if (typeof process === "undefined" || !process.versions?.node) return false;
+    const configured = this.opts.wasmUrl;
+    const configuredLocal =
+      configured !== undefined && isNodeFileLikeWasm(configured);
+    // HTTP(S)/data URLs stay on the fetch path. A configured local path (plain
+    // path or file: URL) is read from disk like the zero-config default —
+    // Node's fetch rejects file: URLs, so treating it as a fetch target made
+    // configureWasm({wasmUrl}) unusable in Node/Electron.
+    if (configured !== undefined && !configuredLocal) return false;
     try {
       // Test suites mock modern-xlsx with a bare { initWasm } factory; a
       // missing initWasmSync must skip auto-init, not throw a TypeError.
-      if (typeof initWasmSync !== "function") return false;
+      if (typeof initWasmSync !== "function") {
+        if (configuredLocal) {
+          throw new Error("initWasmSync is unavailable in this environment");
+        }
+        return false;
+      }
       // esbuild（platform:"browser"，见 tsup.config.ts）会把字面量 "node:fs"
       // 重写成裸 "fs"——恰是 tsup 插件为 modern-xlsx 消除的那类消费方浏览器
       // 构建警告源（tsup-plugins.ts 注释明确要求本处 import 保留）。
@@ -242,16 +269,37 @@ export class WasmLoader {
         readFileSync: (path: string | URL) => Uint8Array;
       };
       let bytes: Uint8Array;
-      try {
-        bytes = fsNs.readFileSync(defaultWasmUrl());
-      } catch {
-        bytes = fsNs.readFileSync(
-          new URL("../dist/modern-xlsx.wasm", import.meta.url),
-        );
+      if (configuredLocal) {
+        // fs.readFileSync treats a string as a literal path: a "file://..."
+        // string must be converted to a URL object (Node's fetch-style file
+        // URL rejection is why this path exists in the first place).
+        const target =
+          typeof configured === "string" &&
+          configured.toLowerCase().startsWith("file:")
+            ? new URL(configured)
+            : configured;
+        bytes = fsNs.readFileSync(target);
+      } else {
+        try {
+          bytes = fsNs.readFileSync(defaultWasmUrl());
+        } catch {
+          bytes = fsNs.readFileSync(
+            new URL("../dist/modern-xlsx.wasm", import.meta.url),
+          );
+        }
       }
       initWasmSync(bytes);
       return true;
     } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      if (configuredLocal) {
+        // An explicitly configured local file is a deliberate deployment
+        // choice: fail with the real fs/compile reason instead of falling
+        // through to fetch(file://) and reporting a misleading "fetch failed".
+        throw new Error(
+          `[xlsx-core] Failed to load the configured WASM file "${String(configured)}": ${reason}`,
+        );
+      }
       // Resolution/read/init failure (e.g. a consumer bundling for Node
       // without the package files on disk): fall through to initWasm,
       // which retries and degrades exactly as before this path existed.
@@ -259,9 +307,7 @@ export class WasmLoader {
       // fetch(file://…) 必然失败，最终报错只有误导性的 "fetch failed"——
       // ENOENT / CompileError（wasm 损坏、0 字节）等真实原因只在此处可见。
       console.warn(
-        `[xlsx-core] Node WASM auto-init failed, falling back to the standard initWasm path. Reason: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `[xlsx-core] Node WASM auto-init failed, falling back to the standard initWasm path. Reason: ${reason}`,
       );
       return false;
     }

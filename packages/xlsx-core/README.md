@@ -36,7 +36,10 @@
     0/负数是「立即超时」而非禁用）与 `LoadState`。URL 变更限制：WASM
     加载成功后再改 `wasmUrl` 只在全新 JS realm 生效（刷新页面或
     终止后重建的 worker——modern-xlsx 的 `initWasm` 幂等、首次成功即锁定），
-    两个业务包 README 有面向用户的完整说明。另按名再导出 24 个
+    两个业务包 README 有面向用户的完整说明。Node 下 `wasmUrl` 支持
+    HTTP(S) 地址、普通文件路径与 `file:` URL——本地路径由 `fs` 同步读取并
+    `initWasmSync`（显式配置的本地文件读取失败会给真实 fs/编译原因，不回退
+    fetch）。另按名再导出 24 个
     modern-xlsx 类型（`Worksheet`、`CellData`、`FontData`、`AlignmentData`
     等）。引擎运行时已打包进本包 `dist`。
 - **tsup esbuild 插件** —— `@marcusok/xlsx-core/tsup` 暴露两个插件

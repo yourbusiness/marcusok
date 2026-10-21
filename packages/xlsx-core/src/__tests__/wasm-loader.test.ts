@@ -24,7 +24,7 @@ describe("WasmLoader error recovery", () => {
 
   it("parks in the error state after retries are exhausted and refuses to re-run", async () => {
     initWasmMock.mockRejectedValue(new Error("boom"));
-    const loader = makeLoader("bad.wasm");
+    const loader = makeLoader("https://example.com/bad.wasm");
 
     await expect(loader.ensureLoaded()).rejects.toThrow(
       /failed after 2 attempts: boom/,
@@ -39,7 +39,7 @@ describe("WasmLoader error recovery", () => {
 
   it("clears the error state on ANY updateOptions call, so the next load retries", async () => {
     initWasmMock.mockRejectedValue(new Error("network down"));
-    const loader = makeLoader("good.wasm");
+    const loader = makeLoader("https://example.com/good.wasm");
     await expect(loader.ensureLoaded()).rejects.toThrow(/failed after 2/);
 
     // Same URL, only a timeout tweak: previously this left the loader stuck
@@ -62,18 +62,20 @@ describe("WasmLoader error recovery", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       initWasmMock.mockResolvedValue(undefined);
-      const loader = makeLoader("a.wasm");
+      const loader = makeLoader("https://example.com/a.wasm");
       await loader.ensureLoaded();
       expect(loader.isReady).toBe(true);
       expect(initWasmMock).toHaveBeenCalledTimes(1);
 
-      loader.updateOptions({ wasmUrl: "b.wasm" });
+      loader.updateOptions({ wasmUrl: "https://example.com/b.wasm" });
       expect(loader.isReady).toBe(false);
 
       await loader.ensureLoaded();
       expect(loader.isReady).toBe(true);
       expect(initWasmMock).toHaveBeenCalledTimes(2);
-      expect(initWasmMock).toHaveBeenLastCalledWith("b.wasm");
+      expect(initWasmMock).toHaveBeenLastCalledWith(
+        "https://example.com/b.wasm",
+      );
     } finally {
       warn.mockRestore();
     }
@@ -86,11 +88,11 @@ describe("WasmLoader error recovery", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       initWasmMock.mockResolvedValue(undefined);
-      const loader = makeLoader("a.wasm");
+      const loader = makeLoader("https://example.com/a.wasm");
       await loader.ensureLoaded();
       expect(warn).not.toHaveBeenCalled();
 
-      loader.updateOptions({ wasmUrl: "b.wasm" });
+      loader.updateOptions({ wasmUrl: "https://example.com/b.wasm" });
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0][0])).toContain("idempotent");
     } finally {
@@ -102,7 +104,7 @@ describe("WasmLoader error recovery", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       initWasmMock.mockResolvedValue(undefined);
-      const loader = makeLoader("a.wasm");
+      const loader = makeLoader("https://example.com/a.wasm");
       await loader.ensureLoaded();
 
       loader.updateOptions({ timeoutMs: 5_000, maxRetries: 5 });
@@ -148,12 +150,12 @@ describe("WasmLoader error recovery", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       initWasmMock.mockRejectedValueOnce(new Error("old url fails"));
-      const loader = makeLoader("a.wasm");
+      const loader = makeLoader("https://example.com/a.wasm");
       const superseded = loader.ensureLoaded();
       // 等 attempt 1 确实发生（此后 A 处于退避等待中）。
       await vi.waitFor(() => expect(initWasmMock).toHaveBeenCalledTimes(1));
 
-      loader.updateOptions({ wasmUrl: "b.wasm" });
+      loader.updateOptions({ wasmUrl: "https://example.com/b.wasm" });
       initWasmMock.mockResolvedValue(undefined);
       await loader.ensureLoaded();
       expect(loader.isReady).toBe(true);
@@ -234,7 +236,7 @@ describe("WasmLoader error recovery", () => {
         resolveInit = resolve;
       }),
     );
-    const loader = makeLoader("slow.wasm");
+    const loader = makeLoader("https://example.com/slow.wasm");
     await expect(loader.ensureLoaded()).rejects.toThrow(
       /failed after 2 attempts/,
     );
@@ -256,7 +258,7 @@ describe("WasmLoader error recovery", () => {
         rejectInit = reject;
       }),
     );
-    const loader = makeLoader("slow-bad.wasm");
+    const loader = makeLoader("https://example.com/slow-bad.wasm");
     await expect(loader.ensureLoaded()).rejects.toThrow(
       /failed after 2 attempts/,
     );
