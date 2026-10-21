@@ -104,6 +104,91 @@ describe("worker 超时（挂死保护）", () => {
   });
 });
 
+describe("terminateParseWorker（手动回收逃生口）", () => {
+  // 换 parseWorkerUrl/wasmUrl 后让新配置生效的公开途径（worker 仅在首次
+  // 创建时读一次 URL；重建 preview 无效——worker 是模块级单例）。
+  // 观测手段沿用本文件的 CSV 技巧：字节是 CSV，主线程本可解析成功——若
+  // 终止连坐误走主线程回退，结果会变成 ok:true，与"不回退"立刻区分。
+
+  it("在途请求以 noFallback 失败、不回退主线程复跑，worker 被 terminate", async () => {
+    vi.resetModules();
+    let terminations = 0;
+    class HungWorker {
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      postMessage() {}
+      terminate() {
+        terminations++;
+      }
+    }
+    vi.stubGlobal("Worker", HungWorker);
+    const { parseWorkbookSource: fresh, terminateParseWorker } =
+      await import("../worker/worker-client");
+
+    const promise = fresh({ bytes: csvBytes });
+    terminateParseWorker();
+    const r = await promise;
+    expect(terminations).toBe(1);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.noFallback).toBe(true);
+      expect(r.message).toContain("terminateParseWorker");
+    }
+  });
+
+  it("空闲时调用是无害 no-op；终止不永久禁用 worker 路径：下次解析重建新实例", async () => {
+    vi.resetModules();
+    let constructions = 0;
+    class HungWorker {
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      constructor() {
+        constructions++;
+      }
+      postMessage() {}
+      terminate() {}
+    }
+    vi.stubGlobal("Worker", HungWorker);
+    const mod = await import("../worker/worker-client");
+
+    // 无 worker 无在途请求：不得抛错、不得触发构造
+    mod.terminateParseWorker();
+    expect(constructions).toBe(0);
+
+    const p1 = mod.parseWorkbookSource({ bytes: csvBytes });
+    mod.terminateParseWorker();
+    const r1 = await p1;
+    expect(r1.ok).toBe(false);
+
+    // 换成能应答的实现（模拟按新配置重建的 worker）：应构造第二个实例并
+    // 正常服务——terminate 不置 workerBroken，与超时同口径
+    class ResponsiveWorker {
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      constructor() {
+        constructions++;
+      }
+      postMessage(msg: { id: number }) {
+        queueMicrotask(() => {
+          this.onmessage?.({
+            data: {
+              id: msg.id,
+              ok: true,
+              workbook: {
+                sheets: [{ name: "CSV", rowCount: 2 }],
+                activeSheetIndex: 0,
+                dateSystem: "date1900",
+              },
+            },
+          });
+        });
+      }
+      terminate() {}
+    }
+    vi.stubGlobal("Worker", ResponsiveWorker);
+    const r2 = await mod.parseWorkbookSource({ bytes: csvBytes });
+    expect(r2.ok).toBe(true);
+    expect(constructions).toBe(2); // 挂死实例 + 重建实例
+  });
+});
+
 describe("worker 构造失败（跨域脚本同步抛错）", () => {
   // worker 脚本受浏览器同源限制：parseWorkerUrl 配成裸 CDN 域名时
   // new Worker() 在 Chrome 下同步抛 SecurityError。异常若穿透到调用方，

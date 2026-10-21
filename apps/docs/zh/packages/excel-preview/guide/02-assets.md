@@ -41,6 +41,7 @@ configureWasm({ wasmUrl, parseWorkerUrl });
 从导出包 loader 继承的注意事项（两者共用）：
 
 - `configureWasm` 要在**第一次预览之前**调用；成功加载后改 WASM URL 只在全新 JS realm 生效（刷新页面或新建 worker）。
+- 换 URL 需要先回收旧 worker：parse worker 仅在首次创建时读一次 `parseWorkerUrl`（worker 内的 `initWasm` 读 `wasmUrl` 同理）。在下一次解析前调用主入口导出的 `terminateParseWorker()`——在途解析以 noFallback 拒绝、不在主线程重跑，下次解析按当前配置重建新 worker。**重建 preview 不起作用**：worker 是跨实例共享的模块级单例。
 - worker 加载失败时自动回退主线程解析——预览仍可用，代价是大文件解析期间阻塞主线程。
 
 ## loader 默认值

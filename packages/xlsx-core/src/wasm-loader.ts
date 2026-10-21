@@ -103,7 +103,8 @@ export class WasmLoader {
    * genuinely takes effect only in a fresh JS realm (a page reload, or a
    * worker created after the consuming package's terminateWorker-style
    * escape hatch — e.g. `terminateWorker()` from
-   * `@marcusok/excel-exporter/worker-utils`). updateOptions warns when any
+   * `@marcusok/excel-exporter/worker-utils` or `terminateParseWorker()`
+   * from `@marcusok/excel-preview`). updateOptions warns when any
    * part of this caveat applies.
    */
   updateOptions(opts: LoaderOptions): void {
@@ -128,7 +129,8 @@ export class WasmLoader {
           "one settles (or never, if it already succeeded). The new URL genuinely takes " +
           "effect only in a fresh JS realm (reload the page, or terminate the shared " +
           "worker before the next operation — e.g. terminateWorker() from " +
-          "@marcusok/excel-exporter/worker-utils).",
+          "@marcusok/excel-exporter/worker-utils, or terminateParseWorker() from " +
+          "@marcusok/excel-preview for the parse worker).",
       );
     }
     // workerUrl 与 wasmUrl 同类限制但形态不同：导出包的共享 Worker 实例在
@@ -150,7 +152,10 @@ export class WasmLoader {
       );
     }
     // parseWorkerUrl 与 workerUrl 同机制（excel-preview 的共享 parse worker
-    // 也在首次创建时读取一次，之后不再重读），镜像同一警告。
+    // 也在首次创建时读取一次，之后不再重读），镜像同一警告。逃生口是
+    // excel-preview 的 terminateParseWorker()——旧文案的 "recreate the
+    // preview" 是无效处方：parse worker 是模块级单例、跨 preview 实例共享，
+    // 重建 preview 不会重建 worker。
     const parseWorkerUrlChanged =
       opts.parseWorkerUrl !== undefined &&
       (this.opts.parseWorkerUrl === undefined
@@ -160,8 +165,10 @@ export class WasmLoader {
       console.warn(
         "[xlsx-core] parseWorkerUrl changed. The shared parse Worker reads its script URL " +
           "once at creation and is reused afterwards, so an already-created worker keeps " +
-          "the old URL. Reload the page (or recreate the preview) before the next parse " +
-          "for the new URL to take effect.",
+          "the old URL. Terminate it (terminateParseWorker() from @marcusok/excel-preview) " +
+          "before the next parse — or reload the page — for the new URL to take effect. " +
+          "Recreating the preview is not enough: the parse worker is a module-level " +
+          "singleton shared across preview instances.",
       );
     }
     this.opts = { ...this.opts, ...opts };

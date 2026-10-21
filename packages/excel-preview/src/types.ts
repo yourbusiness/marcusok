@@ -26,6 +26,9 @@ export interface PreviewSheet {
   visible: boolean;
   /** 文件声明的视图开关（缺省 true）。 */
   showGridLines: boolean;
+  /** 文件声明的 RTL 视图开关（缺省 LTR）。已解析进模型但渲染层**暂未消费**：
+   * 预览目前固定按 LTR 渲染（文档站 limits 页明示），本字段为 RTL 支持的
+   * 前瞻保留——消费方不应据此判断实际渲染方向。 */
   rightToLeft: boolean;
   /** 数据边界（1-based，含样式格；合并区末行/列已并入——纯合并不写覆盖格，
    * 只按内容归约会把合并区截小，见 parse/model.ts）。 */

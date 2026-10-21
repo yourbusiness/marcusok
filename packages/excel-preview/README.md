@@ -88,7 +88,11 @@ deduplicated as an asset by content-hash naming and the HTTP cache).
 Self-hosted copies use the same `configureWasm({ wasmUrl, parseWorkerUrl })`
 call shape as the exporter (the parse worker has its own `parseWorkerUrl`
 field — each package's worker is a different script, so one field could not
-serve both).
+serve both). The parse worker is a module-level singleton that reads
+`parseWorkerUrl` once at creation: after changing URLs, call
+`terminateParseWorker()` (exported from the main entry) — or reload the page —
+before the next parse. In-flight parses are rejected without a main-thread
+rerun; the next parse rebuilds a fresh worker from the current options.
 
 ## Documentation
 

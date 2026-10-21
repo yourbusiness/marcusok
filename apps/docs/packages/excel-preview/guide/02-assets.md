@@ -41,6 +41,7 @@ configureWasm({ wasmUrl, parseWorkerUrl });
 Notes carried over from the exporter's loader (they share it):
 
 - Call `configureWasm` **before** the first preview; a WASM URL change after a successful load only takes effect in a fresh JS realm (page reload or a newly created worker).
+- URL changes need the old worker gone: the parse worker reads `parseWorkerUrl` once at creation (the worker-side `initWasm` reads `wasmUrl` the same way). Call `terminateParseWorker()` (exported from the main entry) before the next parse — in-flight parses are rejected without a main-thread rerun, and the next parse creates a fresh worker from the current options. Recreating the preview is **not** enough: the worker is a module-level singleton shared across preview instances.
 - The worker falls back to the main-thread parse path when it fails to load — the preview keeps working, at the cost of blocking during large parses.
 
 ## Loader defaults

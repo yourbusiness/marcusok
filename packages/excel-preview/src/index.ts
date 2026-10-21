@@ -34,6 +34,10 @@ export type {
 // WASM/worker 自托管配置面与 excel-exporter 同构（共享 core 的同一 loader）
 export { configureWasm, getWasmLoader } from "@marcusok/xlsx-core";
 export type { LoaderOptions, LoadState } from "@marcusok/xlsx-core";
+// 手动回收共享解析 worker：换 parseWorkerUrl/wasmUrl 后让新配置生效的
+// 逃生口（worker 仅在首次创建时读一次 URL，重建 preview 无效——它是模块级
+// 单例），语义详见 worker-client 的 JSDoc
+export { terminateParseWorker } from "./worker/worker-client";
 // 自定义渲染器可直接复用的单元格格式化器（渲染器同源实现）
 export { formatCellValue } from "./numfmt/format";
 export type { FormattedValue } from "./numfmt/format";

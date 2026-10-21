@@ -190,6 +190,25 @@ describe("WasmLoader error recovery", () => {
     }
   });
 
+  it("warns that a parseWorkerUrl change points at terminateParseWorker, not the old ineffective advice", () => {
+    // 与 workerUrl 同机制；警告必须指出 terminateParseWorker() 这条真实
+    // 生效路径。旧文案的 "recreate the preview" 是无效处方（parse worker
+    // 是模块级单例，重建 preview 不重建 worker），断言防止它悄悄回来。
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const loader = makeLoader();
+      loader.updateOptions({
+        parseWorkerUrl: "https://cdn.example.com/parse.worker.js",
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+      const text = String(warn.mock.calls[0][0]);
+      expect(text).toContain("terminateParseWorker");
+      expect(text).not.toContain("recreate the preview");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("falls back to initWasm when the mocked modern-xlsx lacks initWasmSync", async () => {
     // The mock factory in this file has no initWasmSync export (test doubles
     // often won't): Node auto-init must step aside instead of throwing when

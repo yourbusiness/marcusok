@@ -216,6 +216,29 @@ function rejectAllPending(err: Omit<ParseErr, "ok">): void {
 }
 
 /**
+ * 终止共享解析 worker 并拒绝全部在途请求（公开逃生口，主入口导出）。
+ * 在途请求标 noFallback（与超时/导出包 terminateWorker 同口径）：主动终止
+ * 通常发生在换 parseWorkerUrl/wasmUrl 或页面收尾时，此后把在途的大文件解析
+ * 重跑到主线程既违背终止意图、又是 worker 路由要规避的冻结源——直接失败，
+ * 调用方重试即可。
+ *
+ * 与超时一样**不**置 workerBroken：下一次解析会按 loader 当前配置（含新换
+ * 的 URL——worker 仅在首次创建时读一次，此后不再重读，见 wasm-loader 的
+ * updateOptions 警告）重建新 worker。注意重建 preview 不起作用：worker 是
+ * 模块级单例，跨 preview 实例共享，只有本函数（或刷新页面）能回收它。
+ */
+export function terminateParseWorker(): void {
+  worker?.terminate();
+  worker = null;
+  rejectAllPending({
+    code: "UNKNOWN",
+    message:
+      "parse worker terminated via terminateParseWorker(); retry the parse",
+    noFallback: true,
+  });
+}
+
+/**
  * 解析入口：浏览器走共享 Worker；Node/SSR 等无 Worker 环境主线程。Worker
  * 失败（脚本加载失败/内部错误）时以未转移的原始字节自动重试主线程一次。
  */
