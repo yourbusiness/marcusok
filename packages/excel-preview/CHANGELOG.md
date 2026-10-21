@@ -1,5 +1,15 @@
 # @marcusok/excel-preview
 
+## 2.3.0
+
+### Minor Changes
+
+- 25093cd: Improve embedding and worker robustness: styles are injected into the container's ShadowRoot (with an optional CSP `styleNonce`) and the viewport window is defensively capped when CSS did not apply; the parse worker now uses a FIFO queue where timeouts measure processing time and do not reject queued parses; `terminateParseWorker()` clears the `workerBroken` fallback; non-integer/NaN `setSheet()` indexes report through `onError` instead of throwing; and `onParsed`/`onError` callback exceptions are isolated.
+
+### Patch Changes
+
+- d883ceb: Support local WASM files in Node: `configureWasm({ wasmUrl })` now accepts a plain filesystem path or a `file:` URL in addition to HTTP(S) URLs. The binary is read synchronously (matching zero-config auto-init), and a missing/unreadable configured file fails with the real fs/compile reason instead of a misleading `fetch failed`.
+
 ## 2.2.0
 
 ### Minor Changes
