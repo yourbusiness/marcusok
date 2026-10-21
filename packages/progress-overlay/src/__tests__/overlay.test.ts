@@ -67,6 +67,22 @@ describe("遮罩生命周期", () => {
     expect(root()).toBeNull();
   });
 
+  it("ShadowRoot 容器：样式与遮罩都进入 shadow tree，并应用 nonce", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const container = document.createElement("div");
+    shadow.appendChild(container);
+
+    show({ container, styleNonce: "nonce-xyz" });
+    const style = shadow.querySelector("#mxe-overlay-style");
+    expect(style).not.toBeNull();
+    expect(style!.getAttribute("nonce")).toBe("nonce-xyz");
+    const overlay = shadow.querySelector(".mxe-overlay");
+    expect(overlay).not.toBeNull();
+    expect(overlay!.parentElement).toBe(container);
+  });
+
   it("close 幂等，重复调用不再产生副作用", () => {
     const h = show();
     h.close();

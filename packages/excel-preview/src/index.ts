@@ -88,11 +88,31 @@ export async function parseWorkbookBytes(
  * preview.destroy();
  * ```
  */
+/**
+ * 用户回调异常隔离：回调是调用方代码（常见如 React 组件已卸载），其抛错
+ * 不得被 boot 的 catch 误报成解析/渲染错误，也不得产生未处理拒绝。与
+ * excel-exporter 的 guardCallback 同口径：仅 warn。
+ */
+function guardCallback<A extends unknown[]>(
+  cb: ((...args: A) => void) | undefined,
+  name: string,
+): ((...args: A) => void) | undefined {
+  if (!cb) return cb;
+  return (...args: A) => {
+    try {
+      cb(...args);
+    } catch (e) {
+      console.warn(`[excel-preview] user ${name} callback threw; ignoring`, e);
+    }
+  };
+}
+
 export function createPreview(
   container: HTMLElement,
   options: PreviewOptions,
 ): PreviewInstance {
-  const { onParsed, onError } = options;
+  const onParsed = guardCallback(options.onParsed, "onParsed");
+  const onError = guardCallback(options.onError, "onError");
   let destroyed = false;
   // destroy 即取消：abort 在途解析（见 PreviewInstance.destroy 注释）。
   // worker 路径由此立即解除 boot 的等待、迟到结果丢弃；主线程回退路径
@@ -143,6 +163,7 @@ export function createPreview(
         showHeaders: options.showHeaders,
         showGridLines: options.showGridLines,
         showTabs: options.showTabs,
+        styleNonce: options.styleNonce,
         onRendered: (ms) => {
           const sheet = result.workbook.sheets[renderer!.activeSheetIndex];
           onParsed?.({

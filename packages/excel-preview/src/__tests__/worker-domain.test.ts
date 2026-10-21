@@ -102,6 +102,117 @@ describe("worker 超时（挂死保护）", () => {
     expect(terminations).toBe(2);
     vi.useRealTimers();
   });
+
+  it("并发解析排队：前一个超时后，后一个在新 worker 上重新计时而非被连坐", async () => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    let terminations = 0;
+    let constructions = 0;
+    class HungWorker {
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      constructor() {
+        constructions++;
+      }
+      postMessage() {}
+      terminate() {
+        terminations++;
+      }
+    }
+    vi.stubGlobal("Worker", HungWorker);
+    const { parseWorkbookSource: fresh } =
+      await import("../worker/worker-client");
+
+    const a = fresh({ bytes: csvBytes });
+    const b = fresh({ bytes: csvBytes });
+    expect(constructions).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    const ra = await a;
+    expect(ra.ok).toBe(false);
+    if (!ra.ok) expect(ra.message).toContain("timed out");
+    expect(terminations).toBe(1);
+    // b 排在主线程队列里，a 超时后才派发到新 worker 并开始自己的计时。
+    expect(constructions).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    const rb = await b;
+    expect(rb.ok).toBe(false);
+    if (!rb.ok) {
+      expect(rb.message).toContain("timed out");
+      expect(rb.message).not.toContain("concurrent");
+    }
+    expect(terminations).toBe(2);
+    vi.useRealTimers();
+  });
+
+  it("取消活动请求会终止 worker 并让排队请求落到新实例", async () => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    let terminations = 0;
+    let constructions = 0;
+    class HungWorker {
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      constructor() {
+        constructions++;
+      }
+      postMessage() {}
+      terminate() {
+        terminations++;
+      }
+    }
+    vi.stubGlobal("Worker", HungWorker);
+    const { parseWorkbookSource: fresh, terminateParseWorker } =
+      await import("../worker/worker-client");
+
+    const ac = new AbortController();
+    const a = fresh({ bytes: csvBytes, signal: ac.signal });
+    const b = fresh({ bytes: csvBytes });
+    ac.abort();
+    const ra = await a;
+    expect(ra.ok).toBe(false);
+    if (!ra.ok) expect(ra.code).toBe("ABORTED");
+    expect(terminations).toBe(1);
+    // b 未被取消影响，已在新 worker 上派发。
+    expect(constructions).toBe(2);
+
+    terminateParseWorker();
+    const rb = await b;
+    expect(rb.ok).toBe(false);
+    if (!rb.ok) expect(rb.noFallback).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("取消排队请求不影响活动请求", async () => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    let terminations = 0;
+    class HungWorker {
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      postMessage() {}
+      terminate() {
+        terminations++;
+      }
+    }
+    vi.stubGlobal("Worker", HungWorker);
+    const { parseWorkbookSource: fresh } =
+      await import("../worker/worker-client");
+
+    const a = fresh({ bytes: csvBytes });
+    const ac = new AbortController();
+    const b = fresh({ bytes: csvBytes, signal: ac.signal });
+    ac.abort();
+    const rb = await b;
+    expect(rb.ok).toBe(false);
+    if (!rb.ok) expect(rb.code).toBe("ABORTED");
+    expect(terminations).toBe(0);
+
+    // 活动请求仍按自己的超时收尾。
+    await vi.advanceTimersByTimeAsync(120_000);
+    const ra = await a;
+    expect(ra.ok).toBe(false);
+    expect(terminations).toBe(1);
+    vi.useRealTimers();
+  });
 });
 
 describe("terminateParseWorker（手动回收逃生口）", () => {
@@ -209,7 +320,7 @@ describe("worker 构造失败（跨域脚本同步抛错）", () => {
       terminate() {}
     }
     vi.stubGlobal("Worker", CrossOriginWorker);
-    const { parseWorkbookSource: fresh } =
+    const { parseWorkbookSource: fresh, terminateParseWorker } =
       await import("../worker/worker-client");
 
     const r1 = await fresh({ bytes: csvBytes });
@@ -219,5 +330,35 @@ describe("worker 构造失败（跨域脚本同步抛错）", () => {
     expect(r2.ok).toBe(true);
     // workerBroken 已置位：第二次请求直接走主线程，不再重付构造
     expect(constructions).toBe(1);
+
+    // terminateParseWorker 必须清除 workerBroken：换 URL 后下一次解析要按
+    // 当前配置重建 worker（此前该逃生口在构造失败路径上失效，只能刷新页面）。
+    terminateParseWorker();
+    class ResponsiveWorker {
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      constructor() {
+        constructions++;
+      }
+      postMessage(msg: { id: number }) {
+        queueMicrotask(() => {
+          this.onmessage?.({
+            data: {
+              id: msg.id,
+              ok: true,
+              workbook: {
+                sheets: [{ name: "CSV", rowCount: 2 }],
+                activeSheetIndex: 0,
+                dateSystem: "date1900",
+              },
+            },
+          });
+        });
+      }
+      terminate() {}
+    }
+    vi.stubGlobal("Worker", ResponsiveWorker);
+    const r3 = await fresh({ bytes: csvBytes });
+    expect(r3.ok).toBe(true);
+    expect(constructions).toBe(2);
   });
 });

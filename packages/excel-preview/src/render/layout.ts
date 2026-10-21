@@ -157,6 +157,37 @@ export interface VisibleRange {
 }
 
 /** 可视范围 + 缓冲（纯窗口，不含合并召回——见 visibleMergeAnchors）。 */
+/**
+ * 有效视口尺寸（CSS 失效防御）。
+ *
+ * 正常滚动容器：scroll 尺寸大于 client 尺寸，使用 client 尺寸。
+ * 内容不超过视口：使用 client 尺寸（可能大于 fallback）。
+ * CSS 未生效（如样式被注入到 document.head、节点却在 ShadowRoot，或严格
+ * CSP 拦截了样式）：viewport 不再滚动，clientHeight 会被内容撑到全表高度；
+ * 此时用 fallback 封顶，避免把整张表判定为"可见"而创建百万级 DOM。
+ *
+ * @param client clientWidth/clientHeight
+ * @param scroll scrollWidth/scrollHeight
+ * @param fallback 防御上限（无布局信息时的回退尺寸）
+ * @param cssApplied viewport 的 overflow 计算值是否为 auto/scroll
+ */
+export function effectiveViewportExtent(
+  client: number,
+  scroll: number,
+  fallback: number,
+  cssApplied = true,
+): number {
+  const c = client > 0 ? client : fallback;
+  // CSS 明确缺失（ShadowRoot/CSP 样式未生效）时 client 会被内容撑到全表
+  // 高度，直接用 fallback 封顶。CSS 生效时即使内容恰好填满视口也信任
+  // client——不能靠"client ≈ content"猜测，否则会少渲染底部内容。
+  if (!cssApplied) return Math.min(c, fallback);
+  const s = scroll > 0 ? scroll : c;
+  if (s > c + 1) return c; // genuine scroll container
+  // 无滚动条且 CSS 生效 = 内容放得下；用真实 client（可能大于 fallback）。
+  return c;
+}
+
 export function computeVisibleRange(
   layout: GridLayout,
   scrollTop: number,

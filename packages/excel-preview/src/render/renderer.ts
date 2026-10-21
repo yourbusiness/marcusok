@@ -30,6 +30,7 @@ import { formatCellValue } from "../numfmt/format";
 import {
   buildLayout,
   computeVisibleRange,
+  effectiveViewportExtent,
   visibleMergeAnchors,
   columnIndexLabel,
   HEADER_COL_PX,
@@ -82,8 +83,23 @@ export interface RenderOptions {
   showHeaders?: boolean;
   showGridLines?: boolean;
   showTabs?: boolean;
+  /** CSP nonce applied to the injected <style> elements. */
+  styleNonce?: string;
   onSheetChange?: (index: number) => void;
   onRendered?: (durationMs: number) => void;
+}
+
+/**
+ * 样式必须注入到容器所在的 root node：容器在 ShadowRoot 内时，document.head
+ * 里的规则不会进入 shadow tree，虚拟滚动依赖的 .xpv-viewport overflow 等
+ * 会全部失效（实测会退化为全表 DOM）。
+ */
+function styleRootFor(container: HTMLElement): ParentNode {
+  const root = container.getRootNode?.();
+  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
+    return root;
+  }
+  return document.head ?? document.documentElement;
 }
 
 export class SheetRenderer {
@@ -102,6 +118,8 @@ export class SheetRenderer {
   private colHeadFrozen!: HTMLDivElement;
   private rowHeadFrozen!: HTMLDivElement;
   private styleEl: HTMLStyleElement | null = null;
+  private readonly styleRoot: ParentNode;
+  private styleNonce: string | undefined;
 
   private workbook: PreviewWorkbook | null = null;
   private sheetIndex = -1;
@@ -122,6 +140,8 @@ export class SheetRenderer {
   private showGridLines = true;
   private showTabs = true;
   private gridOverride: boolean | undefined;
+  /** CSS 是否真正作用到 viewport（ShadowRoot/CSP 防护）。 */
+  private cssApplied = true;
   private opts: RenderOptions = {};
   private destroyFns: (() => void)[] = [];
   private sheetStyleEl: HTMLStyleElement | null = null;
@@ -130,6 +150,7 @@ export class SheetRenderer {
 
   constructor(container: HTMLElement) {
     this.scope = `xpv-s${++instanceSeq}`;
+    this.styleRoot = styleRootFor(container);
     this.root = document.createElement("div");
     this.root.className = `xpv-root ${this.scope}`;
     container.appendChild(this.root);
@@ -142,20 +163,25 @@ export class SheetRenderer {
     this.showHeaders = opts.showHeaders ?? true;
     this.showTabs = opts.showTabs ?? true;
     this.gridOverride = opts.showGridLines;
+    this.styleNonce = opts.styleNonce;
 
     if (!this.styleEl) {
       this.styleEl = document.createElement("style");
       this.styleEl.textContent = BASE_CSS;
-      document.head.appendChild(this.styleEl);
+      if (this.styleNonce) this.styleEl.setAttribute("nonce", this.styleNonce);
+      this.styleRoot.appendChild(this.styleEl);
       this.destroyFns.push(() => this.styleEl?.remove());
     }
     if (!this.sheetStyleEl) {
       // sheet 级样式（xf 类 + 网格线）独立元素：切 sheet 时整体替换
       this.sheetStyleEl = document.createElement("style");
-      document.head.appendChild(this.sheetStyleEl);
+      if (this.styleNonce)
+        this.sheetStyleEl.setAttribute("nonce", this.styleNonce);
+      this.styleRoot.appendChild(this.sheetStyleEl);
       this.destroyFns.push(() => this.sheetStyleEl?.remove());
     }
     this.buildDom();
+    this.refreshCssApplied();
     // 初始 sheet 越界/缺名时回退 activeSheetIndex（与名称路径的兜底语义一致）。
     // 不回退则 setSheet 提前 return、layout 保持 null，预览静默空白且
     // onParsed/onError 均不触发（此前传越界数字索引的实测行为）。
@@ -230,22 +256,44 @@ export class SheetRenderer {
       // viewport 已被本方法拆下，不断开则持续持有游离节点直到 destroy。
       this.ro?.disconnect();
       // 断开闭包捕获局部实例而非 this.ro——后者在 destroy 时只断得掉最新一个。
-      const ro = new ResizeObserver(() => this.updateOverlays(true));
+      const ro = new ResizeObserver(() => {
+        // A detached container or a late-attached shadow root can start with
+        // styles unresolved; re-check on layout changes before capping.
+        this.refreshCssApplied();
+        this.updateOverlays(true);
+      });
       this.ro = ro;
       ro.observe(this.viewport);
       this.destroyFns.push(() => ro.disconnect());
     }
   }
 
+  /**
+   * 显式探测滚动容器样式是否生效：CSS 未注入（ShadowRoot/CSP）时 overflow
+   * 仍是 visible，viewport 会被内容撑高，虚拟化窗口必须用 fallback 封顶。
+   */
+  private refreshCssApplied(): void {
+    if (typeof getComputedStyle !== "function") return;
+    const overflowY = getComputedStyle(this.viewport).overflowY;
+    this.cssApplied = overflowY === "auto" || overflowY === "scroll";
+  }
+
   /** 切换 sheet（名称或索引）。返回实际索引；无效返回 -1。 */
   setSheet(nameOrIndex: string | number): number {
     if (!this.workbook) return -1;
+    // 非整数/NaN 索引既不是有效 sheet，也不能用于数组下标：此前会先写入
+    // this.sheetIndex，再在 sheets[idx] 为 undefined 时抛裸 TypeError，
+    // 绕过 createPreview 的 onError 契约并留下损坏的 activeSheetIndex。
+    if (typeof nameOrIndex === "number" && !Number.isInteger(nameOrIndex)) {
+      return -1;
+    }
     const idx =
       typeof nameOrIndex === "number"
         ? nameOrIndex
         : this.workbook.sheets.findIndex((s) => s.name === nameOrIndex);
     if (idx < 0 || idx >= this.workbook.sheets.length) return -1;
     const sheet = this.workbook.sheets[idx];
+    if (!sheet) return -1;
     this.sheetIndex = idx;
     this.showGridLines = this.gridOverride ?? sheet.showGridLines;
 
@@ -440,12 +488,24 @@ export class SheetRenderer {
     // 占据视口顶部/左侧但不在滚动坐标里体现）+ 被冻结层覆盖的尺寸；可用宽高
     // 相应扣除表头与冻结区。此前漏减表头偏移，窗口整体偏 24/40px，靠 200px
     // buffer 掩盖（表头加高或 buffer 调小时会露出顶部缺行）。
+    // 防御 CSS 未生效（ShadowRoot/CSP）：viewport 被内容撑高时 clientHeight
+    // 等于全表高度，若直接采用会把整表判定为可见并创建全量 DOM。
     const vw =
-      (this.viewport.clientWidth || FALLBACK_VIEW_W) -
+      effectiveViewportExtent(
+        this.viewport.clientWidth,
+        this.viewport.scrollWidth,
+        FALLBACK_VIEW_W,
+        this.cssApplied,
+      ) -
       headW -
       l.colLeft[l.frozenCols];
     const vh =
-      (this.viewport.clientHeight || FALLBACK_VIEW_H) -
+      effectiveViewportExtent(
+        this.viewport.clientHeight,
+        this.viewport.scrollHeight,
+        FALLBACK_VIEW_H,
+        this.cssApplied,
+      ) -
       headH -
       l.rowTop[l.frozenRows];
     if (vw <= 0 || vh <= 0) return;

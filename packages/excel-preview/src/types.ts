@@ -175,6 +175,11 @@ export interface PreviewOptions {
   showGridLines?: boolean;
   /** 是否渲染 sheet 页签栏；默认 true。 */
   showTabs?: boolean;
+  /**
+   * CSP nonce：注入到预览的 <style> 元素上。注意单元格几何使用内联
+   * style 属性，严格 CSP（style-src-attr 不放行）仍需允许内联样式。
+   */
+  styleNonce?: string;
   /** 渲染就绪回调：首次解析渲染完成后与每次 sheet 切换完成后都会触发
    * （不是仅触发一次；duration.parse 复用首次解析耗时）。 */
   onParsed?: (info: PreviewParsedInfo) => void;

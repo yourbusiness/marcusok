@@ -87,6 +87,77 @@ describe("createPreview 初始 sheet 校验", () => {
     }
   });
 
+  it("实例方法 setSheet 的非整数/NaN 索引经 onError 上报，不抛裸异常", async () => {
+    const onParsed = vi.fn();
+    const onError = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const preview = createPreview(container, {
+      source: csvBytes,
+      onParsed,
+      onError,
+    });
+    await flushBoot();
+    onError.mockClear();
+
+    for (const bad of [1.5, NaN]) {
+      expect(() => preview.setSheet(bad)).not.toThrow();
+      expect(onError).toHaveBeenCalledWith({
+        code: "UNKNOWN",
+        message: `Sheet not found: ${String(bad)}`,
+      });
+    }
+  });
+
+  it("onParsed 抛错被隔离：不误报为解析错误，渲染继续", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const onError = vi.fn();
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      createPreview(container, {
+        source: csvBytes,
+        onParsed: () => {
+          throw new Error("user onParsed boom");
+        },
+        onError,
+      });
+      await flushBoot();
+      expect(onError).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("onParsed"),
+        expect.any(Error),
+      );
+      expect(container.querySelectorAll(".xpv-cell").length).toBeGreaterThan(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("onError 自身抛错不会产生未处理拒绝", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      expect(() =>
+        createPreview(container, {
+          source: csvBytes,
+          sheet: "NoSuchSheet",
+          onError: () => {
+            throw new Error("user onError boom");
+          },
+        }),
+      ).not.toThrow();
+      await flushBoot();
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("onError"),
+        expect.any(Error),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("未提供 sheet：不触发 onError（activeTab 默认）", async () => {
     const onParsed = vi.fn();
     const onError = vi.fn();

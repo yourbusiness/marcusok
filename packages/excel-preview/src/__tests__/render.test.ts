@@ -6,6 +6,7 @@ import {
   charsToPx,
   columnIndexLabel,
   computeVisibleRange,
+  effectiveViewportExtent,
   ptToPx,
   visibleMergeAnchors,
 } from "../render/layout";
@@ -27,6 +28,19 @@ describe("layout 几何", () => {
     expect(columnIndexLabel(25)).toBe("Z");
     expect(columnIndexLabel(26)).toBe("AA");
     expect(columnIndexLabel(701)).toBe("ZZ");
+  });
+
+  it("effectiveViewportExtent：正常滚动用 client，CSS 失效时用 fallback 封顶", () => {
+    // 正常滚动容器
+    expect(effectiveViewportExtent(500, 2_000_000, 600)).toBe(500);
+    // 内容放得下：使用真实 client（可能大于 fallback）
+    expect(effectiveViewportExtent(900, 900, 600)).toBe(900);
+    // 内容恰好填满视口（无滚动条）且 CSS 生效：仍信任 client，不少渲染
+    expect(effectiveViewportExtent(900, 900, 600, true)).toBe(900);
+    // CSS 未生效：client 被内容撑到全表高度 -> fallback 封顶
+    expect(effectiveViewportExtent(600_180, 600_180, 600, false)).toBe(600);
+    // 无布局信息
+    expect(effectiveViewportExtent(0, 0, 600)).toBe(600);
   });
 
   it("buildLayout：列宽/行高/合并映射", async () => {
@@ -448,6 +462,33 @@ describe("SheetRenderer", () => {
     r.destroy();
   });
 
+  it("ShadowRoot 容器：样式注入 shadow tree，并带 CSP nonce", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const shadowContainer = document.createElement("div");
+    shadow.appendChild(shadowContainer);
+
+    const model = await parse(bigWorkbookBytes(2_000, 6));
+    const headStylesBefore = document.head.querySelectorAll("style").length;
+    const r = new SheetRenderer(shadowContainer);
+    r.render(model, { styleNonce: "nonce-123" });
+
+    const styles = shadow.querySelectorAll("style");
+    expect(styles.length).toBeGreaterThan(0);
+    expect(styles[0].getAttribute("nonce")).toBe("nonce-123");
+    // 本实例的样式只进 shadow tree，不再写入 document.head
+    expect(document.head.querySelectorAll("style").length).toBe(
+      headStylesBefore,
+    );
+    // 虚拟化仍生效（不因样式作用域问题退化为全表 DOM）
+    const cells = shadowContainer.querySelectorAll(".xpv-cell").length;
+    expect(cells).toBeGreaterThan(0);
+    expect(cells).toBeLessThan(2_000 * 6);
+    r.destroy();
+    host.remove();
+  });
+
   it("切 sheet 与销毁", async () => {
     const model = await parse(sampleWorkbookBytes());
     const r = new SheetRenderer(container);
@@ -462,6 +503,18 @@ describe("SheetRenderer", () => {
       document.body.contains(container.querySelector(".xpv-root") as Node),
     ).toBe(false);
     expect(document.querySelectorAll("style").length).toBe(0);
+  });
+
+  it("setSheet 非整数/NaN 返回 -1，不抛错也不污染 activeSheetIndex", async () => {
+    const model = await parse(sampleWorkbookBytes());
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    expect(r.activeSheetIndex).toBe(0);
+    for (const bad of [1.5, NaN]) {
+      expect(r.setSheet(bad)).toBe(-1);
+      expect(r.activeSheetIndex).toBe(0);
+    }
+    r.destroy();
   });
 
   it("重复 render：旧 viewport 的 ResizeObserver 立即断开，不累积泄漏", async () => {

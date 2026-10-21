@@ -49,6 +49,8 @@ export interface ProgressOverlayOptions {
   blockInteraction?: boolean;
   /** 主题，默认 "auto"（按 prefers-color-scheme 解析）。 */
   theme?: "auto" | "light" | "dark";
+  /** CSP nonce：注入到遮罩的 <style> 元素上。 */
+  styleNonce?: string;
   /** 文案覆盖。 */
   text?: ProgressOverlayTextOptions;
 }
@@ -78,6 +80,7 @@ interface ResolvedOptions {
   container: HTMLElement;
   blockInteraction: boolean;
   theme: "light" | "dark";
+  styleNonce?: string;
   text: ResolvedText;
 }
 
@@ -266,12 +269,25 @@ const STYLES = `
 }
 `;
 
-function ensureStyles(): void {
-  if (document.getElementById(STYLE_ID)) return;
+/**
+ * 样式注入目标必须是容器所在的 root node：容器在 ShadowRoot 内时，
+ * document.head 的规则不会进入 shadow tree，遮罩会退化为页面流里的透明块。
+ */
+function styleRootFor(container: HTMLElement): ParentNode {
+  const root = container.getRootNode?.();
+  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
+    return root;
+  }
+  return document.head ?? document.documentElement;
+}
+
+function ensureStyles(root: ParentNode, nonce: string | undefined): void {
+  if (root.querySelector(`#${STYLE_ID}`)) return;
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = STYLES;
-  document.head.appendChild(style);
+  if (nonce) style.setAttribute("nonce", nonce);
+  root.appendChild(style);
 }
 
 interface OverlayDom {
@@ -555,6 +571,7 @@ export function showProgressOverlay(
       container: options.container ?? document.body,
       blockInteraction: options.blockInteraction ?? true,
       theme: resolveTheme(options.theme),
+      styleNonce: options.styleNonce,
       text: {
         title: options.text?.title ?? DEFAULT_TEXT.title,
         initial: options.text?.initial ?? DEFAULT_TEXT.initial,
@@ -577,7 +594,7 @@ export function showProgressOverlay(
   let closed = false;
 
   try {
-    ensureStyles();
+    ensureStyles(styleRootFor(cfg.container), cfg.styleNonce);
 
     // 容器变了而旧遮罩还挂着：直接丢弃（以最新容器为准）。
     if (active && active.container !== cfg.container) {
