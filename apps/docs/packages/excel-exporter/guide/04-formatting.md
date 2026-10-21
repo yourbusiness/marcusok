@@ -4,13 +4,13 @@ Column `format` can be a structured **FormatSpec** (thread-safe; works on all pa
 
 ## FormatSpec
 
-| Type       | Options                                 | Example                                                        | Description                                                                                                                           |
-| ---------- | --------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `enum`     | `map`, `fallback?`                      | `{ type: "enum", map: { paid: "Paid" }, fallback: "Unknown" }` | Maps raw values to labels; unmapped values use `fallback` or pass through; missing values (null/blank) render as empty cells          |
-| `date`     | `pattern?` (default `yyyy-MM-dd`)       | `{ type: "date" }`                                             | Converts to an Excel date serial and auto-injects `numFormat`                                                                         |
-| `datetime` | `pattern?` (default `yyyy-MM-dd HH:mm`) | `{ type: "datetime" }`                                         | Same, with time                                                                                                                       |
-| `number`   | `decimals?` (default 0), `thousands?`   | `{ type: "number", decimals: 2, thousands: true }`             | Numeric semantics; the Workbook path keeps full precision rendered via `numFormat`; missing values (null/blank) render as empty cells |
-| `padding`  | `fill`, `length`, `align?` (left/right) | `{ type: "padding", fill: "0", length: 6, align: "left" }`     | Pads to a fixed length (IDs, codes)                                                                                                   |
+| Type       | Options                                 | Example                                                        | Description                                                                                                                  |
+| ---------- | --------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `enum`     | `map`, `fallback?`                      | `{ type: "enum", map: { paid: "Paid" }, fallback: "Unknown" }` | Maps raw values to labels; unmapped values use `fallback` or pass through; missing values (null/blank) render as empty cells |
+| `date`     | `pattern?` (default `yyyy-MM-dd`)       | `{ type: "date" }`                                             | Converts to an Excel date serial and auto-injects `numFormat`                                                                |
+| `datetime` | `pattern?` (default `yyyy-MM-dd HH:mm`) | `{ type: "datetime" }`                                         | Same, with time                                                                                                              |
+| `number`   | `decimals?` (default 0), `thousands?`   | `{ type: "number", decimals: 2, thousands: true }`             | Numeric semantics; both paths keep full precision and render via numFmt; missing values (null/blank) render as empty cells   |
+| `padding`  | `fill`, `length`, `align?` (left/right) | `{ type: "padding", fill: "0", length: 6, align: "left" }`     | Pads to a fixed length (IDs, codes)                                                                                          |
 
 ```ts
 columns: [
@@ -60,18 +60,17 @@ Signature: `(value: unknown, row: Record<string, unknown>) => string | number | 
 
 ## Cross-path precision notes
 
-Behavior differs slightly between paths — always set `decimals` explicitly:
+Both routes now share the same storage semantics — the stream path emits a minimal `styles.xml` for `FormatSpec` formats:
 
-- **Workbook path** (main / worker+workbook): full precision is preserved; display decimals come from the auto-injected `numFormat`;
-- **Stream path** (≥ 50,000 rows): no `numFormat` support; `decimals` are baked into the stored value (`9999.99` → `10000`);
-- So **without explicit `decimals` (default 0), the stored cell value can differ between paths** — explicit `decimals` is the main way to guarantee cross-threshold consistency.
-- **Cross-path `thousands`**: the separator is visible only on the Workbook path (rendered via the auto-injected `#,##0` `numFormat`); the stream path (≥ 50,000 rows / degraded exports) keeps the cell a **number** with no visible separators — baking separators into the value would turn data cells into text and break downstream calculations.
+- **Stored values**: `number` keeps full precision on both paths; `decimals`/`thousands` are display-only numFmt settings. `date`/`datetime` store the same Excel serial number on both paths.
+- **Display**: the Workbook path attaches the numFmt via the cell style; the stream path emits one cellXf per distinct format code. Crossing 50,000 rows no longer changes cell type or stored value.
+- **Cell/layout styling** (font, fill, border, width, freeze, filter) is still Workbook-only; only number formats are restored on the stream.
 - **Missing values render as empty cells** on every path, for `number` and `padding` columns and `enum` alike: `null`/`undefined` and blank/whitespace-only strings (the most common missing-value shape from databases, forms and CSV imports) never become `0`, a padded `"00000"`, or the `enum` `fallback`.
 
 ## Dates
 
-`date` / `datetime` accept `Date` objects, parseable strings or timestamps. The Workbook path writes a serial + `numFormat`; Stream path (no `numFormat` support) emit readable strings per the pattern (`mm` resolves to minutes vs month by its context).
+`date` / `datetime` accept `Date` objects, parseable strings or timestamps. Both paths store an Excel serial and attach the pattern as a numFmt (Workbook: cell style; Stream: minimal `styles.xml`), so cell type and display agree across the 50k threshold.
 
-**Pattern tokens (differ between paths)**: the stream path (≥ 50,000 rows, explicit `mode: "stream"`, or the fallback) parses only the six tokens `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss` (case-insensitive). The Workbook path hands the pattern to Excel as a `numFormat`, where any valid format code also renders (`yy`, single-letter `m`/`d`, `AM/PM`, quoted literals like `yyyy"年"`). Characters outside the six tokens are emitted **as-is after lower-casing** on the stream path — `pattern: "yy-MM-dd"` exports `yy-01-05` above the threshold and a proper two-digit year below it. Two consequences worth knowing: the lower-casing also hits quoted literals (so `yyyy-MM-dd"T"HH:mm` renders `2026-07-01"t"15:30` above the threshold), and the quotes themselves are emitted, since the stream path does not interpret them (`yyyy"年"M"月"d"日"` renders `2026"年"m"月"d"日"` — `M`/`d` are not tokens there). Superset tokens are likewise only partially passed through: their six-token prefix still parses and the remainder leaks out (`"mmm"` → `"09m"`, while Excel renders the month abbreviation). Stick to the six tokens for cross-threshold consistency, and prefer `numFormat` (a style, dropped wholesale on the stream path) over `pattern` when you need quoted literals.
+**Pattern semantics**: both paths hand the pattern to Excel as a number format (`numFormat` / minimal `styles.xml`), so the full format-code language applies identically — `yy`, single-letter `m`/`d`, `AM/PM`, `mmm`/`dddd`, quoted literals like `yyyy"年"M"月"d"日"`. There is no reduced token subset on the stream path anymore.
 
-**Timezone convention (consistent across paths)**: `date` / `datetime` interpret and render values by their **UTC components** — the workbook serial comes from modern-xlsx's `dateToSerial` (UTC wall clock) and the stream strings use the same UTC components, so one input renders identically on every path in every timezone. ISO date strings (`"2026-07-01"`) parse as UTC midnight per ECMA-262 and fit this convention natively. Note that Dates constructed with local time (`new Date(year, month, day)`) carry UTC components that can fall on the previous day in non-UTC timezones (local midnight in UTC+8 = 16:00 UTC the day before). Prefer ISO strings or `Date.UTC(...)` for timezone-stable date columns.
+**Timezone convention (consistent across paths)**: `date` / `datetime` interpret and render values by their **UTC components** — both paths store the serial produced by modern-xlsx's `dateToSerial` (UTC wall clock), so one input renders identically on every path in every timezone. ISO date strings (`"2026-07-01"`) parse as UTC midnight per ECMA-262 and fit this convention natively. Note that Dates constructed with local time (`new Date(year, month, day)`) carry UTC components that can fall on the previous day in non-UTC timezones (local midnight in UTC+8 = 16:00 UTC the day before). Prefer ISO strings or `Date.UTC(...)` for timezone-stable date columns.

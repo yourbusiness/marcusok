@@ -32,7 +32,7 @@ Outputs the mapped label; unmapped values use `fallback`, or pass through when a
 
 Accepts `Date` / parseable string / timestamp. The Workbook path writes an Excel date serial and auto-injects `numFormat`; the stream path outputs the pattern-formatted string. Values are interpreted by their **UTC components** (matching the workbook serial's `dateToSerial` convention, so all paths and timezones render the same); ISO date strings parse as UTC midnight per ECMA-262 — see the timezone note in [Value Formatting](/packages/excel-exporter/guide/04-formatting). Pattern tokens differ between paths: the stream path lower-cases the pattern, parses only `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss`, and emits anything else as-is — not interpreting quoted literals, so `yyyy"年"M"月"` renders `2026"年"m"月"` — while the Workbook path renders any valid Excel format code, quoted literals included — see the note in [Value Formatting](/packages/excel-exporter/guide/04-formatting).
 
-Two more edges in the same area: a value the parser cannot convert to a date (bigints, booleans, plain objects, invalid Dates — only `Date` / parseable strings / timestamps are accepted) is written as its string form instead of failing the export; and superset tokens (`mmm`, `yy`, single-letter `M`/`d`) are only partially handled on the stream path — `"mmm"` renders as `"09m"` there while Excel renders the month abbreviation — so stick to the six tokens for cross-threshold consistency (details in [Value Formatting](/packages/excel-exporter/guide/04-formatting)).
+One more edge in the same area: a value the parser cannot convert to a date (bigints, booleans, plain objects, invalid Dates — only `Date` / parseable strings / timestamps are accepted) is written as its string form instead of failing the export. Pattern tokens are rendered by Excel on both paths (the stream path emits the pattern as a numFmt in its minimal `styles.xml`), so there is no reduced token subset (details in [Value Formatting](/packages/excel-exporter/guide/04-formatting)).
 
 ### number
 
@@ -40,9 +40,9 @@ Two more edges in the same area: a value the parser cannot convert to a date (bi
 { type: "number", decimals: 2, thousands: true }
 ```
 
-`decimals` defaults to 0, `thousands` to false; `decimals` is validated as an integer in 0–100 (the `toFixed` ceiling the stream path relies on). **Always set `decimals` explicitly**: the Workbook path keeps full precision rendered via `numFormat`, while Stream/fallback paths bake decimals into the stored value — the two can differ otherwise.
+`decimals` defaults to 0, `thousands` to false; `decimals` is validated as an integer in 0–100. Both paths keep the full-precision stored value and render `decimals`/`thousands` through an Excel numFmt — the Workbook path via the cell style, the stream path via its minimal `styles.xml`. Crossing 50,000 rows therefore no longer rounds the stored value or drops separators.
 
-Cross-path `thousands`: the Workbook path renders the separator via an auto-injected `#,##0` `numFormat`; the stream path (>= 50,000 rows / degraded exports) cannot use `numFormat` and keeps the cell a **number**, so separators are not visible there (baking them into the value would turn data cells into text and break downstream calculations).
+Dates/datetimes behave the same way: both paths store the Excel serial number (UTC components) and attach the pattern as a numFmt, so the cell type and display agree across routes.
 
 `null`/`undefined` values (and blank/whitespace-only strings — the most common missing-value shape coming out of databases, forms and CSV imports) render as empty cells on every path — never `0`. `padding` treats them the same way: an empty cell, not a padded fake code like `"00000"`. `enum` does too: an empty cell, never the `fallback` (see above).
 

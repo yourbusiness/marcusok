@@ -9,7 +9,7 @@
 | WASM 二进制 | `@marcusok/excel-preview/dist/modern-xlsx.wasm` | `new URL(<file>, import.meta.url)`——打包器产出 hash 资产；Node 经 node_modules 定位 |
 | 解析 worker | `@marcusok/excel-preview/dist/parse.worker.js`  | 同一模式；worker 是单文件自包含 ESM（没有会 404 的兄弟导入）                        |
 
-浏览器里主线程完全不需要 WASM（前提是 worker 加载成功）：解析在 worker 内（worker 自带一份引擎），主线程唯一的引擎调用是格式化——纯 JS。worker 构造/加载失败时会整会话回退主线程，该路径会自己加载 WASM（见[快速上手](/zh/packages/excel-preview/guide/01-quick-start)）。Node（无 Worker）下主线程从磁盘同步初始化 WASM，零样板。
+浏览器里主线程完全不需要 WASM（前提是 worker 加载成功）：解析在 worker 内（worker 自带一份引擎），主线程唯一的引擎调用是格式化——纯 JS。worker 构造/加载失败时会回退主线程，该路径会自己加载 WASM（见[快速上手](/zh/packages/excel-preview/guide/01-quick-start)）。该回退在会话内是粘性的，但 `terminateParseWorker()` 会清除它，让下一次解析按当前配置重建。Node（无 Worker）下主线程从磁盘同步初始化 WASM，零样板。
 
 引擎在构建期打包进本包 `dist`（2.0 之前曾以独立的 `xlsx-core` 包分发）。同页使用 `excel-exporter` 与 `excel-preview` 时主线程各持一份引擎副本——两份二进制完全相同，通常被内容 hash 命名与 HTTP 缓存去重成一份资产。各包的自包含 worker 因浏览器 module worker 无法解析裸导入，必然各带一份——这是与导出包一致的既有事实。
 
@@ -41,8 +41,11 @@ configureWasm({ wasmUrl, parseWorkerUrl });
 从导出包 loader 继承的注意事项（两者共用）：
 
 - `configureWasm` 要在**第一次预览之前**调用；成功加载后改 WASM URL 只在全新 JS realm 生效（刷新页面或新建 worker）。
-- 换 URL 需要先回收旧 worker：parse worker 仅在首次创建时读一次 `parseWorkerUrl`（worker 内的 `initWasm` 读 `wasmUrl` 同理）。在下一次解析前调用主入口导出的 `terminateParseWorker()`——在途解析以 noFallback 拒绝、不在主线程重跑，下次解析按当前配置重建新 worker。**重建 preview 不起作用**：worker 是跨实例共享的模块级单例。
+- 换 URL 需要先回收旧 worker：parse worker 仅在首次创建时读一次 `parseWorkerUrl`（worker 内的 `initWasm` 读 `wasmUrl` 同理）。在下一次解析前调用主入口导出的 `terminateParseWorker()`——在途与排队解析以 noFallback 拒绝、不在主线程重跑，并清除 `workerBroken` 永久回退状态，下次解析按当前配置重建新 worker。**重建 preview 不起作用**：worker 是跨实例共享的模块级单例。
+- worker 请求经主线程 FIFO 队列串行化（同一时刻一个解析）。超时从派发时开始计时，排队等待不计；超时解析终止 worker，排队解析改派到新实例。取消活动解析同样终止 worker，取消排队解析只摘除该请求。
 - worker 加载失败时自动回退主线程解析——预览仍可用，代价是大文件解析期间阻塞主线程。
+- Node 运行时注意：内置引擎的 `readBuffer` 在 Node 22.x（以及 Node 24.14）上对数字密集表比 Node 24.21 慢约 10 倍。功能支持仍为 Node >= 22（CI 覆盖），但本文档的性能数字以锁定的开发运行时（`.nvmrc`）为准。
+- Node 打包注意：若服务端构建把本包内联、且 WASM 资产没有随产物输出，自动磁盘定位会失败，解析返回 `WASM` 错误（预览没有静默的无样式兜底）。保持本包 external、拷贝资产，或用 `configureWasm({ wasmUrl })` 显式指定——Node 支持 HTTP(S) 地址、普通文件路径与 `file:` URL（后两者用 `fs` 同步读取）。
 
 ## loader 默认值
 

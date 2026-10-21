@@ -12,7 +12,7 @@ When the WASM path is unavailable, the library automatically degrades to the pur
 
 ## The one failure that never degrades: worker timeout
 
-When the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminated and the export **fails fast** with the original timeout error — no main-thread retry, no stream fallback. The timeout means the worker is wedged (a hung WASM init, an engine loop) or the workload legitimately exceeds the budget; either way, rerunning the same large build on the main thread is exactly the freeze the worker route exists to avoid — the same policy `@marcusok/excel-preview` applies to its parse timeout. Requests queued behind the timed-out export on the shared worker are rejected with the same fast-fail semantics. Retry the export (a fresh worker is created), raise `workerTimeoutMs` via `configureWasm`, or split the input.
+When the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminated and **that request** fails fast with the original timeout error — no main-thread retry, no stream fallback. The timeout measures actual worker processing time (it starts after `postMessage`), not queue wait. Requests waiting in the main-thread FIFO queue are re-dispatched to a fresh worker rather than rejected as collateral. Retry the failed export (a fresh worker is created), raise `workerTimeoutMs` via `configureWasm`, or split the input.
 
 ## Behavioral differences
 
@@ -22,8 +22,8 @@ When the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminat
 | Cell styles                | full             | stripped (the fast stream emits minimal OOXML without a style part)                       |
 | Multi-row headers / merges | supported        | supported (merges are structure, not styles)                                              |
 | Width / freeze / filter    | supported        | not supported                                                                             |
-| FormatSpec                 | supported        | supported (enum/padding/number/date semantics kept; dates become readable strings)        |
-| Number formats             | `numFormat`      | `decimals` baked into stored value                                                        |
+| FormatSpec                 | supported        | supported (enum/padding/number/date; dates stay serials)                                  |
+| Number formats             | `numFormat`      | minimal `styles.xml` numFmt (decimals/thousands display-only)                             |
 | Warning                    | —                | console prints `[excel-exporter] Falling back to the style-less fast stream. Reason: ...` |
 
 ## Detecting the fallback

@@ -63,7 +63,7 @@ Yes. UTF-8 (with or without BOM) and GB18030 are detected automatically, and the
 
 ### `setSheet()` right after `createPreview()` does nothing
 
-That is the documented timing, not a bug: `createPreview` boots asynchronously, so `setSheet()` is a silent no-op and `getSheetNames()` returns `[]` until the parse resolves. Call them from `onParsed`, from your own UI, or let the tab bar drive them. `destroy()` also aborts an in-flight parse (it does not merely silence the callbacks) — the cancellation is silent: it resolves as `ABORTED` and never surfaces via `onError`. See [Quick Start](/packages/excel-preview/guide/01-quick-start).
+That is the documented timing, not a bug: `createPreview` boots asynchronously, so `setSheet()` is a silent no-op and `getSheetNames()` returns `[]` until the parse resolves. Call them from `onParsed`, from your own UI, or let the tab bar drive them. Once booted, an invalid value (unknown name, out-of-range index, non-integer number or `NaN`) surfaces through `onError` as `Sheet not found: …` instead of throwing. `destroy()` also aborts an in-flight parse (it does not merely silence the callbacks) — the cancellation is silent: it resolves as `ABORTED` and never surfaces via `onError`. See [Quick Start](/packages/excel-preview/guide/01-quick-start).
 
 ### A formula cell renders empty
 
@@ -71,7 +71,7 @@ Formula cells render their **cached** value — the same convention as SheetJS a
 
 ### Does previewing a huge file freeze the page?
 
-No. Parsing runs in a Web Worker (100k × 10 cells measured at ~1.5s) and the renderer mounts viewport cells only, so the tab stays responsive regardless of the file's size. Two real limits remain: the whole file is read into memory inside the worker (multi-hundred-MB files hit memory limits before anything else), and the grid is one tall container element, so Firefox / Safari stop scrolling past ~890k rows (~1.67M in Chrome). Details in [Scope & Limits](/packages/excel-preview/guide/04-limits).
+Parsing runs in a Web Worker (100k × 10 cells measured at ~1.5s) and the renderer mounts viewport cells only, so the tab stays responsive while the worker parses and while scrolling. Two caveats: the finished model is structured-cloned back to the main thread in one task that grows with cell count (~50ms at 10k rows, ~150ms at 50k, ~300ms at 100k in Chromium), and the whole file is read into memory inside the worker (multi-hundred-MB files hit memory limits first). The grid is one tall container element, so Firefox / Safari stop scrolling past ~890k rows (~1.67M in Chrome). Details in [Scope & Limits](/packages/excel-preview/guide/04-limits).
 
 ## Progress overlay (exporter's `overlay` option)
 

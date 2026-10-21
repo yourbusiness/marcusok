@@ -63,7 +63,7 @@ Stream 路径支持多行表头（`children`）与数据区合并（`merges`）�
 
 ### `createPreview` 之后立刻调 `setSheet()` 没有生效
 
-这是文档写明的时序，不是 bug：`createPreview` 是异步启动的，解析完成前 `setSheet()` 是静默空操作、`getSheetNames()` 返回 `[]`。请在 `onParsed` 里、或由你自己的 UI 调用，也可以直接用表格底部的工作表标签栏切换。`destroy()` 还会**中止**已在进行中的解析（不只是屏蔽回调）——取消是静默的：以 `ABORTED` 收场，绝不会经 `onError` 上报。详见[快速开始](/zh/packages/excel-preview/guide/01-quick-start)。
+这是文档写明的时序，不是 bug：`createPreview` 是异步启动的，解析完成前 `setSheet()` 是静默空操作、`getSheetNames()` 返回 `[]`。请在 `onParsed` 里、或由你自己的 UI 调用，也可以直接用表格底部的工作表标签栏切换。解析完成后，无效值（名称不存在、索引越界、非整数或 `NaN`）经 `onError` 报出 `Sheet not found: …`，不会抛裸异常。`destroy()` 还会**中止**已在进行中的解析（不只是屏蔽回调）——取消是静默的：以 `ABORTED` 收场，绝不会经 `onError` 上报。详见[快速开始](/zh/packages/excel-preview/guide/01-quick-start)。
 
 ### 公式单元格渲染为空
 
@@ -71,7 +71,7 @@ Stream 路径支持多行表头（`children`）与数据区合并（`merges`）�
 
 ### 预览大文件会卡死页面吗？
 
-不会。解析在 Web Worker 内完成（实测 10 万行 × 10 列约 1.5s），渲染只挂载视口内的单元格，因此页面响应性与文件大小无关。但仍有两个真实上限：整个文件会在 worker 内一次性读入内存（数百 MB 的文件会先撞上内存上限）；表格是一个很高的容器元素，Firefox / Safari 在约 89 万行后无法继续滚动（Chrome 约 167 万行）。细节见[范围与限制](/zh/packages/excel-preview/guide/04-limits)。
+解析在 Web Worker 内完成（实测 10 万行 × 10 列约 1.5s），渲染只挂载视口内的单元格，因此 worker 解析期间与滚动过程中页面都能保持响应。但有两点要注意：完成的模型会通过结构化克隆一次性回传主线程，这段任务随单元格数增长（Chromium 实测 1 万行约 50ms、5 万行约 150ms、10 万行约 300ms）；整个文件也会在 worker 内一次性读入内存（数百 MB 的文件会先撞上内存上限）。表格是一个很高的容器元素，Firefox / Safari 在约 89 万行后无法继续滚动（Chrome 约 167 万行）。细节见[范围与限制](/zh/packages/excel-preview/guide/04-limits)。
 
 ## 进度遮罩（导出包的 `overlay` 选项）
 

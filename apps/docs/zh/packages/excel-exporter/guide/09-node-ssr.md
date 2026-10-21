@@ -69,7 +69,7 @@ await getWasmLoader().ensureLoaded(); // 一次性读取并编译随包发布的
 
 > 不要用单独安装的 `modern-xlsx` 的 `initWasmSync` 来预热：引擎已打包进本包自己的 `dist`，外部副本是另一个模块实例，预热不到打包内的这一份。
 
-> 注意：自动初始化依赖运行时能从磁盘定位安装目录里的 wasm。若你的打包/部署形态不满足这一点（例如依赖被内联进产物且资产未随行输出），自动定位失败时不会报错，而是走降级链（无样式流式兜底，表头与合并仍保留，console 有 `[excel-exporter]` 前缀警告）；此时保持本包 external（Node 服务端构建的默认行为）、`configureWasm({ wasmUrl })` 指向 HTTP 地址，或把资产拷贝到产物可读的位置即可。
+> 注意：自动初始化依赖运行时能从磁盘定位安装目录里的 wasm。若你的打包/部署形态不满足这一点（例如依赖被内联进产物且资产未随行输出），自动定位失败时不会报错，而是走降级链（无样式流式兜底，表头与合并仍保留，console 有 `[excel-exporter]` 前缀警告）；此时保持本包 external（Node 服务端构建的默认行为）、把资产拷贝到产物可读的位置，或用 `configureWasm({ wasmUrl })` 显式指定。Node 下 `wasmUrl` 支持 HTTP(S) 地址、普通文件路径与 `file:` URL（后两者用 `fs` 同步读取并初始化；本地文件缺失会报真实 fs/编译原因，而不是误导性的 `fetch failed`）。
 
 ## 性能提示
 

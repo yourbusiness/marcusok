@@ -4,13 +4,13 @@
 
 ## FormatSpec
 
-| 类型       | 参数                                     | 示例                                                          | 说明                                                                                        |
-| ---------- | ---------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `enum`     | `map`、`fallback?`                       | `{ type: "enum", map: { paid: "已支付" }, fallback: "未知" }` | 枚举值映射；未命中且无 fallback 时原样输出；缺失值（null/空白）渲染为空单元格               |
-| `date`     | `pattern?`（默认 `yyyy-MM-dd`）          | `{ type: "date" }`                                            | 转 Excel 日期序列并自动注入 `numFormat`                                                     |
-| `datetime` | `pattern?`（默认 `yyyy-MM-dd HH:mm`）    | `{ type: "datetime" }`                                        | 同上，带时间                                                                                |
-| `number`   | `decimals?`（默认 0）、`thousands?`      | `{ type: "number", decimals: 2, thousands: true }`            | 数字语义：Workbook 路径保留完整精度，经 `numFormat` 渲染；缺失值（null/空白）渲染为空单元格 |
-| `padding`  | `fill`、`length`、`align?`（left/right） | `{ type: "padding", fill: "0", length: 6, align: "left" }`    | 左/右补全到固定长度（如工号）                                                               |
+| 类型       | 参数                                     | 示例                                                          | 说明                                                                                |
+| ---------- | ---------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `enum`     | `map`、`fallback?`                       | `{ type: "enum", map: { paid: "已支付" }, fallback: "未知" }` | 枚举值映射；未命中且无 fallback 时原样输出；缺失值（null/空白）渲染为空单元格       |
+| `date`     | `pattern?`（默认 `yyyy-MM-dd`）          | `{ type: "date" }`                                            | 转 Excel 日期序列并自动注入 `numFormat`                                             |
+| `datetime` | `pattern?`（默认 `yyyy-MM-dd HH:mm`）    | `{ type: "datetime" }`                                        | 同上，带时间                                                                        |
+| `number`   | `decimals?`（默认 0）、`thousands?`      | `{ type: "number", decimals: 2, thousands: true }`            | 数字语义：两条路径都保留完整精度并经 numFmt 渲染；缺失值（null/空白）渲染为空单元格 |
+| `padding`  | `fill`、`length`、`align?`（left/right） | `{ type: "padding", fill: "0", length: 6, align: "left" }`    | 左/右补全到固定长度（如工号）                                                       |
 
 ```ts
 columns: [
@@ -60,18 +60,17 @@ columns: [
 
 ## 跨模式精度注意事项
 
-同一份配置在不同路径下行为有细微差异，务必显式声明 `decimals`：
+两条路径现在共享同一套存储语义（Stream 路径会为 `FormatSpec` 输出最小 `styles.xml`）：
 
-- **Workbook 路径**（main / worker+workbook）：`number` 保留完整精度，显示小数由自动注入的 `numFormat` 控制；
-- **Stream 路径**（≥ 50,000 行）：没有 `numFormat` 支持，会把 `decimals` 烧进存储值（如 `9999.99` → `10000`）；
-- 因此**不声明 `decimals`（默认 0）时，两种路径存进单元格的值可能不同**；跨阈值一致性是显式声明 `decimals` 的最重要理由。
-- **`thousands` 的跨路径差异**：千分位只在 Workbook 路径可见（经自动注入的 `#,##0` `numFormat` 渲染）；Stream 路径（≥ 50,000 行 / 降级导出）保持单元格为**数字**、不显示分隔符——把分隔符烧入值会把数据单元格变成文本、破坏下游计算。
+- **存储值**：`number` 在两条路径都保留完整精度；`decimals`/`thousands` 是纯显示 numFmt。`date`/`datetime` 在两条路径存同一个 Excel 序列号。
+- **显示**：Workbook 路径通过单元格样式附加 numFmt；Stream 路径为每个不同格式码输出一个 cellXf。跨 50,000 行不再改变单元格类型或存储值。
+- **单元格/布局样式**（字体、填充、边框、宽度、冻结、筛选）仍仅 Workbook 路径支持；Stream 只恢复数字格式。
 - **缺失值在所有路径渲染为空单元格**，`number`、`padding` 与 `enum` 一视同仁：`null`/`undefined` 与空串/纯空白串（数据库、表单、CSV 导入中最常见的缺失值形态）绝不会变成 `0`、`"00000"` 或 `enum` 的 `fallback`。
 
 ## 日期值
 
-`date` / `datetime` 接受 `Date` 对象、可解析字符串或时间戳。Workbook 路径写入日期序列 + `numFormat`；Stream 路径（无 `numFormat` 支持）会按 pattern 输出可读字符串（`mm` 会自动按前后文区分月份与分钟）。
+`date` / `datetime` 接受 `Date` 对象、可解析字符串或时间戳。两条路径都写入日期序列号，并把 pattern 作为 numFmt 附加（Workbook：单元格样式；Stream：最小 `styles.xml`），因此单元格类型与显示跨阈值一致。
 
-**pattern 支持的 token（跨路径有差异）**：Stream 路径（≥ 50,000 行、显式 `mode: "stream"` 或兜底路径）只解析 `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss` 六种 token（大小写不敏感）。Workbook 路径把 pattern 作为 `numFormat` 交给 Excel 渲染，任意合法格式码都生效（`yy`、单字母 `m`/`d`、`AM/PM`、`yyyy"年"` 这类字面量等）。六种 token 之外的**字符**在 Stream 路径「小写后原样」输出——比如 `pattern: "yy-MM-dd"`，阈值以下导出正常的两位年份，阈值以上导出 `yy-01-05`。有两点需要注意：小写化同样作用于引号字面量（`yyyy-MM-dd"T"HH:mm` 在阈值以上渲染成 `2026-07-01"t"15:30`），且引号本身会被输出——Stream 路径不解析引号（`yyyy"年"M"月"d"日"` 渲染成 `2026"年"m"月"d"日"`，因为 `M`/`d` 在那里不是 token）。超集 token 同样只是部分透传：其中的六 token 前缀仍会被解析、剩余字符漏出（`"mmm"` → `"09m"`，而 Excel 侧渲染月份缩写）。为保证跨阈值一致，请只使用这六种 token；确实需要引号字面量时，优先用 `numFormat`（属于样式，在 Stream 路径整段丢弃）。
+**pattern**：两条路径都把 pattern 作为数字格式交给 Excel 渲染，`yy`、单字母 `m`/`d`、`AM/PM`、引号字面量等完整格式码语义一致，不再有六 token 子集限制。
 
-**时区约定（跨路径一致）**：`date` / `datetime` 统一按值的 **UTC 分量**解释与输出——Workbook 路径的序列来自 modern-xlsx 的 `dateToSerial`（UTC 口径），Stream 路径的字符串同样取 UTC 分量，因此同一输入在任何时区、任何路径下显示一致；ISO 日期字符串（如 `"2026-07-01"`）按 ECMA-262 解析为 UTC 午夜，天然符合该口径。注意 `new Date(年, 月, 日)` 这类**本地时间**构造的 Date，其 UTC 分量在非零时区可能落到前一天（例如 UTC+8 的本地 0 点 = 前一日 16:00 UTC）。为保证跨时区一致，日期列建议传 ISO 字符串或用 `Date.UTC(...)` 构造。
+**时区约定（跨路径一致）**：`date` / `datetime` 统一按值的 **UTC 分量**解释与输出——两条路径的序列都来自 `dateToSerial`（UTC 口径），因此同一输入在任何时区、任何路径下显示一致；ISO 日期字符串（如 `"2026-07-01"`）按 ECMA-262 解析为 UTC 午夜，天然符合该口径。注意 `new Date(年, 月, 日)` 这类**本地时间**构造的 Date，其 UTC 分量在非零时区可能落到前一天（例如 UTC+8 的本地 0 点 = 前一日 16:00 UTC）。为保证跨时区一致，日期列建议传 ISO 字符串或用 `Date.UTC(...)` 构造。

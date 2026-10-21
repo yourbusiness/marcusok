@@ -11,7 +11,7 @@
 
 由此带来几点值得注意的结论：
 
-- 这两个类型确实声明的公共 [`ExportOptions`](/zh/packages/excel-exporter/api/01-export-excel#exportoptions) 字段——`filename`、`mode`、`onProgress`、`onPhase`、`download`、`overlay`——语义与主入口完全一致（同样的路由、同样的进度契约、同样的 `{ success, blob, engine, mode, duration, rowCount, error }` 结果）。
+- 这两个类型确实声明的公共 [`ExportOptions`](/zh/packages/excel-exporter/api/01-export-excel#exportoptions) 字段——`filename`、`mode`、`onProgress`、`onPhase`、`download`、`signal`、`overlay`——语义与主入口完全一致（同样的路由、同样的进度契约、同样的 `{ success, blob, engine, mode, duration, rowCount, error }` 结果）。
 - `overlay` 在两个类型上均有声明、两个转换函数也都会透传，语义与 `exportExcel` 上完全一致：默认**开启**，`false` 关闭，传对象则自定义（见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)）。
 - 两个入口都是单 sheet：各自产出的 `sheets` 数组有且只有一项。
 
@@ -55,6 +55,7 @@ exportTable(options: TableExportOptions): Promise<ExportResult>
 | `onProgress`  | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                                                                                                                           |
 | `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                                                                                                            |
 | `download`    | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                                                                                                                  |
+| `signal`      | `AbortSignal`                                      | —    | 取消语义同 `exportExcel`：解析为 `AbortError` 失败结果并跳过降级链                                                                                                |
 | `overlay`     | `boolean \| ProgressOverlayOptions`                | —    | 与 `exportExcel` 上语义一致：默认**开启**；`false` 关闭，传对象自定义                                                                                             |
 
 ### TableColumnInput
@@ -195,6 +196,7 @@ exportEcharts(options: EChartsExportOptions): Promise<ExportResult>
 | `onProgress`     | `(progress: number) => void`                       | —    | 0 → 1，所有路径上首尾 0 与 1 各上报一次                               |
 | `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时                                |
 | `download`       | `boolean`                                          | —    | 默认 `true`；`false` 只返回 Blob                                      |
+| `signal`         | `AbortSignal`                                      | —    | 取消语义同 `exportExcel`                                              |
 | `overlay`        | `boolean \| ProgressOverlayOptions`                | —    | 与 `exportExcel` 上语义一致：默认**开启**；`false` 关闭，传对象自定义 |
 
 ### EChartsOptionInput 及相关类型

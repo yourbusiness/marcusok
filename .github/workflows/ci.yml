@@ -32,8 +32,12 @@ jobs:
         # (pnpm@9.12.0), keeping CI in sync with local corepack.
       - uses: actions/setup-node@v4
         with:
-          # Single source of truth for the Node version (root engines field
-          # requires >=22.12; .nvmrc pins the exact major).
+          # Single source of truth for the development/CI Node version.
+          # .nvmrc pins 24.21.0: the bundled modern-xlsx engine's WASM
+          # readBuffer is ~10x slower on Node 22.x (and on 24.14) for
+          # numeric-heavy sheets, which makes the local performance SLAs fail.
+          # Published packages still declare engines.node >= 22; the node22
+          # job below keeps functional compatibility covered.
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
@@ -60,3 +64,23 @@ jobs:
         env:
           RUN_PERF: "0"
       - run: pnpm build
+
+  # Published packages declare engines.node >= 22; keep functional coverage on
+  # the oldest supported line. Performance baselines are skipped here (they are
+  # a local SLA and the engine is materially slower on Node 22 for numeric
+  # sheets — see the README support note).
+  node22:
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: "0"
+      RUN_PERF: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test

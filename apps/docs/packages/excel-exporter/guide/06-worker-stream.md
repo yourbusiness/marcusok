@@ -9,7 +9,7 @@ The worker asset (`export.worker.js`, a self-contained ESM file) is located auto
 Worker path behavior:
 
 - **Worker failures degrade gracefully** — if the Worker route fails (e.g. a misconfigured `workerUrl` override 404s), the export **retries on the main thread** (modern-xlsx keeps styles; the ≥ 50,000-row fast stream needs no WASM at all). On the Worker + Workbook route a failing retry degrades further to the style-less stream fallback (`mode: "stream"` with `result.error` set, success stays `true`). On the Worker + stream route (browser ≥ 50,000 rows) the retry _is_ the fast stream on the identical input, so a failure there is terminal: the export resolves with `success: false` instead of attempting a third build. Either way the caller's promise resolves rather than rejects, with an `[excel-exporter]` console warning at each degradation step;
-- The Worker instance is reused and requests are dispatched by `requestId`, so concurrent exports never interfere;
+- The Worker instance is reused, but requests are **serialized through a main-thread FIFO queue**: only one export is in flight at a time. Each request's timeout starts when it is dispatched (not while queued), and a timeout/abort only settles that request — queued exports continue on a fresh worker;
 - **Function-form formats are stripped** (functions cannot be structured-cloned) — use FormatSpec on worker paths;
 - `onProgress` / `onPhase` are forwarded from the Worker: `build` once the worker's build finishes, and `init` only on Worker + Workbook, when the worker actually initializes WASM — the Worker + stream route uses no WASM and reports no `init` at all.
 
@@ -19,17 +19,17 @@ Worker path behavior:
 
 Known stream limitations:
 
-| Feature                        | Stream path                                        |
-| ------------------------------ | -------------------------------------------------- |
-| Multi-row headers (`children`) | supported (header auto-merge)                      |
-| Cell merges (`merges`)         | supported (data area)                              |
-| Cell styles (`style`)          | not supported                                      |
-| Header styles (`headerStyle`)  | not supported                                      |
-| Column width (`width`)         | not supported                                      |
-| Freeze / auto-filter           | not supported                                      |
-| Custom number formats          | not supported (`decimals` baked into stored value) |
-| Date formats                   | readable strings per pattern                       |
-| Progress callback              | reported every 1000 rows                           |
+| Feature                        | Stream path                                      |
+| ------------------------------ | ------------------------------------------------ |
+| Multi-row headers (`children`) | supported (header auto-merge)                    |
+| Cell merges (`merges`)         | supported (data area)                            |
+| Cell styles (`style`)          | not supported                                    |
+| Header styles (`headerStyle`)  | not supported                                    |
+| Column width (`width`)         | not supported                                    |
+| Freeze / auto-filter           | not supported                                    |
+| Custom number formats          | supported via minimal `styles.xml` (numFmt only) |
+| Date formats                   | stored as serials + numFmt (same as Workbook)    |
+| Progress callback              | reported every 1000 rows                         |
 
 Skipped features (cell styles, header styles, column width, freeze, ...) print `[excel-exporter] stream mode: features not supported (...)` in the console.
 

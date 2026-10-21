@@ -12,7 +12,7 @@
 
 ## 唯一不降级的失败：worker 超时
 
-共享 worker 超出 `workerTimeoutMs`（默认 120 秒）即被终止，导出携原始超时错误**快速失败**——不重试主线程、不落到流式兜底。超时意味着 worker 已挂死（WASM 初始化悬置、引擎死循环）或负载确实超出预算；两种情形下在主线程重跑同样的大构建，正是 worker 路由要规避的冻结源——与 `@marcusok/excel-preview` 解析超时的策略一致。排在超时导出之后、共享 worker 上的排队请求会以同样的快速失败语义被拒绝。重试导出（会重建新 worker）、经 `configureWasm` 调大 `workerTimeoutMs`、或拆分输入。
+共享 worker 超出 `workerTimeoutMs`（默认 120 秒）即被终止，**该请求**携原始超时错误快速失败——不重试主线程、不落到流式兜底。超时只计 worker 实际处理时间（从 `postMessage` 成功后开始），不含排队等待；主线程 FIFO 队列中排队的请求会改派到新 worker，而不是被连坐拒绝。重试失败的导出（会重建新 worker）、经 `configureWasm` 调大 `workerTimeoutMs`、或拆分输入。
 
 ## 行为差异
 
@@ -22,8 +22,8 @@
 | 单元格样式            | 完整             | 剥离（快速流输出不带样式部件的极简 OOXML）                                              |
 | 多行表头 / 合并       | 支持             | 支持（合并不是样式）                                                                    |
 | 列宽/冻结/筛选        | 支持             | 不支持                                                                                  |
-| FormatSpec            | 支持             | 支持（enum/padding/number/date 语义保留，日期输出为可读字符串）                         |
-| 数字格式              | `numFormat`      | `decimals` 烧入存储值                                                                   |
+| FormatSpec            | 支持             | 支持（enum/padding/number/date；日期保持序列号）                                        |
+| 数字格式              | `numFormat`      | 最小 `styles.xml` numFmt（decimals/thousands 为纯显示）                                 |
 | 警告                  | —                | console 打印 `[excel-exporter] Falling back to the style-less fast stream. Reason: ...` |
 
 ## 如何感知兜底

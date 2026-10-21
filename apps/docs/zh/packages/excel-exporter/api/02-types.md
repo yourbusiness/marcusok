@@ -34,7 +34,7 @@
 
 工作表尺寸同样在导出前对照 Excel 硬上限校验：每表 1,048,576 行（表头行计入）、16,384 列（注入的 `indexColumn` 占一列）。超限的表直接以 `{ success: false }` 收场，错误中写明表名与实际行列数——否则在 stream 路径上会照常写出并 zip 成功，直到 Excel 打开时才报修复提示。
 
-**stream 路径兼容性。** 在无样式快速流上——显式 `mode: "stream"`、auto ≥ 50,000 行、或降级兜底——上两张表中的全部样式/布局字段都会被丢弃并打印 `console.warn`：`width`、列级 `style` / `headerStyle`、表级 `headerStyle` / `dataStyle`、`freezeRows`、`autoFilter`（连同 `FormatSpec` 本会自动注入的 `numFormat`——`decimals` 改为烧入存储值）。结构保留：多行表头、`merges` 与 `indexColumn` 不受影响。完整的分路径能力矩阵见 [Worker 与流式指南](/zh/packages/excel-exporter/guide/06-worker-stream)。
+**stream 路径兼容性。** 在快速流上——显式 `mode: "stream"`、auto ≥ 50,000 行、或降级兜底——单元格/布局样式会被丢弃并打印 `console.warn`：`width`、列级 `style` / `headerStyle`、表级 `headerStyle` / `dataStyle`、`freezeRows`、`autoFilter`。但 `FormatSpec` 的日期/数字 numFmt **不会**被丢弃：stream 路径会输出最小 `styles.xml`，日期保持序列号，`decimals`/`thousands` 在两条路径上都是纯显示设置。结构保留：多行表头、`merges` 与 `indexColumn` 不受影响。完整的分路径能力矩阵见 [Worker 与流式指南](/zh/packages/excel-exporter/guide/06-worker-stream)。
 
 ## IndexColumnOptions
 

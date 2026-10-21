@@ -154,7 +154,7 @@ Invalid input fails identically on every route with `{ success: false, error }` 
 | 20,000–49,999 rows | Worker + Workbook    | main     |
 | >= 50,000 rows     | Worker + Fast stream | stream   |
 
-On the Worker path the main thread only performs one structured-clone `postMessage` (100k rows ~94ms); the export work runs in the Worker thread. The Workbook path supports full `CellStyle`; Fast stream supports multi-row headers and merges but not `StyleBuilder`/layout styles — `width`/`freezeRows` etc. are dropped with a warning.
+On the Worker path the main thread only performs one structured-clone `postMessage` (100k rows ~94ms); the export work runs in the Worker thread. Concurrent exports are serialized through a main-thread FIFO queue (one worker request in flight at a time), so they do not corrupt each other; each request's timeout starts only when it is dispatched. The Workbook path supports full `CellStyle`; Fast stream supports multi-row headers, merges and number formats (date/number FormatSpec via a minimal `styles.xml`) but not cell/layout styling — `width`/`freezeRows` etc. are dropped with a warning.
 
 ### Style Presets
 
@@ -210,10 +210,10 @@ See [`src/types.ts`](./src/types.ts). Worker mode cannot carry functions across 
 
 Main-thread paths additionally accept function form (`main`, and `stream` in Node where it runs on the main thread): `format: (v) => v ? "Yes" : "No"`. The browser Worker path strips functions and prints a warning — use `FormatSpec` there instead.
 
-Number-spec cross-path notes (see `ColumnConfig.format` in [`src/types.ts`](./src/types.ts)):
+Format-spec cross-path notes (see `ColumnConfig.format` in [`src/types.ts`](./src/types.ts)):
 
-- Set `decimals` explicitly: the Workbook path stores full precision and renders decimals via `numFormat`, while the stream path (>= 50,000 rows / degraded exports) bakes decimals into the stored value.
-- `thousands: true` renders separators only on the Workbook path (`#,##0` numFormat). The stream path keeps the cell a number, so separators are not visible there — baking them into the value would turn data cells into text.
+- `decimals`/`thousands` are display-only: both the Workbook and stream paths store the full-precision number and render it through an Excel numFormat. The stream path emits a minimal `styles.xml` when any date/number spec is present, so crossing the 50k threshold no longer rounds stored values or drops separators.
+- `date`/`datetime` store the same Excel serial number on both paths; the pattern is attached as a numFmt (Workbook: cell style; stream: `styles.xml`), so cell type and display agree across routes.
 - `null`/`undefined` values (and blank/whitespace-only strings — the most common missing-value shape from databases, forms and CSV imports; `Number("") === 0` would silently turn them into a meaningful `0`) render as empty cells on every path (never `0`). `padding` treats them the same way (empty cell, not a padded `"00000"`), and so does `enum`: an empty cell, never the `fallback` — missing values never reach `map`/`fallback` at all.
 
 ### Fallback
@@ -222,7 +222,7 @@ When the browser Worker route fails (missing/404 worker asset, WASM init error i
 
 - **Worker + Workbook** (browser 20,000 – 49,999 rows): the library first **retries on the main thread** with modern-xlsx — styles are preserved. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to the **pure-JS fast stream** — no WASM, no network, headers and merges preserved, styles stripped. A successful degraded export carries `result.error` (with `success: true`) describing the degradation.
 - **Worker + Fast stream** (browser ≥ 50,000 rows, or an explicit `mode: "stream"`): the retry on the main thread _is_ the same fast stream on the identical input, so there are no styles left to preserve and nothing further to degrade to. A retry failure is terminal — the export resolves with `success: false` instead of attempting a doomed third build.
-- **Timeout** is the exception that never enters the chain: when the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminated and the export **fails fast** with the original timeout error — no main-thread retry, no stream fallback. The timeout means the worker is wedged or the workload legitimately exceeds the budget, and rerunning the same large build on the main thread is exactly the freeze the worker route exists to avoid (same policy as `@marcusok/excel-preview`'s parse timeout). Retry the export (a fresh worker is created), raise `workerTimeoutMs` via `configureWasm`, or split the input.
+- **Timeout** is the exception that never enters the chain: when the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminated and that request **fails fast** with the original timeout error — no main-thread retry, no stream fallback. The timeout measures only the time a request actually spends inside the worker (it starts after `postMessage`), not queue wait. Requests that were queued behind it are re-dispatched to a fresh worker (still serialized, but not failed as collateral). Retry the failed export, raise `workerTimeoutMs` via `configureWasm`, or split the input.
 
 Either way the caller's promise resolves rather than rejects, and each degradation step prints an `[excel-exporter]` console warning — check `result.error` to monitor the fallback rate.
 
@@ -247,7 +247,8 @@ The overlay appends to (never replaces) your existing `onProgress` / `onPhase` c
 - `configureWasm(opts)` — optional overrides for `wasmUrl`/`workerUrl`/`timeoutMs`/`maxRetries`/`workerTimeoutMs` (see [How assets resolve](#how-assets-resolve-zero-configuration)). The shared `LoaderOptions` type also accepts `parseWorkerUrl` — that field configures `@marcusok/excel-preview`'s parse worker and has no effect on this package (the export worker's URL is `workerUrl`). Note: changing `wasmUrl` after a _successful_ load does not reload WASM on a thread that already initialized it (modern-xlsx's `initWasm` is idempotent — first successful init wins); the new URL takes effect only in a fresh JS realm (page reload / a worker created after `terminateWorker()`), and a console warning is printed when this applies. Changing `workerUrl` has the analogous limitation: the shared Worker reads its script URL once at creation, so a later change only reaches a worker created after `terminateWorker()` (a warning is printed on any `workerUrl` change).
 - `onPhase(phase, durationMs)` (an `exportExcel` option) — per-phase timing callback: `init` (WASM init) / `build` (workbook build) / `download` (trigger download); reports elapsed milliseconds per phase — note that each **main-thread** build attempt reports its own `build` phase, so a degradation chain (failed worker build → main-thread retry → stream fallback) reports one `build` per main-thread attempt, while an attempt that fails _inside the worker_ reports no `build` at all (its failure surfaces through the retry) (see `ExportPhase` in [`src/types.ts`](./src/types.ts)). Does not affect the `duration` in the returned result.
 - `WorkbookBuilder` — batch builder (<50k rows, full styling). Does not expand `SheetConfig.indexColumn`; call `applyIndexColumn(sheet)` first.
-- `exportAsStream(sheets, onProgress?)` — large-file export (>=50k rows). Same caveat as `WorkbookBuilder` for `indexColumn`.
+- `exportAsStream(sheets, onProgress?, signal?)` — large-file export (>=50k rows), with optional cancellation. Same caveat as `WorkbookBuilder` for `indexColumn`.
+- `signal` (an `exportExcel` option) — optional `AbortSignal`. Aborting resolves `{ success: false, error }` with `error.name === "AbortError"`, skips the degradation chain, and does not trigger a download. Worker requests are cancelled immediately (active request terminates its worker; queued requests are removed); main-thread routes observe the signal at await boundaries because their synchronous build loop cannot be interrupted mid-chunk.
 - `applyIndexColumn(sheet)` / `INDEX_PROP` — expand `indexColumn` into the leading `__index__` column yourself (what `exportExcel` does internally), and the reserved prop name, for callers driving the two low-level entry points above.
 - `exportTable(options)` — convenience export for common table data, accepting Element Plus `prop`/`label` (the library naming), AntD `dataIndex`/`title`, and the legacy `key`/`header` names.
 - `exportEcharts(options)` — convenience export for common ECharts data, supporting category-axis multi-series (categories from `xAxis.data`, or `yAxis.data` for horizontal bar charts), pie `name/value`, and scatter pairs in either ECharts spelling (`[x,y]`, `[x,y,...dims]` — the first two dims become `X`/`Y` and a one-time console warning notes the dropped extra dims, or `{ value: [x,y] }`). `dataset` mode and multiple x/y axes are rejected with explicit errors. The default sheet name and column headers are Chinese (`图表数据` / `系列` / `类目` / `名称` / `数值`), except the scatter layout, whose coordinate headers are the literal `X` / `Y`; override them via `sheetName` / `seriesHeader` / `categoryHeader` / `nameHeader` / `valueHeader`. In long/item layouts the header texts double as row keys, so duplicated headers are rejected with a clear error.
@@ -256,7 +257,7 @@ The overlay appends to (never replaces) your existing `onProgress` / `onPhase` c
 - `headerStyle` — supported on both `SheetConfig` and `ColumnConfig` for styling header cells.
 - `overlay` (an `exportExcel` option, since 2.8.0) — `boolean | ProgressOverlayOptions`, on by default; `false` disables the overlay with zero overhead. Types are re-exported from the main entry.
 - `exportExcelWithOverlay(options, overlayOptions?)` / `showExportOverlay(overlayOptions)` / `nextPaint()` (`@marcusok/excel-exporter/overlay` subpath) — the pre-2.8 compatibility surface plus the generic overlay entry: the first is equivalent to `exportExcel({ ...options, overlay })`, the second is the standalone overlay show function (handle methods `setProgress` / `setPhase`, texts via `text.phases`), and `nextPaint()` supports the mount-then-yield pattern before long blocking spans.
-- `exportInWorker` / `terminateWorker` (`@marcusok/excel-exporter/worker-utils`, source entry `src/worker-exporter.ts`) — manual Worker lifecycle control.
+- `exportInWorker` / `terminateWorker` (`@marcusok/excel-exporter/worker-utils`, source entry `src/worker-exporter.ts`) — manual Worker lifecycle control. The shared worker processes requests through a main-thread FIFO queue (one in flight at a time); `terminateWorker()` rejects both the active and queued requests as no-fallback failures.
 
 ## Node Usage
 
@@ -271,7 +272,7 @@ import { getWasmLoader } from "@marcusok/excel-exporter";
 await getWasmLoader().ensureLoaded(); // reads + compiles the shipped wasm once
 ```
 
-Alternatively, `configureWasm({ wasmUrl })` with an HTTP(S) URL works too (fetched, not read from disk). Note: `initWasmSync` from a separately installed `modern-xlsx` does **not** pre-warm this package — the engine is bundled in, so an external copy is a different module instance.
+Alternatively, `configureWasm({ wasmUrl })` accepts an HTTP(S) URL (fetched), a plain filesystem path, or a `file:` URL (read synchronously with `fs`). A configured local file that cannot be read fails with the real fs/compile reason instead of a misleading `fetch failed`. Note: `initWasmSync` from a separately installed `modern-xlsx` does **not** pre-warm this package — the engine is bundled in, so an external copy is a different module instance.
 
 ## Design Decisions
 

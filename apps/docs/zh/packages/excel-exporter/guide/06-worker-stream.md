@@ -9,7 +9,7 @@ worker 资产（`export.worker.js`，自包含单文件 ESM）默认自动定位
 Worker 路径行为：
 
 - **Worker 失败会优雅降级**——Worker 路由失败时（例如 `workerUrl` 覆盖配置指向 404），导出会**先回退到主线程重试**（modern-xlsx 保留样式；≥ 50,000 行的 Fast stream 本身不依赖 WASM）。在 Worker + Workbook 路由上，重试再失败才继续降级到无样式的流式兜底（`mode: "stream"` 且 `result.error` 非空，`success` 仍为 `true`）；而在 Worker + stream 路由上（浏览器 ≥ 50,000 行），主线程重试本身就是对同一份输入跑同一个 fast stream，因此再失败即终局——导出以 `success: false` 结束，不再尝试第三次构建。无论哪条路由，调用方的 Promise 都正常 resolve（不会 reject），每一级降级都会在 console 打印 `[excel-exporter]` 前缀警告；
-- Worker 实例复用，请求按 `requestId` 并发分发，多次导出互不串扰；
+- Worker 实例复用，但请求经**主线程 FIFO 队列串行化**：同一时刻只有一个导出在处理。每个请求的超时从派发时开始计时（排队时间不计），超时/中止只收尾当前请求——排队中的导出落到新 worker 继续执行；
 - **函数形式的 format 会被剥离**（结构化克隆无法传递函数）——worker 路径请使用 FormatSpec；
 - `onProgress` / `onPhase` 会从 Worker 转发回主线程：`build` 在 Worker 内构建完成时上报；`init` 仅在 Worker + Workbook 路由、且 Worker 确实执行了 WASM 初始化时才上报——Worker + stream 路由不使用 WASM，完全不上报 `init`。
 
@@ -19,17 +19,17 @@ Worker 路径行为：
 
 Stream 路径的已知限制：
 
-| 特性                      | Stream 路径                     |
-| ------------------------- | ------------------------------- |
-| 多行表头（`children`）    | 支持（表头自动合并）            |
-| 单元格合并（`merges`）    | 支持（数据区）                  |
-| 单元格样式（`style`）     | 不支持                          |
-| 表头样式（`headerStyle`） | 不支持                          |
-| 列宽（`width`）           | 不支持                          |
-| 冻结行 / 自动筛选         | 不支持                          |
-| 自定义数字格式            | 不支持（`decimals` 烧入存储值） |
-| 日期格式                  | 按 pattern 输出可读字符串       |
-| 进度回调                  | 每 1000 行上报一次              |
+| 特性                      | Stream 路径                           |
+| ------------------------- | ------------------------------------- |
+| 多行表头（`children`）    | 支持（表头自动合并）                  |
+| 单元格合并（`merges`）    | 支持（数据区）                        |
+| 单元格样式（`style`）     | 不支持                                |
+| 表头样式（`headerStyle`） | 不支持                                |
+| 列宽（`width`）           | 不支持                                |
+| 冻结行 / 自动筛选         | 不支持                                |
+| 自定义数字格式            | 支持（最小 `styles.xml` / 仅 numFmt） |
+| 日期格式                  | 写序列号 + numFmt（与 Workbook 一致） |
+| 进度回调                  | 每 1000 行上报一次                    |
 
 被跳过的特性（单元格样式、表头样式、列宽、冻结等）会在 console 打印 `[excel-exporter] stream mode: features not supported (...)` 警告。
 

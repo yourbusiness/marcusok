@@ -39,6 +39,7 @@ await exportExcel({
     container: document.body,
     blockInteraction: true, // 置 false 则只做视觉覆盖
     theme: "auto", // "auto" | "light" | "dark"
+    styleNonce: undefined, // 注入 <style> 的 CSP nonce；样式写入容器的 root node（支持 ShadowRoot）
     text: {
       title: "正在导出 Excel",
       initial: "准备中…",

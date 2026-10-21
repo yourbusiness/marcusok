@@ -40,6 +40,7 @@ await exportExcel({
     container: document.body,
     blockInteraction: true, // false = visual cover only
     theme: "auto", // "auto" | "light" | "dark"
+    styleNonce: undefined, // CSP nonce for the injected <style>; styles go into container's root node (ShadowRoot-aware)
     text: {
       title: "正在导出 Excel",
       initial: "准备中…",

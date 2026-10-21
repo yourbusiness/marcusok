@@ -39,8 +39,8 @@ console.log(result); // engine: "fast-xlsx", mode: "stream", rowCount: 100000
 ## 要点
 
 - 10 万行下 `auto` 选择 `worker + Fast stream`，实测约 0.8s（Workbook 路径同数据量 Chrome 实测 17.5s）；
-- stream 路径**支持多行表头与合并**，但**不支持样式/列宽/冻结/筛选**，会打印 console 警告，属预期行为；
+- stream 路径**支持多行表头、合并与数字格式**（date/number FormatSpec 经最小 `styles.xml`），但**不支持单元格/布局样式、列宽/冻结/筛选**，会打印 console 警告，属预期行为；
 - `onProgress` 每 1000 行上报一次，适合展示进度；
-- 数字列建议显式声明 `decimals`，保证存储值与 Workbook 路径一致。
+- `decimals`/`thousands` 在两条路径上都是纯显示 numFmt，跨阈值存储值保持一致。
 
 到 [在线演示](/zh/play) 选择 100,000 行，切换 `auto` 与 `main` 对比体验差异。

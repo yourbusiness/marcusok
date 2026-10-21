@@ -51,6 +51,10 @@ load, so use `duration.render` for a switch's own cost).
   in-flight parse; `parseWorkbookBytes` accepts an `AbortSignal`), friendly
   code-carrying errors (`PASSWORD_PROTECTED`, `LEGACY_FORMAT` for legacy
   `.xls`, `ABORTED` for cancellations, …).
+- **Embedding** — works inside a ShadowRoot (styles are injected into the
+  container's root node), and both injected `<style>` elements accept an
+  optional CSP `styleNonce`. Cell geometry still uses inline `style`
+  attributes, so a strict CSP must allow inline style attributes.
 
 ## Low-level API
 
@@ -63,9 +67,18 @@ formatter the DOM renderer uses.
 ## Large files
 
 Parsing is not streaming (OOXML parts cross-reference each other), but it
-happens entirely inside a Web Worker — the UI never freezes — and the DOM
-renderer virtualizes to viewport-only cells. Measured locally: ~1.5s parse for
-100k rows × 10 columns; scrolling cost is independent of file size.
+happens inside a Web Worker and the DOM renderer virtualizes to viewport-only
+cells. Measured locally: ~1.5s parse for 100k rows × 10 columns; scrolling cost
+is independent of file size. The worker returns the whole model via structured
+clone, so the handoff itself is a main-thread task that grows with the cell
+count (~50ms at 10k rows, ~150ms at 50k, ~300ms at 100k in Chromium) — expect a
+brief pause at the end of the parse, not during it.
+
+Node/SSR performance depends heavily on the runtime build: the bundled engine's
+`readBuffer` is ~10x slower on Node 22.x (and Node 24.14) than on Node 24.21 for
+numeric-heavy sheets. Functional support stays at Node >= 22 (CI covers it),
+but the local performance baselines and the numbers above assume the pinned
+development runtime (`.nvmrc`).
 
 ## Not in scope
 
@@ -91,8 +104,17 @@ field — each package's worker is a different script, so one field could not
 serve both). The parse worker is a module-level singleton that reads
 `parseWorkerUrl` once at creation: after changing URLs, call
 `terminateParseWorker()` (exported from the main entry) — or reload the page —
-before the next parse. In-flight parses are rejected without a main-thread
-rerun; the next parse rebuilds a fresh worker from the current options.
+before the next parse. In-flight and queued parses are rejected without a
+main-thread rerun; the next parse rebuilds a fresh worker from the current
+options (this also clears a previous worker-construction/load failure, i.e. the
+`workerBroken` permanent-fallback state).
+
+Worker requests are serialized through a main-thread FIFO queue (one parse in
+flight at a time). A request's timeout starts when it is dispatched, so queue
+wait does not count; a timed-out parse terminates the worker and queued parses
+continue on a fresh instance. Aborting the active parse also terminates the
+worker (queued parses are re-dispatched); aborting a queued parse only removes
+that request.
 
 ## Documentation
 

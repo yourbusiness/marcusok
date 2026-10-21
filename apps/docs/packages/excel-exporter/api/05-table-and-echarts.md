@@ -11,7 +11,7 @@ Two convenience entry points that accept the data shapes you already have — a 
 
 Consequences worth knowing:
 
-- The shared [`ExportOptions`](/packages/excel-exporter/api/01-export-excel#exportoptions) fields these two types do declare — `filename`, `mode`, `onProgress`, `onPhase`, `download`, `overlay` — behave exactly as they do on the main entry (same routing, same progress contract, same `{ success, blob, engine, mode, duration, rowCount, error }` result).
+- The shared [`ExportOptions`](/packages/excel-exporter/api/01-export-excel#exportoptions) fields these two types do declare — `filename`, `mode`, `onProgress`, `onPhase`, `download`, `signal`, `overlay` — behave exactly as they do on the main entry (same routing, same progress contract, same `{ success, blob, engine, mode, duration, rowCount, error }` result).
 - `overlay` is declared on both types and forwarded by both converters, with the same semantics as on `exportExcel`: default **on**, `false` to opt out, an options object to customize (see the [Progress Overlay guide](/packages/excel-exporter/guide/11-overlay)).
 - Both wrappers are single-sheet: each produces a `sheets` array of exactly one entry.
 
@@ -55,6 +55,7 @@ Exports one sheet from a `columns + data` pair, with column descriptors in the s
 | `onProgress`  | `(progress: number) => void`                       | —        | 0 → 1, with the leading 0 and trailing 1 each fired once on every route                                                                                                                                                          |
 | `onPhase`     | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                                                                                                                                                                            |
 | `download`    | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                                                                                                                                                                                    |
+| `signal`      | `AbortSignal`                                      | —        | Same cancellation semantics as on `exportExcel`; resolves an `AbortError` result and skips the degradation chain                                                                                                                 |
 | `overlay`     | `boolean \| ProgressOverlayOptions`                | —        | Same as on `exportExcel`: default **on**; `false` disables, an object customizes                                                                                                                                                 |
 
 ### TableColumnInput
@@ -195,6 +196,7 @@ Exports one sheet from a small, explicit structural subset of an ECharts option.
 | `onProgress`     | `(progress: number) => void`                       | —        | 0 → 1, with the leading 0 and trailing 1 each fired once on every route          |
 | `onPhase`        | `(phase: ExportPhase, durationMs: number) => void` | —        | `init` / `build` / `download` timings                                            |
 | `download`       | `boolean`                                          | —        | Default `true`; `false` returns the Blob only                                    |
+| `signal`         | `AbortSignal`                                      | —        | Same cancellation semantics as on `exportExcel`                                  |
 | `overlay`        | `boolean \| ProgressOverlayOptions`                | —        | Same as on `exportExcel`: default **on**; `false` disables, an object customizes |
 
 ### EChartsOptionInput and friends

@@ -69,7 +69,7 @@ await getWasmLoader().ensureLoaded(); // reads + compiles the shipped wasm once
 
 > Do not use `initWasmSync` from a separately installed `modern-xlsx` for this: the engine is bundled into this package's own `dist`, so an external copy initializes a different module instance and does not pre-warm the bundled one.
 
-> Bundler caveat: if your server build bundles this package and the WASM asset is not emitted alongside the bundle, the automatic disk lookup fails and WASM-dependent routes degrade to the style-less stream (headers/merges preserved). Either keep the package external (the default for Node server builds), pass `configureWasm({ wasmUrl })` with an HTTP URL, or copy the asset where the bundle can read it.
+> Bundler caveat: if your server build bundles this package and the WASM asset is not emitted alongside the bundle, the automatic disk lookup fails and WASM-dependent routes degrade to the style-less stream (headers/merges preserved). Either keep the package external (the default for Node server builds), copy the asset where the bundle can read it, or point `configureWasm({ wasmUrl })` at it explicitly — Node accepts an HTTP(S) URL, a plain filesystem path, or a `file:` URL (the last two are read with `fs` and initialize synchronously; a missing local file fails with the real fs/compile reason instead of a misleading `fetch failed`).
 
 ## Performance tip
 

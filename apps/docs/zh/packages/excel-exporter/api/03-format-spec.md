@@ -32,7 +32,7 @@ type FormatSpec =
 
 接受 `Date` / 可解析字符串 / 时间戳。Workbook 路径写入 Excel 日期序列并自动注入 `numFormat`；Stream 路径输出 pattern 格式化字符串。统一按 **UTC 分量**解释（与 Workbook 序列的 `dateToSerial` 口径一致，跨路径/跨时区显示相同）；ISO 日期字符串按 ECMA-262 解析为 UTC 午夜，详见[值格式化的时区约定](/zh/packages/excel-exporter/guide/04-formatting)。pattern 支持的 token 跨路径有差异：Stream 路径会先把整串转小写，只解析 `yyyy` / `MM` / `dd` / `HH` / `mm` / `ss`，其余内容小写后原样输出——不解析引号字面量，`yyyy"年"M"月"` 会渲染成 `2026"年"m"月"`；Workbook 路径可渲染任意合法 Excel 格式码（含引号字面量）——详见[值格式化的说明](/zh/packages/excel-exporter/guide/04-formatting)。
 
-同一区域还有两个边界：无法转换为日期的值（bigint、布尔、普通对象、Invalid Date——只接受 `Date` / 可解析字符串 / 时间戳）会以其字符串形态写入，而不会让导出失败；超集 token（`mmm`、`yy`、单字母 `M`/`d`）在 Stream 路径只被部分处理——`"mmm"` 在那里渲染成 `"09m"`，而 Excel 侧渲染月份缩写——跨阈值一致请只用六种 token（详见[值格式化的说明](/zh/packages/excel-exporter/guide/04-formatting)）。
+同一区域还有一个边界：无法转换为日期的值（bigint、布尔、普通对象、Invalid Date——只接受 `Date` / 可解析字符串 / 时间戳）会以其字符串形态写入，而不会让导出失败。pattern 在两条路径上都由 Excel 渲染（Stream 路径通过最小 `styles.xml` 写入 numFmt），不再有 token 子集限制（详见[值格式化的说明](/zh/packages/excel-exporter/guide/04-formatting)）。
 
 ### number
 
@@ -40,9 +40,9 @@ type FormatSpec =
 { type: "number", decimals: 2, thousands: true }
 ```
 
-`decimals` 默认 0，`thousands` 默认 false；`decimals` 校验为 0–100 的整数（与 stream 路径依赖的 `toFixed` 上限一致）。**务必显式声明 `decimals`**：Workbook 路径保留完整精度经 `numFormat` 渲染，Stream/兜底路径将 `decimals` 烧入存储值，两种路径存储值可能不同。
+`decimals` 默认 0，`thousands` 默认 false；`decimals` 校验为 0–100 的整数。两条路径都保留完整精度的存储值，并通过 Excel numFmt 渲染 `decimals`/`thousands`——Workbook 路径走单元格样式，Stream 路径走最小 `styles.xml`。因此跨 50,000 行不再舍入存储值，也不再丢失千分位。
 
-`thousands` 的跨路径差异：Workbook 路径经自动注入的 `#,##0` `numFormat` 渲染千分位；Stream 路径（≥ 50,000 行 / 降级导出）无法使用 `numFormat`，单元格保持为**数字**，因此不显示千分位（把分隔符烧入值会把数据单元格变成文本，破坏下游计算）。
+日期/时间同理：两条路径都存 Excel 序列号（UTC 分量），pattern 作为 numFmt 附加，单元格类型与显示跨路径一致。
 
 `null`/`undefined`（以及空串/纯空白串——数据库、表单、CSV 导入中最常见的缺失值形态）在所有路径下均渲染为空单元格——绝不会是 `0`。`padding` 对它们同样处理：空单元格，而不是 `"00000"` 这类填充出的假编号。`enum` 亦然：空单元格，绝不会是 `fallback`（见上文）。
 

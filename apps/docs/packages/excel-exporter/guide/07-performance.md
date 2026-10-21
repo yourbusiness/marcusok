@@ -24,5 +24,7 @@ Numbers below come from local measurements (real Chrome, 6 mixed-type columns). 
 
 - Stay on `mode: "auto"`; never force `main` for large files;
 - Keep styled exports under 50k rows **per call** — `auto` routes on the total across all sheets of one call, so splitting into more sheets of the same call does not help; for larger data accept degraded styling or split into multiple `exportExcel` calls (one file each);
-- **Set `decimals` explicitly** on `number` columns for consistent stored values across paths (Workbook/Stream/fallback);
+- `decimals`/`thousands` are display-only numFmt settings on both paths now; no need to pre-round values for cross-threshold consistency;
 - Run large server-side exports in background tasks.
+
+> Runtime note: the local baselines and `.nvmrc` use Node 24.21.0. The bundled engine's WASM `readBuffer` is ~10x slower on Node 22.x (and Node 24.14) for numeric-heavy preview sheets; the exporter's Workbook/stream benchmarks are far less sensitive, but performance comparisons should use the pinned runtime. CI keeps a functional Node 22 job with performance tests skipped.
