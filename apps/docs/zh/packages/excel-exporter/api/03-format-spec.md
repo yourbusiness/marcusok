@@ -73,10 +73,10 @@ format: (value, row) => string | number | boolean;
 
 可以访问整行数据做条件格式化。函数无法穿过结构化克隆，因此各路径行为不同：
 
-- **main 路径**（auto 模式下浏览器 < 20,000 行 / Node < 50,000 行；或任意行数显式 `mode: "main"`）：函数正常执行；
-- **Node 的 stream 路径**（auto ≥ 50,000 行，或显式 `mode: "stream"`）：同样在主线程执行，函数正常执行；
+- **main 路径**（auto 模式下浏览器低于 Worker 门槛 / Node 低于 stream 门槛；或任意行数显式 `mode: "main"`）：函数正常执行；
+- **Node 的 stream 路径**（auto 达到 stream 门槛，或显式 `mode: "stream"`）：同样在主线程执行，函数正常执行；
 - **worker 失败后的主线程重试**：函数正常执行——原始 options 里的函数仍在，被剥离的只是发给 worker 的副本；
-- **浏览器 worker 路径**（auto ≥ 20,000 行，或显式 `mode: "worker"` / `mode: "stream"`）：函数会被**剥离并打印 `console.warn`**，该列以原始值导出（不会报错，也不会回落到 main）。
+- **浏览器 worker 路径**（auto 达到 Worker 门槛，或显式 `mode: "worker"` / `mode: "stream"`）：函数会被**剥离并打印 `console.warn`**，该列以原始值导出（不会报错，也不会回落到 main）。
 
 需要 worker 路径保留格式时，请改写为 FormatSpec。
 

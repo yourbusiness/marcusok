@@ -10,7 +10,7 @@ Pick a dataset, row count and export mode, click export to get a real `.xlsx` fi
   <PackageDemo dir="excel-exporter" />
 </ClientOnly>
 
-- **auto (recommended)**: picks the optimal main / worker / stream path by row count;
+- **auto (recommended)**: picks the optimal main / worker / stream path by row and cell count;
 - **main**: synchronous main-thread build — notice the cliff at 100k rows;
 - **worker**: Web Worker threading; the main thread only does one structured clone;
 - **stream**: Fast stream, ~0.8s at 100k rows, but no styles or layout features.

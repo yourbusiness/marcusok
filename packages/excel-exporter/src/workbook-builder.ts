@@ -87,7 +87,13 @@ export class WorkbookBuilder {
         // 结果漂移，违反 types.ts 的跨路径同一性契约。兜底分支（函数 format
         // 返回 undefined/null、toStr 产出 ""）同口径归 null——此前 "" 直入
         // aoa 建成空文本格，与 stream 的跳格不一致（同一性缺口）。
-        if (typeof v === "string") return v === "" ? null : v;
+        // 字符串同样过 toStr：enum/padding/函数 format 的返回值可能携带
+        // XML 非法字符或孤立代理项；toStr 统一清洗，避免与 stream 路径
+        // 内容不一致或触发引擎 serde 失败。
+        if (typeof v === "string") {
+          const s = toStr(v);
+          return s === "" ? null : s;
+        }
         const fallback = toStr(v);
         return fallback === "" ? null : fallback;
       }),

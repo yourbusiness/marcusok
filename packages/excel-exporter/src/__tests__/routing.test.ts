@@ -2,6 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { exportExcel } from "../index";
 import { exportInWorker } from "../worker-exporter";
 import { StylePresets } from "../style-presets";
+import {
+  pickMode,
+  STREAM_CELL_THRESHOLD,
+  WORKER_CELL_THRESHOLD,
+} from "../routing";
 // Node's fetch rejects file://, so sync-init the WASM (see setup.ts).
 import "./setup";
 
@@ -23,7 +28,101 @@ function stubBrowserWorkerEnv(): void {
 
 // Node (vitest environment: 'node') has no Web Worker / window globals, so this
 // suite verifies the env-aware fallbacks in pickMode without mocking.
+describe("pickMode thresholds (rows + estimated cells)", () => {
+  it("routes by cell count when the row count is below both row thresholds", () => {
+    // 宽表：行数不大，但单元格数触达 stream / worker 阈值
+    expect(pickMode("auto", 40_000, 2_000_000, false)).toEqual({
+      mode: "stream",
+      workerMode: "stream",
+    });
+    expect(pickMode("auto", 40_000, 2_000_000, true)).toEqual({
+      mode: "worker",
+      workerMode: "stream",
+    });
+    // 1M 格：Workbook 路径仍可接受（20k×50 实测约 1.6s），走 Worker+Workbook
+    expect(pickMode("auto", 20_000, 1_000_000, true)).toEqual({
+      mode: "worker",
+      workerMode: "workbook",
+    });
+    // 10k×30=300k 格：主线程同步构建已足够长，浏览器交给 Worker
+    expect(
+      pickMode("auto", 10_000, WORKER_CELL_THRESHOLD + 50_000, true),
+    ).toEqual({
+      mode: "worker",
+      workerMode: "workbook",
+    });
+    // 10k×20=200k 格：低于 Worker 单元格阈值，保持 main
+    expect(pickMode("auto", 10_000, 200_000, true)).toEqual({ mode: "main" });
+  });
+
+  it("keeps the row thresholds and explicit modes unchanged", () => {
+    expect(pickMode("auto", 60_000, 60_000, true)).toEqual({
+      mode: "worker",
+      workerMode: "stream",
+    });
+    expect(pickMode("auto", 60_000, 60_000, false)).toEqual({
+      mode: "stream",
+      workerMode: "stream",
+    });
+    expect(pickMode("worker", 1, 1, true)).toEqual({
+      mode: "worker",
+      workerMode: "workbook",
+    });
+    expect(pickMode("worker", 1, 1, false)).toEqual({ mode: "main" });
+    expect(pickMode("main", 100_000, 10_000_000, true)).toEqual({
+      mode: "main",
+    });
+    expect(pickMode("stream", 1, 1, false)).toEqual({
+      mode: "stream",
+      workerMode: "stream",
+    });
+  });
+
+  it("uses the documented cell threshold constants", () => {
+    expect(STREAM_CELL_THRESHOLD).toBe(1_500_000);
+    expect(WORKER_CELL_THRESHOLD).toBe(250_000);
+  });
+});
+
 describe("exportExcel mode routing (Node environment)", () => {
+  it("auto routes a wide sheet (100 x 16,384 = 1.64M cells) to the fast stream", async () => {
+    // 行数只有 100，但单元格数超过 stream 阈值。旧实现只看行数会走
+    // Workbook 路径（实测同规模 2M 格约 6.3s/RSS +1.2GB）。
+    const columns = Array.from({ length: 16_384 }, (_, i) => ({
+      prop: `c${i}`,
+      label: `C${i}`,
+    }));
+    const r = await exportExcel({
+      filename: "wide-stream",
+      download: false,
+      mode: "auto",
+      sheets: [
+        { name: "S", columns, data: Array.from({ length: 100 }, () => ({})) },
+      ],
+    });
+    expect(r.success).toBe(true);
+    expect(r.engine).toBe("fast-xlsx");
+    expect(r.mode).toBe("stream");
+  });
+
+  it("auto keeps a 10 x 16,384 (163k cells) sheet on the styled main path", async () => {
+    const columns = Array.from({ length: 16_384 }, (_, i) => ({
+      prop: `c${i}`,
+      label: `C${i}`,
+    }));
+    const r = await exportExcel({
+      filename: "wide-main",
+      download: false,
+      mode: "auto",
+      sheets: [
+        { name: "S", columns, data: Array.from({ length: 10 }, () => ({})) },
+      ],
+    });
+    expect(r.success).toBe(true);
+    expect(r.engine).toBe("modern-xlsx");
+    expect(r.mode).toBe("main");
+  });
+
   it("forced 'worker' mode in a no-Worker env falls back to modern-xlsx, not the style-less stream", async () => {
     const r = await exportExcel({
       filename: "routing-worker",
@@ -346,6 +445,70 @@ describe("exportExcel worker branch onProgress contract (mocked worker)", () => 
       expect(r.success).toBe(false);
       expect(r.error?.message).toBe("boom-2");
       expect(progress).toEqual([0, 1]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.mocked(exportInWorker).mockReset();
+    }
+  });
+
+  it("auto routes a 10k x 30 sheet (300k cells) to the worker by cell count", async () => {
+    stubBrowserWorkerEnv();
+    vi.mocked(exportInWorker).mockResolvedValue({
+      success: true,
+      blob: new Blob(["x"]),
+      engine: "modern-xlsx",
+      mode: "worker",
+    });
+    const columns = Array.from({ length: 30 }, (_, i) => ({
+      prop: `c${i}`,
+      label: `C${i}`,
+    }));
+    try {
+      const r = await exportExcel({
+        filename: "worker-cell-threshold",
+        download: false,
+        mode: "auto",
+        sheets: [
+          {
+            name: "S",
+            columns,
+            data: Array.from({ length: 10_000 }, () => ({})),
+          },
+        ],
+      });
+      expect(r.success).toBe(true);
+      expect(exportInWorker).toHaveBeenCalledWith(
+        expect.objectContaining({ filename: "worker-cell-threshold" }),
+        "workbook",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      vi.mocked(exportInWorker).mockReset();
+    }
+  });
+
+  it("auto keeps a 10k x 20 sheet (200k cells) on main by cell count", async () => {
+    stubBrowserWorkerEnv();
+    const columns = Array.from({ length: 20 }, (_, i) => ({
+      prop: `c${i}`,
+      label: `C${i}`,
+    }));
+    try {
+      const r = await exportExcel({
+        filename: "main-cell-threshold",
+        download: false,
+        mode: "auto",
+        sheets: [
+          {
+            name: "S",
+            columns,
+            data: Array.from({ length: 10_000 }, () => ({})),
+          },
+        ],
+      });
+      expect(r.success).toBe(true);
+      expect(r.mode).toBe("main");
+      expect(exportInWorker).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
       vi.mocked(exportInWorker).mockReset();

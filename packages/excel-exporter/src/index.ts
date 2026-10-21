@@ -1,11 +1,4 @@
-import type {
-  CellStyle,
-  ColumnConfig,
-  ExportOptions,
-  ExportResult,
-  ExportMode,
-  ExportPhase,
-} from "./types";
+import type { ExportOptions, ExportResult } from "./types";
 import { WorkbookBuilder } from "./workbook-builder";
 import { exportAsStream } from "./streaming-builder";
 import {
@@ -13,25 +6,25 @@ import {
   isAbortError,
   type NoFallbackError,
 } from "./worker-exporter";
-import { triggerDownload, toBlobPart } from "./download";
+import { toBlobPart } from "./download";
+import {
+  triggerDownloadIsolated,
+  mergeOverlayText,
+  overlayPhaseKey,
+} from "./overlay-wiring";
 import { getWasmLoader } from "@marcusok/xlsx-core";
 import { tableExportToOptions, type TableExportOptions } from "./table-export";
 import {
   echartsExportToOptions,
   type EChartsExportOptions,
 } from "./echarts-export";
-import {
-  validateSheetName,
-  validateMerges,
-  validateSheetLimits,
-} from "./format-utils";
-import { columnLabel, flattenColumnTree } from "./column-tree";
-import { applyIndexColumn, assertNoReservedIndexProp } from "./sheet-normalize";
+import { applyIndexColumn } from "./sheet-normalize";
+import { validateInput } from "./input-validation";
+import { estimateTotalCells, pickMode } from "./routing";
 import {
   nextPaint,
   showProgressOverlay,
   type ProgressOverlayOptions,
-  type ProgressOverlayTextOptions,
 } from "@marcusok/progress-overlay";
 
 export * from "./types";
@@ -61,453 +54,6 @@ export { BaseCellStyle } from "./style-utils";
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const STREAM_THRESHOLD = 50_000; // Workbook.toBuffer cliff starts ~55k rows
-const WORKER_THRESHOLD = 20_000; // main-mode sync work is acceptable below this
-/** validateInput 的 mode 枚举校验用；与 ExportMode 类型一一对应。 */
-const VALID_MODES = new Set<ExportMode>(["auto", "main", "worker", "stream"]);
-
-/**
- * Fire-and-forget browser download. The export itself has already succeeded
- * at this point, so a trigger failure (e.g. a sandboxed DOM throwing on
- * a.click()) must not push the caller into the degradation chain and rebuild
- * the whole workbook — the Blob is already in the result. The "download"
- * phase is reported either way.
- */
-function triggerDownloadIsolated(options: ExportOptions, blob: Blob): void {
-  const downloadStart = performance.now();
-  try {
-    triggerDownload(blob, options.filename);
-  } catch (e) {
-    console.warn(
-      `[excel-exporter] download trigger failed; the Blob is still returned in the result. Reason: ${(e as Error).message}`,
-    );
-  } finally {
-    options.onPhase?.("download", performance.now() - downloadStart);
-  }
-}
-
-type PickedMode = { mode: ExportMode; workerMode?: "workbook" | "stream" };
-
-/**
- * Auto mode selection (verified against independent-process benchmarks).
- * - main fully blocks the thread; only for Node/SSR or browser <20,000 rows.
- * - browser >=20,000 rows go to a worker (main thread does one structured clone).
- * - inside the worker, >=50k rows use stream (avoids the toBuffer cliff).
- */
-function pickMode(options: ExportOptions, totalRows: number): PickedMode {
-  const explicit = options.mode ?? "auto";
-  if (explicit === "stream") return { mode: "stream", workerMode: "stream" };
-  if (explicit === "worker") {
-    // Worker mode requires a Web Worker global. In environments without one
-    // (Node/SSR), fall back to the main-thread path so styles are preserved
-    // instead of silently degrading to the style-less stream fallback.
-    const isBrowser =
-      typeof Worker !== "undefined" && typeof window !== "undefined";
-    if (!isBrowser) {
-      return totalRows >= STREAM_THRESHOLD
-        ? { mode: "stream", workerMode: "stream" }
-        : { mode: "main" };
-    }
-    return {
-      mode: "worker",
-      workerMode: totalRows >= STREAM_THRESHOLD ? "stream" : "workbook",
-    };
-  }
-  if (explicit === "main") return { mode: "main" };
-
-  // auto
-  const isBrowser =
-    typeof Worker !== "undefined" && typeof window !== "undefined";
-  if (!isBrowser) {
-    return totalRows >= STREAM_THRESHOLD
-      ? { mode: "stream", workerMode: "stream" }
-      : { mode: "main" };
-  }
-  if (totalRows < WORKER_THRESHOLD) return { mode: "main" };
-  if (totalRows >= STREAM_THRESHOLD)
-    return { mode: "worker", workerMode: "stream" };
-  return { mode: "worker", workerMode: "workbook" };
-}
-
-/**
- * 样式数值字段的前置校验（与 freezeRows / width 同类）：非法值（如
- * textRotation: 270）直通引擎会以晦涩的 serde 错误失败，并把整份导出降级
- * 为无样式 stream——正是前置校验要消除的"同一错误一边降级一边成功"分裂。
- * 范围只限 types.ts 明确承诺了取值区间的字段（textRotation 注释 0-180），
- * 不替引擎承诺未文档化的上限（如 font.size 的 409）。
- *
- * 颜色与 border.style 同属"types.ts 已承诺、直通引擎却产出 Excel 可能要求
- * 修复的工作簿（success 仍 true）"的字段：引擎对 color: "notacolor" /
- * style: "wavy" 照单全收写进 styles.xml（实测），而 OOXML 的 rgb 是
- * ST_UnsignedIntHex、border style 是封闭枚举——与表名/merge 的校验同一
- * 口径前置拦截（"不产出 Excel 判损文件而 success 仍为 true"）。
- */
-const COLOR_HEX = /^[0-9A-Fa-f]{6}$/;
-const BORDER_STYLES = new Set<string>([
-  "thin",
-  "medium",
-  "thick",
-  "dashed",
-  "dotted",
-  "double",
-  "hair",
-  "mediumDashed",
-  "dashDot",
-  "mediumDashDot",
-  "dashDotDot",
-  "mediumDashDotDot",
-  "slantDashDot",
-]);
-
-function validateColor(
-  color: string | undefined,
-  at: string,
-  field: string,
-): void {
-  if (color === undefined) return;
-  if (typeof color !== "string" || !COLOR_HEX.test(color)) {
-    throw new Error(
-      `[excel-exporter] ${at}: ${field} must be a 6-digit RGB hex string (e.g. 'FF0000'), got ${JSON.stringify(color)}`,
-    );
-  }
-}
-
-function validateCellStyle(style: CellStyle | undefined, at: string): void {
-  if (!style) return;
-  const rotation = style.alignment?.textRotation;
-  if (
-    rotation !== undefined &&
-    (!Number.isInteger(rotation) || rotation < 0 || rotation > 180)
-  ) {
-    throw new Error(
-      `[excel-exporter] ${at}: alignment.textRotation must be an integer between 0 and 180`,
-    );
-  }
-  const size = style.font?.size;
-  if (
-    size !== undefined &&
-    (typeof size !== "number" || !Number.isFinite(size) || size <= 0)
-  ) {
-    throw new Error(
-      `[excel-exporter] ${at}: font.size must be a finite positive number`,
-    );
-  }
-  validateColor(style.font?.color, at, "font.color");
-  validateColor(style.fill?.fgColor, at, "fill.fgColor");
-  validateColor(style.fill?.bgColor, at, "fill.bgColor");
-  const border = style.border;
-  if (border) {
-    for (const side of ["top", "bottom", "left", "right"] as const) {
-      const b = border[side];
-      if (!b) continue;
-      if (!BORDER_STYLES.has(b.style)) {
-        throw new Error(
-          `[excel-exporter] ${at}: border.${side}.style must be one of the OOXML border styles (thin/medium/thick/dashed/...), got ${JSON.stringify(b.style)}`,
-        );
-      }
-      validateColor(b.color, at, `border.${side}.color`);
-    }
-  }
-}
-
-/** 递归校验列树（含分组列）上的样式；分组列的 style 虽被忽略，非法值一并拦截。 */
-function validateColumnStyles(
-  columns: ColumnConfig[],
-  sheetName: string,
-): void {
-  for (const col of columns) {
-    const at = `sheet "${sheetName}" column "${columnLabel(col)}"`;
-    validateCellStyle(col.style, `${at} style`);
-    validateCellStyle(col.headerStyle, `${at} headerStyle`);
-    if (col.children) validateColumnStyles(col.children, sheetName);
-  }
-}
-
-/**
- * Pre-flight validation of user input. Runs the same checks as the
- * Workbook/stream build paths (same functions, same messages), hoisted
- * to the entry so a configuration error fails immediately with `{ success:
- * false, error }` instead of first degrading to a stream fallback attempt
- * that re-runs the identical checks and fails identically. Engine failures
- * (WASM unavailable, build errors) still degrade to the stream as before.
- */
-function validateInput(options: ExportOptions): void {
-  // `options` 本身可能为 null/undefined（JS 调用方）：不守住这里，入口处在
-  // try 之前解引用 options 的属性会以裸 TypeError reject，绕过下方承诺的
-  // 结构化 { success: false } 契约。
-  if (options === null || typeof options !== "object") {
-    throw new Error("[excel-exporter] options must be an object");
-  }
-  // mode 是路由的显式意图输入：拼错的枚举值（"Main"/"STREAM"）会被 pickMode
-  // 静默当作 auto 路由，用户的显式指定被无声忽略。与 filename/sheets 等
-  // 字段同一口径前置报错；undefined = 未指定，走 auto。
-  if (options.mode !== undefined && !VALID_MODES.has(options.mode)) {
-    throw new Error(
-      `[excel-exporter] mode must be one of "auto", "main", "worker", "stream" (got ${JSON.stringify(
-        options.mode,
-      )})`,
-    );
-  }
-  // Guard the other core input alongside the sheets checks below: without it,
-  // a JS caller omitting `filename` only fails inside triggerDownload with a
-  // masked TypeError (caught as a cryptic warning), leaving success:true and
-  // no file on disk. Fail fast with the structured { success: false } instead.
-  if (typeof options.filename !== "string" || options.filename.length === 0) {
-    throw new Error("[excel-exporter] filename must be a non-empty string");
-  }
-  // An empty sheets array is not a build error on the stream path (fast-xlsx
-  // would zip a zero-sheet workbook Excel flags as corrupt while reporting
-  // success), so reject it here like every other structural input error.
-  // The same guard covers a missing/non-array `sheets`, which the caller's
-  // totalRows reduce could otherwise hit first with a raw TypeError.
-  if (!Array.isArray(options.sheets) || options.sheets.length === 0) {
-    throw new Error("[excel-exporter] at least one sheet is required");
-  }
-  const seen = new Set<string>();
-  for (const sheet of options.sheets) {
-    // A null/primitive entry would fail on `sheet.name` with a raw TypeError;
-    // give it the same clear treatment as the other structural guards below.
-    if (sheet === null || typeof sheet !== "object") {
-      throw new Error("[excel-exporter] each sheet must be an object");
-    }
-    validateSheetName(sheet.name);
-    // Excel 的表名唯一性是大小写不敏感的（"Sheet1" 与 "SHEET1" 视为同名，
-    // UI 层就拒绝这样命名），查重须同口径，否则会产出 Excel 可能要求修复的
-    // 工作簿而 success 仍为 true。
-    const nameKey = sheet.name.toLowerCase();
-    if (seen.has(nameKey)) {
-      throw new Error(`[excel-exporter] duplicate sheet name "${sheet.name}"`);
-    }
-    seen.add(nameKey);
-    // Guard the two arrays the build paths index into; without these, a sheet
-    // missing `columns`/`data` fails downstream with a raw TypeError instead
-    // of a clear, actionable message.
-    if (!Array.isArray(sheet.columns)) {
-      throw new Error(
-        `[excel-exporter] sheet "${sheet.name}" must have a columns array`,
-      );
-    }
-    if (!Array.isArray(sheet.data)) {
-      throw new Error(
-        `[excel-exporter] sheet "${sheet.name}" must have a data array`,
-      );
-    }
-    const { leaves, headerRowCount } = flattenColumnTree(sheet.columns);
-    // 保留列在这里**无条件**拦截（与是否启用 indexColumn 无关）：构建器对
-    // INDEX_PROP 的特判是无条件的，放行只会让用户自带的该列被行号静默顶替
-    // （数据丢失而 success 仍为 true）。原先该检查只在 applyIndexColumn 内，
-    // 未启用 indexColumn 时它直接返回原表，静默路径正好漏在最外层入口上。
-    assertNoReservedIndexProp(leaves);
-    validateMerges(sheet, leaves.length);
-    // Excel 硬上限（1,048,576 行 × 16,384 列）：超限在 stream 路径会照常
-    // 写出并 zip 成功、Excel 打开即报修复而 success 仍为 true。本校验在序号
-    // 列注入之前运行，列数须自行加上 indexColumn 占用的一列。
-    validateSheetLimits(
-      sheet,
-      leaves.length + (sheet.indexColumn ? 1 : 0),
-      headerRowCount,
-    );
-    // 样式数值字段（textRotation / font.size）前置校验，覆盖 sheet 级、列级
-    //（含分组列）与 indexColumn 注入列的全部出现点。
-    validateCellStyle(sheet.headerStyle, `sheet "${sheet.name}" headerStyle`);
-    validateCellStyle(sheet.dataStyle, `sheet "${sheet.name}" dataStyle`);
-    validateColumnStyles(sheet.columns, sheet.name);
-    if (typeof sheet.indexColumn === "object" && sheet.indexColumn !== null) {
-      validateCellStyle(
-        sheet.indexColumn.style,
-        `sheet "${sheet.name}" indexColumn style`,
-      );
-      validateCellStyle(
-        sheet.indexColumn.headerStyle,
-        `sheet "${sheet.name}" indexColumn headerStyle`,
-      );
-    }
-    // 数值型布局/格式字段的前置校验：缺了这层，非法 width/freezeRows 会直通
-    // 引擎并以晦涩的 serde 错误失败（"JSON parse error: invalid type: null,
-    // expected f64"），随后整份导出被降级为无样式 stream；而同一输入在
-    // >=50k 的 stream 路由却被静默忽略（width）——同一错误跨阈值一边降级
-    // 一边成功。在此拦截使两条路径行为一致，且报错能定位到具体的列/表。
-    if (
-      sheet.freezeRows !== undefined &&
-      (typeof sheet.freezeRows !== "number" ||
-        !Number.isInteger(sheet.freezeRows) ||
-        sheet.freezeRows < 0)
-    ) {
-      throw new Error(
-        `[excel-exporter] sheet "${sheet.name}" freezeRows must be a non-negative integer`,
-      );
-    }
-    // indexColumn 形状校验：非 boolean 非（非 null）object 的值（JS 调用方
-    // 可能传 null / 字符串 / 数字）若放行，会被归一化与构建器各自按不同
-    // 方式静默吞掉——与 freezeRows 等字段一致，前置报错。
-    if (
-      sheet.indexColumn !== undefined &&
-      typeof sheet.indexColumn !== "boolean" &&
-      (typeof sheet.indexColumn !== "object" || sheet.indexColumn === null)
-    ) {
-      throw new Error(
-        `[excel-exporter] sheet "${sheet.name}" indexColumn must be a boolean or an options object`,
-      );
-    }
-    // indexColumn.start 与 freezeRows 同类数值校验：非整数/负数只会在构建期
-    // 产出 1.5、-1 这类怪序号，前置拦截。
-    if (
-      typeof sheet.indexColumn === "object" &&
-      sheet.indexColumn !== null &&
-      sheet.indexColumn.start !== undefined &&
-      (!Number.isInteger(sheet.indexColumn.start) ||
-        sheet.indexColumn.start < 0)
-    ) {
-      throw new Error(
-        `[excel-exporter] sheet "${sheet.name}" indexColumn.start must be a non-negative integer`,
-      );
-    }
-    // indexColumn.width 与下方 col.width 同类，但序号列是在**本校验之后**才由
-    // applyIndexColumn 注入的（见 exportExcel），不在这里单独覆盖就会绕过校验：
-    // NaN 直通引擎以 serde 错误失败并把整份导出降级为无样式 stream，而 >=50k 的
-    // stream 路由又把 width 当作被丢弃的特性静默忽略——同一输入跨阈值一边降级
-    // 一边成功，正是 col.width 校验要消除的那种分裂。
-    if (
-      typeof sheet.indexColumn === "object" &&
-      sheet.indexColumn !== null &&
-      sheet.indexColumn.width !== undefined &&
-      (typeof sheet.indexColumn.width !== "number" ||
-        !Number.isFinite(sheet.indexColumn.width) ||
-        sheet.indexColumn.width < 0)
-    ) {
-      throw new Error(
-        `[excel-exporter] sheet "${sheet.name}" indexColumn.width must be a finite non-negative number`,
-      );
-    }
-    for (const col of leaves) {
-      // OOXML 中 width=0 合法（隐藏列），负数与非有限数非法；只有叶子列
-      // 消费 width，分组列上的 width 本就被忽略。
-      if (
-        col.width !== undefined &&
-        (typeof col.width !== "number" ||
-          !Number.isFinite(col.width) ||
-          col.width < 0)
-      ) {
-        throw new Error(
-          `[excel-exporter] column "${columnLabel(col)}" width must be a finite non-negative number`,
-        );
-      }
-      if (col.format && typeof col.format === "object") {
-        const spec = col.format;
-        // type 枚举校验：拼错的判别值（如 "percent"）会落进 applyFormat 的
-        // default 分支被 toStr 字符串化——数字列整列变文本且 success:true
-        // 零告警，正是 mode 枚举校验注释里要消灭的"显式指定被无声忽略"。
-        // 先取到 string 变量再比较：直接对 spec.type 做全量不等比较会把
-        // spec 收窄成 never，后续分支用不了。
-        const specType: string = spec.type;
-        if (
-          specType !== "number" &&
-          specType !== "date" &&
-          specType !== "datetime" &&
-          specType !== "enum" &&
-          specType !== "padding"
-        ) {
-          throw new Error(
-            `[excel-exporter] column "${columnLabel(col)}" format.type must be one of "number", "date", "datetime", "enum", "padding" (got ${JSON.stringify(specType)})`,
-          );
-        }
-        // enum.map 为必填对象：缺失/null/数组会在渲染期以晦涩 TypeError
-        // （Object.hasOwn 目标非法）直通降级链——与 decimals/length 同类，
-        // 前置拦截且报错能定位到列。
-        if (
-          spec.type === "enum" &&
-          (typeof spec.map !== "object" ||
-            spec.map === null ||
-            Array.isArray(spec.map))
-        ) {
-          throw new Error(
-            `[excel-exporter] column "${columnLabel(col)}" format.map must be an object mapping values to strings`,
-          );
-        }
-        // date/datetime.pattern：非字符串在 formatDateByPattern 的
-        // toLowerCase 即抛裸 TypeError（stream 路径 displayValue 消费）。
-        if (
-          (spec.type === "date" || spec.type === "datetime") &&
-          spec.pattern !== undefined &&
-          typeof spec.pattern !== "string"
-        ) {
-          throw new Error(
-            `[excel-exporter] column "${columnLabel(col)}" format.pattern must be a string`,
-          );
-        }
-        // padding.fill：非字符串不抛错但产出怪输出（padStart 把 fill 先
-        // String() 化再取首字符），与 length 校验同类前置；类型上必填，
-        // undefined 一并拦截。
-        if (spec.type === "padding" && typeof spec.fill !== "string") {
-          throw new Error(
-            `[excel-exporter] column "${columnLabel(col)}" format.fill must be a string`,
-          );
-        }
-        // decimals 两路径共享：Workbook 路径拼 numFormat 字符串（任意值都
-        // "能出"），stream 路径烧入 toFixed(decimals)——收敛到 toFixed 自身
-        // 的 0..100 上限，同一 spec 才不会在 50k 行上下一边成功一边抛错。
-        if (
-          spec.type === "number" &&
-          spec.decimals !== undefined &&
-          (!Number.isInteger(spec.decimals) ||
-            spec.decimals < 0 ||
-            spec.decimals > 100)
-        ) {
-          throw new Error(
-            `[excel-exporter] column "${columnLabel(col)}" format.decimals must be an integer between 0 and 100`,
-          );
-        }
-        // padding.length：非整数/负数会让 padStart 抛 RangeError 或静默不
-        // 填充，超大值会生成巨型字符串，均在渲染期才爆——前置拦截。
-        if (
-          spec.type === "padding" &&
-          (!Number.isInteger(spec.length) ||
-            spec.length < 0 ||
-            spec.length > 10_000)
-        ) {
-          throw new Error(
-            `[excel-exporter] column "${columnLabel(col)}" format.length must be an integer between 0 and 10000`,
-          );
-        }
-      }
-    }
-  }
-}
-
-/**
- * 遮罩的导出语义文案（默认值）与 ExportPhase → 阶段 key 的映射。
- *
- * onPhase 只在阶段**结束后**回调（见 types.ts），没有"阶段开始"事件，所以
- * 文案只能乐观推进：收到 `init` 即表示 init 已完、当前在做 build。
- */
-const OVERLAY_TEXT: ProgressOverlayTextOptions = {
-  title: "正在导出 Excel",
-  initial: "准备中…",
-  phases: {
-    building: "正在构建工作簿…",
-    downloading: "正在下载…",
-    finishing: "即将完成…",
-  },
-  hint: "数据量较大时可能需要数十秒，请勿关闭页面",
-};
-
-function overlayPhaseKey(phase: ExportPhase, willDownload: boolean): string {
-  if (phase === "init") return "building";
-  if (phase === "build") return willDownload ? "downloading" : "finishing";
-  return "finishing";
-}
-
-/** 调用方的 text 片段与导出默认合并：phases 嵌套表单独并，避免整体替换。 */
-function mergeOverlayText(
-  caller: ProgressOverlayTextOptions | undefined,
-): ProgressOverlayTextOptions {
-  return {
-    ...OVERLAY_TEXT,
-    ...caller,
-    phases: { ...OVERLAY_TEXT.phases, ...caller?.phases },
-  };
-}
-
 /**
  * Export to Excel (main entry).
  *
@@ -667,8 +213,11 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
   }
 
   const totalRows = options.sheets.reduce((s, sh) => s + sh.data.length, 0);
+  // 路由同时看行数与单元格总量（宽表会被行数单指标误送进 Workbook 重路径），
+  // 详见 routing.ts 的阈值依据。applyIndexColumn 已展开，叶子列数即终值。
+  const totalCells = estimateTotalCells(options.sheets);
 
-  const picked = pickMode(options, totalRows);
+  const picked = pickMode(options.mode, totalRows, totalCells);
   const needsWasm = picked.workerMode !== "stream";
   const loader = getWasmLoader();
 
@@ -698,7 +247,7 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
     const buildStart = performance.now();
     try {
       if (useStream) {
-        const { bytes, rowCount } = await exportAsStream(
+        const { bytes, rowCount, droppedFeatures } = await exportAsStream(
           options.sheets,
           options.onProgress,
           options.signal,
@@ -711,6 +260,9 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
           mode: "stream",
           duration: performance.now() - start,
           rowCount,
+          ...(droppedFeatures.length > 0 && {
+            degradedFeatures: droppedFeatures,
+          }),
         };
       } else {
         const builder = await WorkbookBuilder.create();

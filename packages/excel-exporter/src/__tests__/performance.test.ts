@@ -75,6 +75,34 @@ describe.runIf(RUN_PERF)(
       expect(dt).toBeLessThan(1000 * SLACK);
     });
 
+    it("40k x 50 (2M cells, auto) routes to the fast stream < 3000ms", async () => {
+      // 回归：旧路由只看行数，40k×50（200 万格）会被送进 Workbook 路径
+      // （实测 ~6.3s / RSS +1.2GB）；单元格门槛应把它切到 stream（~1s）。
+      const rows = 40_000;
+      const cols = 50;
+      const columns = Array.from({ length: cols }, (_, c) => ({
+        prop: `c${c}`,
+        label: `C${c}`,
+      }));
+      const data = Array.from({ length: rows }, (_, r) => {
+        const row: Record<string, number> = {};
+        for (let c = 0; c < cols; c++)
+          row[`c${c}`] = (r * 31 + c * 17) % 100_000;
+        return row;
+      });
+      const t0 = performance.now();
+      const r = await exportExcel({
+        filename: "wide-40k-50",
+        download: false,
+        mode: "auto",
+        sheets: [{ name: "S", columns, data }],
+      });
+      const dt = performance.now() - t0;
+      expect(r.success).toBe(true);
+      expect(r.mode).toBe("stream");
+      expect(dt).toBeLessThan(3000 * SLACK);
+    });
+
     it("40k rows with 40k disjoint merges < 3000ms", async () => {
       // 回归：merge 校验与 addMergeCell 都曾是 O(n²)（旧实现 ~12.8s）。
       // 正常报表不会每条数据都合并，但模板类文件可能达到数万条。

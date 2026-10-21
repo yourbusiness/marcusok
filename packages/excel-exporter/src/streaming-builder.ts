@@ -4,6 +4,8 @@ import { exportFastXlsx } from "./fast-xlsx";
 export interface StreamResult {
   bytes: Uint8Array;
   rowCount: number;
+  /** 本路径丢弃的配置特性（样式/布局），随 ExportResult.degradedFeatures 上报。 */
+  droppedFeatures: string[];
 }
 
 /**

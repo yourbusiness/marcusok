@@ -6,6 +6,7 @@
  *  - 行高 pt → 像素：round(pt × 4 / 3)
  */
 import type { PreviewMerge, PreviewSheet } from "../types";
+import { EXCEL_MAX_COLS, EXCEL_MAX_ROWS } from "../limits";
 
 export const DEFAULT_COL_WIDTH_CHARS = 8.43;
 export const DEFAULT_ROW_HEIGHT_PT = 15;
@@ -25,11 +26,15 @@ const MAX_COVERED_CELLS = 1_000_000;
 const MAX_TOTAL_COVERED_CELLS = 2_000_000;
 
 export function charsToPx(width: number): number {
-  return Math.round(width * MDW + 5);
+  // 防御低层调用方传入负/NaN：负宽度会造出负前缀和，破坏二分窗口计算
+  const w =
+    Number.isFinite(width) && width >= 0 ? width : DEFAULT_COL_WIDTH_CHARS;
+  return Math.round(w * MDW + 5);
 }
 
 export function ptToPx(pt: number): number {
-  return Math.round((pt * 4) / 3);
+  const p = Number.isFinite(pt) && pt >= 0 ? pt : DEFAULT_ROW_HEIGHT_PT;
+  return Math.round((p * 4) / 3);
 }
 
 /** 网格几何缓存：由 renderer 在 sheet/尺寸变化时重建。 */
@@ -63,8 +68,30 @@ function buildPrefix(values: Float64Array): Float64Array {
 }
 
 export function buildLayout(sheet: PreviewSheet): GridLayout {
-  const colCount = Math.max(sheet.colCount, sheet.frozenCols, 1);
-  const rowCount = Math.max(sheet.rowCount, sheet.frozenRows, 1);
+  // 模型层已按 Excel 上限拒绝越界声明；这里是低层调用方（测试/自建
+  // PreviewSheet）的最后一道钳制，避免直接按任意声明分配 TypedArray。
+  const rawCols = Number.isFinite(sheet.colCount)
+    ? Math.max(0, Math.floor(sheet.colCount))
+    : 0;
+  const rawRows = Number.isFinite(sheet.rowCount)
+    ? Math.max(0, Math.floor(sheet.rowCount))
+    : 0;
+  const rawFrozenCols = Number.isFinite(sheet.frozenCols)
+    ? Math.max(0, Math.floor(sheet.frozenCols))
+    : 0;
+  const rawFrozenRows = Number.isFinite(sheet.frozenRows)
+    ? Math.max(0, Math.floor(sheet.frozenRows))
+    : 0;
+  const colCount = Math.min(
+    Math.max(rawCols, rawFrozenCols, 1),
+    EXCEL_MAX_COLS,
+  );
+  const rowCount = Math.min(
+    Math.max(rawRows, rawFrozenRows, 1),
+    EXCEL_MAX_ROWS,
+  );
+  const frozenCols = Math.min(rawFrozenCols, colCount);
+  const frozenRows = Math.min(rawFrozenRows, rowCount);
 
   const colWidths = new Float64Array(colCount);
   colWidths.fill(charsToPx(DEFAULT_COL_WIDTH_CHARS));
@@ -74,7 +101,10 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
     // 不写标志"的第三方产物列宽整体吞掉（实测引擎两形态都给 customWidth
     // =false，无从区分也不必区分；customWidth 字段在模型里保留仅作元信息）
     const w = charsToPx(span.width);
-    for (let c = span.min - 1; c <= span.max - 1 && c < colCount; c++) {
+    const start = Math.ceil(span.min) - 1;
+    const end = Math.floor(span.max) - 1;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    for (let c = Math.max(0, start); c <= end && c < colCount; c++) {
       colWidths[c] = span.hidden ? 0 : w;
     }
   }
@@ -83,7 +113,7 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
   rowHeights.fill(ptToPx(DEFAULT_ROW_HEIGHT_PT));
   for (const r of sheet.rows) {
     const i = r.index - 1;
-    if (i >= 0 && i < rowCount) {
+    if (Number.isInteger(i) && i >= 0 && i < rowCount) {
       rowHeights[i] = r.hidden ? 0 : ptToPx(r.height ?? DEFAULT_ROW_HEIGHT_PT);
     }
   }
@@ -96,7 +126,20 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
   // 总量预算先于循环取足：单条超限合并在预算判断之前短路（不消耗预算），
   // 否则一个畸形大合并会把文件里所有正常小合并也拖进降级
   let coveredBudget = MAX_TOTAL_COVERED_CELLS;
-  for (const m of sheet.merges) {
+  const validMerges = sheet.merges.filter(
+    (m) =>
+      Number.isInteger(m.row) &&
+      Number.isInteger(m.col) &&
+      Number.isInteger(m.rowSpan) &&
+      Number.isInteger(m.colSpan) &&
+      m.row >= 0 &&
+      m.col >= 0 &&
+      m.rowSpan >= 1 &&
+      m.colSpan >= 1 &&
+      m.row + m.rowSpan <= rowCount &&
+      m.col + m.colSpan <= colCount,
+  );
+  for (const m of validMerges) {
     const anchor = `${m.row}:${m.col}`;
     mergeByAnchor.set(anchor, m);
     const area = m.rowSpan * m.colSpan;
@@ -128,11 +171,11 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
     totalHeight: rowTop[rowCount],
     mergeByAnchor,
     coveredBy,
-    merges: sheet.merges,
+    merges: validMerges,
     rowCount,
     colCount,
-    frozenRows: sheet.frozenRows,
-    frozenCols: sheet.frozenCols,
+    frozenRows,
+    frozenCols,
   };
 }
 

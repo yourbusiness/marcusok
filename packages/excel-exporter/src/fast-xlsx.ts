@@ -10,11 +10,11 @@ import {
 import {
   flattenColumnTree,
   a1Range,
-  someColumn,
   columnName,
   columnProp,
 } from "./column-tree";
 import { INDEX_PROP, indexColumnStart } from "./sheet-normalize";
+import { skippedFeatures, streamDroppedFeatures } from "./stream-features";
 
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 const MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -30,6 +30,8 @@ const INVALID_XML_CHARS =
 export interface FastXlsxResult {
   bytes: Uint8Array;
   rowCount: number;
+  /** 被本路径丢弃的配置特性（供 ExportResult.degradedFeatures 上报）。 */
+  droppedFeatures: string[];
 }
 
 interface SharedStringTable {
@@ -353,24 +355,9 @@ export function exportFastXlsx(
       throw new Error(`[excel-exporter] duplicate sheet name "${config.name}"`);
     }
     seenSheetNames.add(nameKey);
-    const skipped: string[] = [];
-    // someColumn walks the whole tree: width/style/headerStyle may sit on
-    // nested nodes, and a top-level-only scan would drop them silently.
-    if (someColumn(config.columns, (c) => c.width !== undefined))
-      skipped.push("width");
-    if (
-      config.headerStyle !== undefined ||
-      someColumn(config.columns, (c) => c.headerStyle !== undefined)
-    )
-      skipped.push("headerStyle");
-    // Data-cell styles are dropped just like layout features; warn so the
-    // degradation is visible instead of silent (headerStyle above already did).
-    if (someColumn(config.columns, (c) => c.style !== undefined))
-      skipped.push("style");
-    // dataStyle 是表级数据样式基底，与列级 style 同样被本路径丢弃
-    if (config.dataStyle !== undefined) skipped.push("dataStyle");
-    if (config.freezeRows) skipped.push("freezeRows");
-    if (config.autoFilter) skipped.push("autoFilter");
+    // 数据/表头样式与布局特性都被本路径丢弃；警告与结构化 degradedFeatures
+    // 共用 stream-features 的判定，避免两处口径漂移。
+    const skipped = skippedFeatures(config);
     if (skipped.length) {
       console.warn(
         "[excel-exporter] stream mode: features not supported (" +
@@ -469,5 +456,9 @@ export function exportFastXlsx(
   // for all paths. The 1,000-row checkpoints are additionally clamped below 1
   // (the final-row checkpoint is skipped), so a whole-thousand row count never
   // yields a duplicate 1 ahead of the terminal one.
-  return { bytes, rowCount: processed.count };
+  return {
+    bytes,
+    rowCount: processed.count,
+    droppedFeatures: streamDroppedFeatures(sheets),
+  };
 }

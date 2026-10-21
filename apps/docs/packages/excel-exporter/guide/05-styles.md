@@ -197,7 +197,7 @@ sheets: [
 
 Presets declare their own alignment, so they keep it: `StylePresets.dataRow` is **left**-aligned by design and stays left under the base. If you want it centered too, derive a variant — `{ ...StylePresets.dataRow, alignment: { horizontal: "center", vertical: "center" } }`.
 
-> The base is a style, so the stream path (≥ 50,000 rows or a degraded export) drops it along with everything else — see [Where styles apply](#where-styles-apply-and-where-they-don-t).
+> The base is a style, so the stream path (at/above the stream gate or a degraded export) drops it along with everything else — see [Where styles apply](#where-styles-apply-and-where-they-don-t).
 
 ## Sheet-level dataStyle
 
@@ -223,7 +223,7 @@ await exportExcel({
 });
 ```
 
-The merge is **field-level**, not wholesale: `dataStyle` provides the base layer and a column's `style` overrides only the fields it sets — a table-wide border survives a column that only sets `numFormat`, and vice versa. The merge goes one level deep for `font` / `fill` / `alignment` / `border`; inside `border`, a side object (`border.bottom`, …) is replaced as a whole, so setting only `{ style: "medium" }` drops the base side's `color` unless you spread it back in. This is deliberately different from `headerStyle`, which replaces wholesale. Like all styling, `dataStyle` is dropped with a warning on the stream path (≥ 50,000 rows / degraded exports).
+The merge is **field-level**, not wholesale: `dataStyle` provides the base layer and a column's `style` overrides only the fields it sets — a table-wide border survives a column that only sets `numFormat`, and vice versa. The merge goes one level deep for `font` / `fill` / `alignment` / `border`; inside `border`, a side object (`border.bottom`, …) is replaced as a whole, so setting only `{ style: "medium" }` drops the base side's `color` unless you spread it back in. This is deliberately different from `headerStyle`, which replaces wholesale. Like all styling, `dataStyle` is dropped with a warning on the stream path (at/above the stream gate / degraded exports).
 
 ## Header styling: sheet default, column override
 
@@ -283,7 +283,7 @@ See the [API reference](../api/02-types) for the full option list.
 
 ## Where styles apply (and where they don't)
 
-- **Styles render on the Workbook routes only**: auto mode under 50,000 rows (main thread, or Worker + Workbook for 20,000–49,999 rows in a browser). The stream path (≥ 50,000 rows, or a degraded export) strips all styling — `style` / `headerStyle` / `dataStyle` / `width` / `freezeRows` — with a console warning. Do not rely on styles for large-file exports.
+- **Styles render on the Workbook routes only**: auto mode below both gates (rows < 50,000 and cells < 1,500,000; main thread, or Worker + Workbook in a browser). The stream path (at/above the row or cell stream gate, or a degraded export) strips all styling — `style` / `headerStyle` / `dataStyle` / `width` / `freezeRows` — with a console warning. Do not rely on styles for large-file exports.
 - **Colors are 6-digit RGB hex without `#`** (`"1F4E79"`), matching modern-xlsx's type contract.
 - **Reusing a preset is free**: `WorkbookBuilder` caches structurally identical styles by `JSON.stringify` and reuses one style index, so referencing `StylePresets.currency` from N columns does not bloat the file — no need to share objects manually. (The caching is in this package's builder; modern-xlsx's `StyleBuilder` itself appends a new record on every call.)
 

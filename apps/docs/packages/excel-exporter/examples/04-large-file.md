@@ -29,7 +29,7 @@ const result = await exportExcel({
       data: rows,
     },
   ],
-  mode: "auto", // ≥ 50k rows -> worker + stream
+  mode: "auto", // at/above the row/cell gate -> worker + stream
   onProgress: (p) => setProgress(p),
 });
 

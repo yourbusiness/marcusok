@@ -17,10 +17,10 @@ That is the entire setup. The package is **self-contained at runtime**: the expo
 
 Two runtime assets ship with this package and are located by default, so a plain `import { exportExcel } from "@marcusok/excel-exporter"` works out of the box:
 
-| Asset              | Description                                                                                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `modern-xlsx.wasm` | WASM core (~1.9MB); needed by the styled routes (main / worker + Workbook) — the Fast stream routes (explicit `mode: "stream"`, or auto/Node ≥ 50,000 rows) do not use WASM |
-| `export.worker.js` | Self-contained worker entry (a single ESM file, zero imports); needed only when exports enter a Worker (auto ≥ 20,000 rows, or explicit worker/stream mode)                 |
+| Asset              | Description                                                                                                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modern-xlsx.wasm` | WASM core (~1.9MB); needed by the styled routes (main / worker + Workbook) — the Fast stream routes (explicit `mode: "stream"`, or auto/Node at/above the stream gate) do not use WASM |
+| `export.worker.js` | Self-contained worker entry (a single ESM file, zero imports); needed only when exports enter a Worker (auto ≥ 20,000 rows or ≥ 250,000 cells, or explicit worker/stream mode)         |
 
 Resolution order:
 
@@ -73,7 +73,7 @@ configureWasm({ wasmUrl, workerUrl });
 
 Vite's dev server pre-bundles dependencies with esbuild into `/node_modules/.vite/deps/`. Inside the pre-bundled chunk, `import.meta.url` points into `.vite/deps/`, so `new URL("./modern-xlsx.wasm", import.meta.url)` resolves to `/node_modules/.vite/deps/modern-xlsx.wasm` — a path where the file does not exist. Vite's HTML fallback (active for `Accept: text/html` **and** `Accept: */*` — plain `fetch` sends the latter) answers that request with `index.html` (HTTP 200, `text/html`; under `appType: 'mpa'` you get a 404 instead — same cause, same fix), WASM compilation fails on the HTML bytes (`expected magic word 00 61 73 6d, found 3c 21 64 6f` — `3c 21 64 6f` is `<!do` from `<!doctype html>`), and the export **silently degrades to the style-less stream**: the file still downloads and `result.success` is `true`, but styles, column widths, freeze panes and auto-filters are all stripped, and `result.error` mentions `Fallback: styles stripped (fast stream)`.
 
-Scope: **`vite build` is unaffected** — the production pipeline emits the wasm as a hashed asset correctly; only the dev server with default `optimizeDeps` is affected. The worker asset (`export.worker.js`, auto mode ≥ 20,000 rows) resolves through the same mechanism and fails the same way, so this is not limited to small exports. One diagnostic trap: after the first failed attempt, later exports report `WASM load previously failed` instead of the original error — the real reason only appears in the console warning of the **first** export (or after a page reload). One exception: on a slow network the underlying load can still succeed _after_ all retry attempts have timed out; the loader then heals itself back to ready, and later exports run the fully-styled paths again without any `configureWasm` call (the "previously failed" message stops appearing).
+Scope: **`vite build` is unaffected** — the production pipeline emits the wasm as a hashed asset correctly; only the dev server with default `optimizeDeps` is affected. The worker asset (`export.worker.js`, auto mode ≥ 20,000 rows or ≥ 250,000 cells) resolves through the same mechanism and fails the same way, so this is not limited to small exports. One diagnostic trap: after the first failed attempt, later exports report `WASM load previously failed` instead of the original error — the real reason only appears in the console warning of the **first** export (or after a page reload). One exception: on a slow network the underlying load can still succeed _after_ all retry attempts have timed out; the loader then heals itself back to ready, and later exports run the fully-styled paths again without any `configureWasm` call (the "previously failed" message stops appearing).
 
 Fix — exclude the package from pre-bundling in `vite.config.ts`:
 
@@ -91,4 +91,4 @@ Restart the dev server afterwards (the `.vite/deps` cache must be re-created). W
 
 ## Node / SSR
 
-No browser static assets and **no initialization boilerplate** are needed in Node: with nothing configured, the engine locates the shipped `modern-xlsx.wasm` on disk (in this package's own `dist/`, pnpm-symlink-safe) and initializes it synchronously on first use. `auto` never uses Workers in Node; ≥ 50k rows switch to streaming on the main thread (the stream path does not use WASM). See [Node/SSR](/packages/excel-exporter/guide/09-node-ssr) for explicit-init timing control and bundler caveats.
+No browser static assets and **no initialization boilerplate** are needed in Node: with nothing configured, the engine locates the shipped `modern-xlsx.wasm` on disk (in this package's own `dist/`, pnpm-symlink-safe) and initializes it synchronously on first use. `auto` never uses Workers in Node; at/above the stream gate exports switch to streaming on the main thread (the stream path does not use WASM). See [Node/SSR](/packages/excel-exporter/guide/09-node-ssr) for explicit-init timing control and bundler caveats.

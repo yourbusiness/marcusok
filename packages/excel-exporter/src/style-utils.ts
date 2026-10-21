@@ -1,5 +1,6 @@
 import type { Workbook } from "@marcusok/xlsx-core";
 import type { CellStyle } from "./types";
+import { validateCellStyle } from "./style-validation";
 
 /**
  * 库级基底样式：铺在**所有**单元格（表头格与数据格）的样式解析链最底层。
@@ -58,6 +59,9 @@ export function mergeStyles(
  * return `this` (verified in modern-xlsx 1.2.0 source), so direct calls suffice.
  */
 export function buildStyleIndex(wb: Workbook, style: CellStyle): number {
+  // 低层 WorkbookBuilder 的直接调用方绕过 exportExcel 的预检；这里做最后
+  // 一道防线，保证非法枚举/XML 字符不会直通引擎写出坏文件。
+  validateCellStyle(style, "style");
   const builder = wb.createStyle();
 
   if (style.font) {

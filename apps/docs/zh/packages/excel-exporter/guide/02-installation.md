@@ -17,10 +17,10 @@ pnpm add @marcusok/excel-exporter
 
 两份运行时资源都随本包发布、默认自动定位，直接 `import { exportExcel } from "@marcusok/excel-exporter"` 即可使用：
 
-| 资源               | 何时需要                                                                                                                                           |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `modern-xlsx.wasm` | 约 1.9MB，样式引擎核心；带样式路径（main / worker + Workbook）需要——Fast stream 路径（显式 `mode: "stream"`，或 auto/Node ≥ 50,000 行）不依赖 WASM |
-| `export.worker.js` | 自包含 worker（单文件 ESM，零自身 import）；仅进入 Worker 的路径需要（auto ≥ 20,000 行，以及显式 `mode: "worker"` / `mode: "stream"`）             |
+| 资源               | 何时需要                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modern-xlsx.wasm` | 约 1.9MB，样式引擎核心；带样式路径（main / worker + Workbook）需要——Fast stream 路径（显式 `mode: "stream"`，或 auto/Node 达到 stream 门槛）不依赖 WASM |
+| `export.worker.js` | 自包含 worker（单文件 ESM，零自身 import）；仅进入 Worker 的路径需要（auto ≥ 20,000 行或 ≥ 250,000 格，以及显式 `mode: "worker"` / `mode: "stream"`）   |
 
 定位顺序：
 
@@ -90,4 +90,4 @@ export default defineConfig({
 
 ## Node / SSR
 
-Node 环境无需部署浏览器静态资源，也**无需任何初始化样板**：未配置 `wasmUrl` 时，引擎会在首次使用时自动定位随包发布的 `modern-xlsx.wasm`（位于本包自己的 `dist/`，pnpm 符号链接安全）并同步初始化。`auto` 模式下 Node 不会走 Worker，而是主线程执行；≥ 5 万行自动切换流式路径（流式路径不依赖 WASM）。初始化时机控制与打包器注意事项见 [Node/SSR](/zh/packages/excel-exporter/guide/09-node-ssr)。
+Node 环境无需部署浏览器静态资源，也**无需任何初始化样板**：未配置 `wasmUrl` 时，引擎会在首次使用时自动定位随包发布的 `modern-xlsx.wasm`（位于本包自己的 `dist/`，pnpm 符号链接安全）并同步初始化。`auto` 模式下 Node 不会走 Worker，而是主线程执行；达到 stream 门槛后自动切换流式路径（流式路径不依赖 WASM）。初始化时机控制与打包器注意事项见 [Node/SSR](/zh/packages/excel-exporter/guide/09-node-ssr)。

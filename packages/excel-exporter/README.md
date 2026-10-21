@@ -15,6 +15,8 @@ Measured locally (real Chrome, 6 mixed-type columns; the Node standalone regress
 | 100k rows | Fast stream | ~780ms   | < 1000ms         |
 
 > The large-file path no longer relies on modern-xlsx's `StreamingXlsxWriter`; it synchronously compresses a minimal OOXML workbook with `fflate`. It finishes the 100k×6-column scenario in ~0.8s and avoids the super-linear cliff of `Workbook.toBuffer()` beyond ~55k rows. The cliff was also verified out-of-band in independent Node processes: the 100k Workbook path lands around ~21s cold, versus the ~17.5s Chrome figure above — the same engine-level cliff in two environments.
+>
+> Routing also considers the estimated **cell count**, not just rows. A 40k×50 sheet (2M cells) measured ~6.3s / RSS +1.2GB on the Workbook path in Node but ~1s / +58MB on the fast stream, while a 60k×20 sheet (1.2M cells) was already on the stream at ~1s. A 20k×100 sheet (2M cells) likewise goes to the stream; 20k×50 (1M cells) stays on the styled Workbook path. See [Auto Routing](#auto-routing).
 
 ## Installation
 
@@ -67,8 +69,8 @@ Columns follow Element Plus naming (`prop` = data-row field, `label` = header te
 
 Two files ship alongside the code and are located automatically:
 
-- **`modern-xlsx.wasm`** (1.9MB, the style engine) — needed by the styled routes (main / worker + Workbook); the Fast stream routes (explicit `mode: "stream"`, or auto/Node ≥ 50,000 rows) do not use WASM at all.
-- **`export.worker.js`** (self-contained, zero imports of its own) — needed only when exports actually enter a Worker (auto mode with ≥ 20,000 rows, or an explicit `mode: "worker"` / `mode: "stream"`).
+- **`modern-xlsx.wasm`** (1.9MB, the style engine) — needed by the styled routes (main / worker + Workbook); the Fast stream routes (explicit `mode: "stream"`, or auto/Node at/above the row or cell stream gate) do not use WASM at all.
+- **`export.worker.js`** (self-contained, zero imports of its own) — needed only when exports actually enter a Worker (auto mode with ≥ 20,000 rows or ≥ 250,000 cells, or an explicit `mode: "worker"` / `mode: "stream"`).
 
 Both default to `new URL(<file>, import.meta.url)` relative to the package entry:
 
@@ -142,19 +144,25 @@ columns: [
 
 Multi-level headers and merges (including header merges) work on all routes — main / worker / stream (including the style-less stream fallback). The stream path preserves merges but does not support styles.
 
-Invalid input fails identically on every route with `{ success: false, error }` instead of a corrupt workbook: `merges` must be integers (`row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1) staying within the data area and not overlapping each other; sheet names must be unique across `sheets` — **case-insensitively**, matching Excel's own rule (`Sheet1` and `SHEET1` clash); sheet dimensions are checked against Excel's hard limits — 1,048,576 rows per sheet (header rows included) and 16,384 columns (an injected `indexColumn` occupies one) — an oversized sheet fails with an error naming the sheet and its actual counts, because on the stream path it would otherwise zip successfully and only surface as Excel's repair prompt on open; `NaN`/`Infinity` in unformatted numeric columns are written as visible strings (illegal XML numbers would corrupt the file). Values are normalized identically on every route: without a `format`, plain objects are written as JSON strings, `Date`s as ISO strings and bigints as decimal strings, so a dataset crossing the 50k-row threshold keeps the same cell content.
+Invalid input fails identically on every route with `{ success: false, error }` instead of a corrupt workbook: `merges` must be integers (`row`/`col` ≥ 0, `rowspan`/`colspan` ≥ 1) staying within the data area and not overlapping each other; sheet names must be unique across `sheets` — **case-insensitively**, matching Excel's own rule (`Sheet1` and `SHEET1` clash); sheet dimensions are checked against Excel's hard limits — 1,048,576 rows per sheet (header rows included) and 16,384 columns (an injected `indexColumn` occupies one) — an oversized sheet fails with an error naming the sheet and its actual counts, because on the stream path it would otherwise zip successfully and only surface as Excel's repair prompt on open; `NaN`/`Infinity` in unformatted numeric columns are written as visible strings (illegal XML numbers would corrupt the file).
+
+XML 1.0-illegal characters (control characters other than tab/LF/CR, U+FFFE/U+FFFF, and lone surrogates) are rejected up front in sheet names, `font.name`, `numFormat` and date/datetime `pattern` — the engine writes these verbatim and Excel would flag the file as corrupt. Data and header strings are sanitized instead (illegal controls removed, lone surrogates replaced with U+FFFD) identically on both routes. Style enums/types (`fill.pattern`, alignment horizontal/vertical, `font.bold`/`italic`, `font.name`/`numFormat` types) are also runtime-validated for JS callers.
+
+Values are normalized identically on every route: without a `format`, plain objects are written as JSON strings, `Date`s as ISO strings and bigints as decimal strings, so a dataset crossing the 50k-row threshold keeps the same cell content.
 
 ### Auto Routing
 
-`pickMode()` in `index.ts` selects the optimal path based on row count (overridable via the `mode` option):
+`pickMode()` in `routing.ts` selects the optimal path from **total rows and estimated cells** (overridable via `mode`). Cell count = data rows × effective leaf columns (after `indexColumn` expansion), summed across all sheets:
 
-| Rows               | Browser              | Node/SSR |
-| ------------------ | -------------------- | -------- |
-| < 20,000 rows      | main                 | main     |
-| 20,000–49,999 rows | Worker + Workbook    | main     |
-| >= 50,000 rows     | Worker + Fast stream | stream   |
+| Workload                                                        | Browser              | Node/SSR |
+| --------------------------------------------------------------- | -------------------- | -------- |
+| < 20,000 rows **and** < 250,000 cells                           | main                 | main     |
+| rows ≥ 20,000 **or** cells ≥ 250,000, but below the stream gate | Worker + Workbook    | main     |
+| rows ≥ 50,000 **or** cells ≥ 1,500,000                          | Worker + Fast stream | stream   |
 
-On the Worker path the main thread only performs one structured-clone `postMessage` (100k rows ~94ms); the export work runs in the Worker thread. Concurrent exports are serialized through a main-thread FIFO queue (one worker request in flight at a time), so they do not corrupt each other; each request's timeout starts only when it is dispatched. The Workbook path supports full `CellStyle`; Fast stream supports multi-row headers, merges and number formats (date/number FormatSpec via a minimal `styles.xml`) but not cell/layout styling — `width`/`freezeRows` etc. are dropped with a warning.
+The cell gate keeps wide sheets off the slow path: 40k×50 = 2M cells goes to the fast stream even though it is under the 50k row threshold, while 20k×50 = 1M cells still gets the styled Workbook path.
+
+On the Worker path the main thread performs one structured-clone `postMessage`; its cost grows with cell count (~94ms at 100k×6, ~200ms at 40k×50 in Chromium). The export work runs in the Worker thread. Concurrent exports are serialized through a main-thread FIFO queue (one worker request in flight at a time), so they do not corrupt each other; each request's timeout starts only when it is dispatched. The Workbook path supports full `CellStyle`; Fast stream supports multi-row headers, merges and number formats (date/number FormatSpec via a minimal `styles.xml`) but not cell/layout styling — `width`/`freezeRows` etc. are dropped with a warning and listed in `result.degradedFeatures` (set even when `success` is `true` and `error` is unset). A failure-driven fallback additionally sets `result.error` with the reason.
 
 ### Style Presets
 
@@ -178,7 +186,7 @@ Two sheet-level fields cover the whole table in one place:
 
 - **`dataStyle`** — base `CellStyle` for every data cell. A column's own `style` deep-merges over it field by field (a table-wide border survives a column that only sets `numFormat`, and vice versa), so `dataStyle: StylePresets.bordered` plus a few column tweaks is the idiomatic bordered-table setup. Headers stay with `headerStyle`.
 - **`indexColumn`** — injects a leading row-number column (`true`, or `{ label, width, start, style, headerStyle }`): values come from the row number (never read from `data`), existing `merges` shift right automatically, and the feature works on every export path — workbook, worker and the style-less stream alike. The header label defaults to `序号` and the width to `6`. The expansion happens once inside `exportExcel`; the lower-level `WorkbookBuilder` / `exportAsStream` entry points only understand an already-expanded `__index__` column, so call the exported `applyIndexColumn(sheet)` before driving them directly.
-- **Default alignment** — every cell is centered by default: the package's `BaseCellStyle` (horizontal + vertical `center`) sits underneath all cells, headers included. Explicit `alignment` values win field by field, and either `dataStyle` or `headerStyle` overrides the base; declare both axes to restore Excel's native alignment. Presets keep their own alignment — `StylePresets.dataRow` stays left-aligned by design. The base is a style like any other, so the style-less stream path (≥ 50,000 rows or a degraded export) drops it too — cells there revert to Excel's native alignment.
+- **Default alignment** — every cell is centered by default: the package's `BaseCellStyle` (horizontal + vertical `center`) sits underneath all cells, headers included. Explicit `alignment` values win field by field, and either `dataStyle` or `headerStyle` overrides the base; declare both axes to restore Excel's native alignment. Presets keep their own alignment — `StylePresets.dataRow` stays left-aligned by design. The base is a style like any other, so the style-less stream path (at/above the stream gate or a degraded export) drops it too — cells there revert to Excel's native alignment.
 
 ```ts
 sheets: [
@@ -220,11 +228,11 @@ Format-spec cross-path notes (see `ColumnConfig.format` in [`src/types.ts`](./sr
 
 When the browser Worker route fails (missing/404 worker asset, WASM init error inside the Worker), the recovery depends on which engine that route was running:
 
-- **Worker + Workbook** (browser 20,000 – 49,999 rows): the library first **retries on the main thread** with modern-xlsx — styles are preserved. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to the **pure-JS fast stream** — no WASM, no network, headers and merges preserved, styles stripped. A successful degraded export carries `result.error` (with `success: true`) describing the degradation.
-- **Worker + Fast stream** (browser ≥ 50,000 rows, or an explicit `mode: "stream"`): the retry on the main thread _is_ the same fast stream on the identical input, so there are no styles left to preserve and nothing further to degrade to. A retry failure is terminal — the export resolves with `success: false` instead of attempting a doomed third build.
+- **Worker + Workbook** (browser below the stream gate: rows < 50,000 and cells < 1,500,000): the library first **retries on the main thread** with modern-xlsx — styles are preserved. Only when that retry also fails (or WASM is unsupported / fails to load on the main thread) does the export degrade to the **pure-JS fast stream** — no WASM, no network, headers and merges preserved, styles stripped. A successful degraded export carries `result.error` (with `success: true`) describing the degradation.
+- **Worker + Fast stream** (browser at/above the stream gate, or an explicit `mode: "stream"`): the retry on the main thread _is_ the same fast stream on the identical input, so there are no styles left to preserve and nothing further to degrade to. A retry failure is terminal — the export resolves with `success: false` instead of attempting a doomed third build.
 - **Timeout** is the exception that never enters the chain: when the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminated and that request **fails fast** with the original timeout error — no main-thread retry, no stream fallback. The timeout measures only the time a request actually spends inside the worker (it starts after `postMessage`), not queue wait. Requests that were queued behind it are re-dispatched to a fresh worker (still serialized, but not failed as collateral). Retry the failed export, raise `workerTimeoutMs` via `configureWasm`, or split the input.
 
-Either way the caller's promise resolves rather than rejects, and each degradation step prints an `[excel-exporter]` console warning — check `result.error` to monitor the fallback rate.
+Either way the caller's promise resolves rather than rejects, and each degradation step prints an `[excel-exporter]` console warning — check `result.error` to monitor the fallback rate, and `result.degradedFeatures` for feature-level loss (set on both the normal stream route and the fallback).
 
 ### Progress Overlay
 

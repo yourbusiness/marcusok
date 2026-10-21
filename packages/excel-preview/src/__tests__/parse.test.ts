@@ -27,7 +27,104 @@ import {
   parseOnMainThread,
 } from "../worker/worker-client";
 import { csvToWorkbook, parseCsvText } from "../parse/csv";
+import { buildLayout } from "../render/layout";
 import { strToU8, zipSync } from "fflate";
+
+// 畸形文件可以只声明一个超大行号/列跨度/合并，就让 layout 在主线程按声明
+// 维度分配数 GB TypedArray（worker 超时覆盖不到布局）。模型层必须按 Excel
+// 硬上限拒绝，且负/非有限几何要归一化，不能让负前缀和破坏窗口计算。
+describe("Excel dimension limits (malformed files)", () => {
+  async function expectCorrupt(bytes: Uint8Array, re: RegExp): Promise<void> {
+    const wb = await readBuffer(bytes);
+    let err: unknown;
+    try {
+      buildPreviewWorkbook(wb, bytes);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Error);
+    expect((err as { code?: string }).code).toBe("CORRUPT");
+    expect((err as Error).message).toMatch(re);
+  }
+
+  it("rejects a row index beyond Excel's 1,048,576-row limit", async () => {
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "Big",
+          xml: '<row r="100000000"><c r="A100000000" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    await expectCorrupt(bytes, /row 100000000/);
+  });
+
+  it("rejects a cell beyond column XFD (16,384)", async () => {
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "Big",
+          xml: '<row r="1"><c r="ZZZZZZ1" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    await expectCorrupt(bytes, /outside Excel's 1\.\.16384 range/);
+  });
+
+  it("rejects a merged range extending beyond the row limit", async () => {
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "Big",
+          xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row>',
+          extraAfter:
+            '<mergeCells count="1"><mergeCell ref="A1:A100000000"/></mergeCells>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    await expectCorrupt(bytes, /merged range outside Excel's/);
+  });
+
+  it("rejects a <col max> span beyond 16,384", async () => {
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "Big",
+          extraBefore: '<cols><col min="1" max="100000000" width="10"/></cols>',
+          xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    await expectCorrupt(bytes, /column span 1\.\.100000000/);
+  });
+
+  it("normalizes negative widths/heights instead of producing negative geometry", async () => {
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "Neg",
+          extraBefore: '<cols><col min="1" max="1" width="-100"/></cols>',
+          xml: '<row r="1" ht="-50" customHeight="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    const wb = await readBuffer(bytes);
+    const model = buildPreviewWorkbook(wb, bytes);
+    const sheet = model.sheets[0];
+    expect(sheet.colSpans[0].width).toBe(8.43);
+    expect(sheet.rows[0].height).toBeNull();
+    const layout = buildLayout(sheet);
+    expect(layout.totalWidth).toBeGreaterThan(0);
+    expect(layout.totalHeight).toBeGreaterThan(0);
+    expect(layout.colWidths[0]).toBeGreaterThan(0);
+    expect(layout.rowHeights[0]).toBeGreaterThan(0);
+  });
+});
 
 describe("color 基础", () => {
   it("ARGB → CSS（FF 前缀剥离、非 FF 转 rgba、非法 null）", () => {

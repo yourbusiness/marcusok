@@ -14,16 +14,18 @@
   <BenchmarkChart dir="excel-exporter" />
 </ClientOnly>
 
+宽表单独实测（Node 24.21）：40k×50 = 200 万格在 Workbook 路径约 6.3s / RSS +1.2GB，Fast stream 约 1s / +58MB；20k×100 = 200 万格 Workbook 约 3.2s / +258MB；60k×20 = 120 万格 stream 约 1s。因此路由同时看估算单元格数，而不只看行数。
+
 ## 结论
 
-1. `Workbook.toBuffer()` 在 ~5.5 万行开始出现超线性断崖（10 万行 17.5s），而 Fast stream 约 0.8s，因此 `STREAM_THRESHOLD = 50_000`；
-2. 浏览器 ≥ 20,000 行走 Worker 后，主线程只做一次结构化克隆（10 万行约 94ms），其余工作在 Worker 内完成；
-3. Stream 路径的代价是单元格/布局样式缺失（数字格式已通过最小 `styles.xml` 保留），所以小文件默认走带完整样式的 Workbook 路径。
+1. `Workbook.toBuffer()` 在 ~5.5 万行开始出现超线性断崖（10 万行 17.5s），而 Fast stream 约 0.8s，因此 stream 门槛是 5 万行或 150 万格；
+2. 浏览器中行 ≥ 20,000 **或** 格 ≥ 250,000 时交给 Worker；主线程只做一次结构化克隆，其成本随单元格数增长（10 万×6 约 94ms、40k×50 约 200ms）；
+3. Stream 路径的代价是单元格/布局样式缺失（数字格式已通过最小 `styles.xml` 保留），所以小文件默认走带完整样式的 Workbook 路径；`result.degradedFeatures` 让这次特性丢失可以被程序化感知。
 
 ## 优化建议
 
 - 默认使用 `mode: "auto"`，不要手动指定 `main` 导出大文件；
-- 需要样式的场景把**单次调用**的总行数控制在 5 万行以内（< 50,000）——auto 按一次调用全部 sheet 的总行数路由，拆成同一次调用的多个 Sheet 没有用；更大数据量接受样式降级，或拆成多次 `exportExcel` 调用（每次一个文件）；
+- 需要样式时让**单次调用同时低于两个门槛**（行 < 5 万且格 < 150 万）——auto 按一次调用全部 sheet 的总行数/总单元格数路由，拆成同一次调用的多个 Sheet 没有用；更大数据量接受样式降级（检查 `result.degradedFeatures`），或拆成多次 `exportExcel` 调用（每次一个文件）；
 - `decimals`/`thousands` 现在是两条路径共同的纯显示 numFmt 设置，无需为了跨阈值一致而预先舍入；
 - 服务端大批量导出放到异步任务中执行。
 

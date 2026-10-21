@@ -51,10 +51,11 @@ load, so use `duration.render` for a switch's own cost).
   in-flight parse; `parseWorkbookBytes` accepts an `AbortSignal`), friendly
   code-carrying errors (`PASSWORD_PROTECTED`, `LEGACY_FORMAT` for legacy
   `.xls`, `ABORTED` for cancellations, …).
-- **Embedding** — works inside a ShadowRoot (styles are injected into the
-  container's root node), and both injected `<style>` elements accept an
-  optional CSP `styleNonce`. Cell geometry still uses inline `style`
-  attributes, so a strict CSP must allow inline style attributes.
+- **Embedding** — works inside a ShadowRoot or an iframe document (styles
+  are injected into the container's root node / `ownerDocument`), and both
+  injected `<style>` elements accept an optional CSP `styleNonce`. Cell
+  geometry still uses inline `style` attributes, so a strict CSP must allow
+  inline style attributes.
 
 ## Low-level API
 

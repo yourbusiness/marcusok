@@ -4,16 +4,16 @@ An Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/moder
 
 ## Capabilities
 
-| Capability                 | Description                                                                                                         |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Declarative API            | Describe exports with `sheets + columns + data`; no cell-level coding                                               |
-| Auto mode routing          | `auto` picks main / worker / Fast stream by row count (20,000 / 50,000 thresholds)                                  |
-| Full cell styling          | Font, fill, alignment, borders, number formats; 8 built-in `StylePresets`                                           |
-| Value formatting           | Structured `FormatSpec` (enum / date / datetime / number / padding)                                                 |
-| Worker threading           | Main thread only does one structured clone; building runs in a Worker (the ≥ 50k-row stream path does not use WASM) |
-| Streaming writes           | Custom `fast-xlsx.ts` + `fflate`, ~0.8s at 100k rows                                                                |
-| Layered fallback           | Auto-degrades to a style-less fast stream when WASM is unavailable                                                  |
-| Progress / phase callbacks | `onProgress`, `onPhase` for visualizations and telemetry                                                            |
+| Capability                 | Description                                                                                                    |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Declarative API            | Describe exports with `sheets + columns + data`; no cell-level coding                                          |
+| Auto mode routing          | `auto` picks main / worker / Fast stream by rows and estimated cells (20k/50k rows, 250k/1.5M cells)           |
+| Full cell styling          | Font, fill, alignment, borders, number formats; 8 built-in `StylePresets`                                      |
+| Value formatting           | Structured `FormatSpec` (enum / date / datetime / number / padding)                                            |
+| Worker threading           | Main thread only does one structured clone; building runs in a Worker (the stream-gate path does not use WASM) |
+| Streaming writes           | Custom `fast-xlsx.ts` + `fflate`, ~0.8s at 100k rows                                                           |
+| Layered fallback           | Auto-degrades to a style-less fast stream when WASM is unavailable                                             |
+| Progress / phase callbacks | `onProgress`, `onPhase` for visualizations and telemetry                                                       |
 
 ## Install
 

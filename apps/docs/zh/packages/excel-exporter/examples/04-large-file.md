@@ -29,7 +29,7 @@ const result = await exportExcel({
       data: rows,
     },
   ],
-  mode: "auto", // ≥ 5 万行自动走 worker + stream
+  mode: "auto", // 达到行/单元格 stream 门槛后自动走 worker + stream
   onProgress: (p) => setProgress(p),
 });
 

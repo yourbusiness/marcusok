@@ -2,6 +2,7 @@ import type { ColumnConfig, ExportOptions, ExportResult } from "./types";
 import { columnLabel } from "./column-tree";
 import { defaultWasmUrl, getWasmLoader } from "@marcusok/xlsx-core";
 import { toBlobPart } from "./download";
+import { streamDroppedFeatures } from "./stream-features";
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -316,6 +317,8 @@ export async function exportInWorker(
       },
     );
     const blob = new Blob([toBlobPart(bytes)], { type: XLSX_MIME });
+    const droppedFeatures =
+      mode === "stream" ? streamDroppedFeatures(options.sheets) : [];
     return {
       success: true,
       blob,
@@ -325,6 +328,7 @@ export async function exportInWorker(
       mode: mode === "stream" ? "stream" : "worker",
       duration: performance.now() - start,
       rowCount: workerRowCount,
+      ...(droppedFeatures.length > 0 && { degradedFeatures: droppedFeatures }),
     };
   } catch (e) {
     return {

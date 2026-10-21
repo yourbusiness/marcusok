@@ -41,6 +41,20 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("iframe-like Document scope", () => {
+  it("样式与节点都进入容器所在的 Document，而不是全局 head", () => {
+    const otherDoc = document.implementation.createHTMLDocument("iframe");
+    const container = otherDoc.createElement("div");
+    otherDoc.body.appendChild(container);
+
+    show({ container });
+
+    expect(otherDoc.querySelectorAll("style").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll("style").length).toBe(0);
+    expect(otherDoc.querySelector(".mxe-overlay")).not.toBeNull();
+  });
+});
+
 describe("遮罩生命周期", () => {
   it("delayMs 为 0 时同步挂载并完成入场过渡", () => {
     show();

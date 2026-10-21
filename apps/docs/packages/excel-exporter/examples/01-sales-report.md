@@ -58,7 +58,7 @@ const result = await exportExcel({
 ## Notes
 
 - 10k rows is below the 20,000-row threshold, so the browser takes the `main` path (main-thread Workbook, full styling); at ≥ 20,000 rows auto mode switches to `worker + Workbook` and keeps the main thread responsive;
-- `onProgress` only fires at the endpoints (0 and 1) on the `main` path, so the progress bar jumps straight to full at 10k rows; incremental progress requires the stream path (≥ 50,000 rows, reported every 1,000 rows — the worker + Workbook path also fires just the two endpoints);
+- `onProgress` only fires at the endpoints (0 and 1) on the `main` path, so the progress bar jumps straight to full at 10k rows; incremental progress requires the stream path (at/above the stream gate, reported every 1,000 rows — the worker + Workbook path also fires just the two endpoints);
 - `StylePresets.currency` formats the amount column (thousands, 2 decimals, right-aligned);
 - The `enum` spec maps internal status codes to readable labels with a `"Unknown"` fallback;
 - `freezeRows + autoFilter` lets reviewers filter directly in Excel.

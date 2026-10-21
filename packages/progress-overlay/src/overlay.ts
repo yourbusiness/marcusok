@@ -271,19 +271,31 @@ const STYLES = `
 
 /**
  * 样式注入目标必须是容器所在的 root node：容器在 ShadowRoot 内时，
- * document.head 的规则不会进入 shadow tree，遮罩会退化为页面流里的透明块。
+ * document.head 的规则不会进入 shadow tree，遮罩会退化为页面流里的透明块；
+ * 容器在另一个 Document（iframe）内时同理，必须注入该 Document 的 head。
+ * 跨 realm 不能用 `instanceof ShadowRoot`；ShadowRoot 的可靠标志是 host。
  */
 function styleRootFor(container: HTMLElement): ParentNode {
   const root = container.getRootNode?.();
-  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
-    return root;
+  if (root && typeof (root as ShadowRoot).host !== "undefined") {
+    return root as ShadowRoot;
   }
-  return document.head ?? document.documentElement;
+  const doc = container.ownerDocument;
+  return (
+    doc?.head ??
+    doc?.documentElement ??
+    document.head ??
+    document.documentElement
+  );
 }
 
-function ensureStyles(root: ParentNode, nonce: string | undefined): void {
+function ensureStyles(
+  root: ParentNode,
+  nonce: string | undefined,
+  doc: Document,
+): void {
   if (root.querySelector(`#${STYLE_ID}`)) return;
-  const style = document.createElement("style");
+  const style = doc.createElement("style");
   style.id = STYLE_ID;
   style.textContent = STYLES;
   if (nonce) style.setAttribute("nonce", nonce);
@@ -306,14 +318,14 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  * 不确定态的旋转圆环：静态轨道圆 + 270° 圆头弧。用 SVG 而非 border 圆环，
  * 因为圆头端点与精确弧长（dasharray）在 border 技法上表达不了。
  */
-function createSpinner(): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, "svg");
+function createSpinner(doc: Document): SVGSVGElement {
+  const svg = doc.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", "mxe-spinner");
   svg.setAttribute("viewBox", "0 0 28 28");
   // 纯装饰：语义由 label 的 aria-live 状态区域承载
   svg.setAttribute("aria-hidden", "true");
   const circle = (cls: string, dash?: string): void => {
-    const c = document.createElementNS(SVG_NS, "circle");
+    const c = doc.createElementNS(SVG_NS, "circle");
     c.setAttribute("class", cls);
     c.setAttribute("cx", "14");
     c.setAttribute("cy", "14");
@@ -355,7 +367,9 @@ interface OverlayDriver {
 }
 
 function createDom(cfg: ResolvedOptions): OverlayDom {
-  const root = document.createElement("div");
+  // 容器可能来自 iframe；所有节点必须在同一 Document 里创建。
+  const doc = cfg.container.ownerDocument ?? document;
+  const root = doc.createElement("div");
   root.className = "mxe-overlay";
   root.dataset.mxeTheme = cfg.theme;
   root.dataset.mxeMode = "indeterminate";
@@ -370,44 +384,44 @@ function createDom(cfg: ResolvedOptions): OverlayDom {
     root.addEventListener("touchmove", block, { passive: false });
   }
 
-  const panel = document.createElement("div");
+  const panel = doc.createElement("div");
   panel.className = "mxe-panel";
 
-  const title = document.createElement("div");
+  const title = doc.createElement("div");
   title.className = "mxe-title";
   title.textContent = cfg.text.title;
 
-  const bar = document.createElement("div");
+  const bar = doc.createElement("div");
   bar.className = "mxe-bar";
   // 不确定态不给 aria-valuenow（ARIA 规范：progressbar 缺 valuenow 即不确定）
   bar.setAttribute("role", "progressbar");
   bar.setAttribute("aria-valuemin", "0");
   bar.setAttribute("aria-valuemax", "100");
 
-  const fill = document.createElement("div");
+  const fill = doc.createElement("div");
   fill.className = "mxe-fill";
   bar.appendChild(fill);
 
   // label 与 percent 同行分居两端；percent 独立于 label 节点——label 是
   // aria-live 区域，混入百分比会让读屏把每次进度变化重播一遍。
-  const row = document.createElement("div");
+  const row = doc.createElement("div");
   row.className = "mxe-row";
 
-  const label = document.createElement("div");
+  const label = doc.createElement("div");
   label.className = "mxe-label";
   label.setAttribute("role", "status");
   label.setAttribute("aria-live", "polite");
   label.textContent = cfg.text.initial;
 
-  const percent = document.createElement("div");
+  const percent = doc.createElement("div");
   percent.className = "mxe-percent";
   row.append(label, percent);
 
-  const hint = document.createElement("div");
+  const hint = doc.createElement("div");
   hint.className = "mxe-hint";
   hint.textContent = cfg.text.hint;
 
-  panel.append(createSpinner(), title, bar, row, hint);
+  panel.append(createSpinner(doc), title, bar, row, hint);
   root.appendChild(panel);
   return { root, bar, fill, label, title, hint, percent };
 }
@@ -594,7 +608,11 @@ export function showProgressOverlay(
   let closed = false;
 
   try {
-    ensureStyles(styleRootFor(cfg.container), cfg.styleNonce);
+    ensureStyles(
+      styleRootFor(cfg.container),
+      cfg.styleNonce,
+      cfg.container.ownerDocument ?? document,
+    );
 
     // 容器变了而旧遮罩还挂着：直接丢弃（以最新容器为准）。
     if (active && active.container !== cfg.container) {

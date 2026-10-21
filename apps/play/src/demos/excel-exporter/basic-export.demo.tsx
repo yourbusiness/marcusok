@@ -426,8 +426,9 @@ export default function BasicExportDemo() {
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
         配置行数与模式后导出，展示文件大小、耗时、吞吐等指标；多次导出会记录在下方
-        历史中对比（行数 ≥ 20,000 走 Worker，≥ 50,000 走流式）。「多级分组」演示
-        children 三级表头（自动合并表头格），「数据区合并」演示 merges（每 10
+        历史中对比（行数 ≥ 20,000 或单元格 ≥ 250,000 走 Worker；行数 ≥ 50,000
+        或单元格 ≥ 1,500,000 走流式）。「多级分组」演示 children
+        三级表头（自动合并表头格），「数据区合并」演示 merges（每 10
         行纵向合并城市列）——两者与最左侧的序号列（indexColumn）在 stream
         路径同样生效（样式除外）。「全屏进度遮罩」走库的 overlay 子路径：导出
         期间显示全局遮罩与进度条，链式追加在现有回调之上，可对比两种交互。

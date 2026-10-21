@@ -1,4 +1,5 @@
 import type { ColumnConfig } from "./types";
+import { sanitizeXmlText } from "./xml-safety";
 
 /**
  * Multi-row header flattening, shared by the Workbook and stream paths
@@ -148,7 +149,7 @@ export function flattenColumnTree(
     () => Array<null>(leaves.length).fill(null),
   );
   for (const cell of headerCells)
-    headerGrid[cell.row][cell.col] = columnLabel(cell.column)!;
+    headerGrid[cell.row][cell.col] = sanitizeXmlText(columnLabel(cell.column)!);
 
   return { leaves, headerRowCount, headerGrid, headerCells, headerMerges };
 

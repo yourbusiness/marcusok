@@ -34,7 +34,7 @@
 
 工作表尺寸同样在导出前对照 Excel 硬上限校验：每表 1,048,576 行（表头行计入）、16,384 列（注入的 `indexColumn` 占一列）。超限的表直接以 `{ success: false }` 收场，错误中写明表名与实际行列数——否则在 stream 路径上会照常写出并 zip 成功，直到 Excel 打开时才报修复提示。
 
-**stream 路径兼容性。** 在快速流上——显式 `mode: "stream"`、auto ≥ 50,000 行、或降级兜底——单元格/布局样式会被丢弃并打印 `console.warn`：`width`、列级 `style` / `headerStyle`（含 `style.numFormat`）、表级 `headerStyle` / `dataStyle`、`freezeRows`、`autoFilter`。但 `FormatSpec` 的日期/数字 numFmt **不会**被丢弃：stream 路径会输出最小 `styles.xml`，日期保持序列号，`decimals`/`thousands` 在两条路径上都是纯显示设置。结构保留：多行表头、`merges` 与 `indexColumn` 不受影响。完整的分路径能力矩阵见 [Worker 与流式指南](/zh/packages/excel-exporter/guide/06-worker-stream)。
+**stream 路径兼容性。** 在快速流上——显式 `mode: "stream"`、auto 达到行/单元格门槛、或降级兜底——单元格/布局样式会被丢弃并打印 `console.warn`，同时通过 `ExportResult.degradedFeatures` 返回：`width`、列级 `style` / `headerStyle`（含 `style.numFormat`）、表级 `headerStyle` / `dataStyle`、`freezeRows`、`autoFilter`。但 `FormatSpec` 的日期/数字 numFmt **不会**被丢弃：stream 路径会输出最小 `styles.xml`，日期保持序列号，`decimals`/`thousands` 在两条路径上都是纯显示设置。结构保留：多行表头、`merges` 与 `indexColumn` 不受影响。完整的分路径能力矩阵见 [Worker 与流式指南](/zh/packages/excel-exporter/guide/06-worker-stream)。
 
 ## IndexColumnOptions
 
@@ -73,7 +73,7 @@
 | `border?`    | `{ top?, bottom?, left?, right? }`                     | 边框，每边 `{ style: BorderStyle, color? }`——取值见 [BorderStyle](#borderstyle)                                                                       |
 | `numFormat?` | `string`                                               | Excel 数字格式码                                                                                                                                      |
 
-样式字段在导出前置校验——非法值以 `{ success: false }` 失败并给出定位到具体表/列的报错，而不是拖到后面变成晦涩的引擎错误或降级导出：颜色必须为 6 位 RGB hex（`"FF0000"`；`"red"` 与 `"#FF0000"` 都会被拒）；`border.*.style` 必须是上文 `BorderStyle` 之一；`font.size` 必须为有限正数；`alignment.textRotation` 必须是 0–180 的**整数**（`45.5` 会被拒绝而非四舍五入）。校验覆盖表级、列级（含分组列被忽略的样式）与 `indexColumn` 样式的全部出现点。校验范围仅限上述字段：`numFormat`、`fill.pattern`、对齐枚举值与 `font.name` 不做前置校验，会直接传给引擎。
+样式字段在导出前置校验——非法值以 `{ success: false }` 失败并给出定位到具体表/列的报错，而不是拖到后面变成晦涩的引擎错误或降级导出：颜色必须为 6 位 RGB hex（`"FF0000"`；`"red"` 与 `"#FF0000"` 都会被拒）；`border.*.style` 必须是上文 `BorderStyle` 之一；`font.size` 必须为有限正数；`alignment.textRotation` 必须是 0–180 的**整数**（`45.5` 会被拒绝而非四舍五入）。校验覆盖表级、列级（含分组列被忽略的样式）与 `indexColumn` 样式的全部出现点。校验还覆盖 `fill.pattern`（`"solid"` / `"none"`）、对齐 horizontal/vertical 枚举、`wrapText`/`bold`/`italic` 类型，以及 `font.name` / `numFormat` 的类型。后两者、表名与日期 pattern 还会拒绝 XML 1.0 非法字符（除 tab/LF/CR 外的控制字符、U+FFFE/U+FFFF、孤立代理项）——这些字符会被引擎原样写进 XML，Excel 打开时会判损。数据/表头字符串则统一清洗（删除非法控制字符、孤立代理项替换为 U+FFFD），两条路径结果一致。
 
 ## BorderStyle
 

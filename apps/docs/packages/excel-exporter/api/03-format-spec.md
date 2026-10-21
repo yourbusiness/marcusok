@@ -40,11 +40,11 @@ One more edge in the same area: a value the parser cannot convert to a date (big
 { type: "number", decimals: 2, thousands: true }
 ```
 
-`decimals` defaults to 0, `thousands` to false; `decimals` is validated as an integer in 0–100. Both paths keep the full-precision stored value and render `decimals`/`thousands` through an Excel numFmt — the Workbook path via the cell style, the stream path via its minimal `styles.xml`. Crossing 50,000 rows therefore no longer rounds the stored value or drops separators.
+`decimals` defaults to 0, `thousands` to false; `decimals` is validated as an integer in 0–100. Both paths keep the full-precision stored value and render `decimals`/`thousands` through an Excel numFmt — the Workbook path via the cell style, the stream path via its minimal `styles.xml`. Crossing the stream gate therefore no longer rounds the stored value or drops separators.
 
 Dates/datetimes behave the same way: both paths store the Excel serial number (UTC components) and attach the pattern as a numFmt, so the cell type and display agree across routes.
 
-**Explicit `CellStyle.numFormat` vs FormatSpec.** On the Workbook path a column's explicit `style.numFormat` takes precedence and the FormatSpec-derived code is not injected. The stream path drops `CellStyle.numFormat` entirely and uses the FormatSpec pattern/decimals/thousands. If both are set and differ, the stored value still matches but the display differs across the 50k threshold; keep them consistent or omit `style.numFormat` on FormatSpec columns.
+**Explicit `CellStyle.numFormat` vs FormatSpec.** On the Workbook path a column's explicit `style.numFormat` takes precedence and the FormatSpec-derived code is not injected. The stream path drops `CellStyle.numFormat` entirely and uses the FormatSpec pattern/decimals/thousands. If both are set and differ, the stored value still matches but the display differs across the stream gate; keep them consistent or omit `style.numFormat` on FormatSpec columns.
 
 `null`/`undefined` values (and blank/whitespace-only strings — the most common missing-value shape coming out of databases, forms and CSV imports) render as empty cells on every path — never `0`. `padding` treats them the same way: an empty cell, not a padded fake code like `"00000"`. `enum` does too: an empty cell, never the `fallback` (see above).
 
@@ -73,10 +73,10 @@ format: (value, row) => string | number | boolean;
 
 Can access the whole row for conditional formatting. Functions cannot cross the structured-clone boundary, so behavior differs per path:
 
-- **main path** (auto mode: browser < 20,000 rows / Node < 50,000 rows; or any size with explicit `mode: "main"`): executed normally;
-- **Node's stream path** (auto ≥ 50,000 rows, or explicit `mode: "stream"`): also main-thread, executed normally;
+- **main path** (auto mode: browser below the Worker gate / Node below the stream gate; or any size with explicit `mode: "main"`): executed normally;
+- **Node's stream path** (auto at/above the stream gate, or explicit `mode: "stream"`): also main-thread, executed normally;
 - **main-thread retry after a worker failure**: executed normally — the original options keep the function, only the copy sent to the worker is stripped;
-- **browser worker path** (auto ≥ 20,000 rows, or explicit `mode: "worker"` / `mode: "stream"`): functions are **stripped with a `console.warn`** and the column exports its raw value (no error, no fallback to main).
+- **browser worker path** (auto at/above the Worker gate, or explicit `mode: "worker"` / `mode: "stream"`): functions are **stripped with a `console.warn`** and the column exports its raw value (no error, no fallback to main).
 
 Convert to FormatSpec to keep formatting on the worker path.
 

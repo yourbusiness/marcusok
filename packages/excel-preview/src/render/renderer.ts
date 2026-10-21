@@ -91,15 +91,25 @@ export interface RenderOptions {
 
 /**
  * 样式必须注入到容器所在的 root node：容器在 ShadowRoot 内时，document.head
- * 里的规则不会进入 shadow tree，虚拟滚动依赖的 .xpv-viewport overflow 等
- * 会全部失效（实测会退化为全表 DOM）。
+ * 里的规则不会进入 shadow tree；容器在另一个 Document（iframe）内时，
+ * 全局 document.head 同样不属于该文档。两种场景都会让虚拟滚动依赖的
+ * .xpv-viewport overflow 等失效（实测会退化为全表 DOM / 无法滚动）。
+ *
+ * 跨 realm 不能用 `instanceof ShadowRoot`（iframe 内构造的 ShadowRoot 与
+ * 外层构造器不同）；ShadowRoot 的可靠标志是 host 属性。
  */
 function styleRootFor(container: HTMLElement): ParentNode {
   const root = container.getRootNode?.();
-  if (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
-    return root;
+  if (root && typeof (root as ShadowRoot).host !== "undefined") {
+    return root as ShadowRoot;
   }
-  return document.head ?? document.documentElement;
+  const doc = container.ownerDocument;
+  return (
+    doc?.head ??
+    doc?.documentElement ??
+    document.head ??
+    document.documentElement
+  );
 }
 
 export class SheetRenderer {
@@ -119,6 +129,8 @@ export class SheetRenderer {
   private rowHeadFrozen!: HTMLDivElement;
   private styleEl: HTMLStyleElement | null = null;
   private readonly styleRoot: ParentNode;
+  /** 容器所在 Document：iframe 场景下必须用它创建节点/注入样式。 */
+  private readonly doc: Document;
   private styleNonce: string | undefined;
 
   private workbook: PreviewWorkbook | null = null;
@@ -150,10 +162,23 @@ export class SheetRenderer {
 
   constructor(container: HTMLElement) {
     this.scope = `xpv-s${++instanceSeq}`;
+    this.doc = container.ownerDocument ?? document;
     this.styleRoot = styleRootFor(container);
-    this.root = document.createElement("div");
+    this.root = this.doc.createElement("div");
     this.root.className = `xpv-root ${this.scope}`;
     container.appendChild(this.root);
+  }
+
+  /** 调度到容器所在 realm 的 rAF（iframe 可见性/时序与父窗口一致）。 */
+  private requestFrame(cb: FrameRequestCallback): number {
+    const view = this.doc.defaultView;
+    return view ? view.requestAnimationFrame(cb) : requestAnimationFrame(cb);
+  }
+
+  private cancelFrame(id: number): void {
+    const view = this.doc.defaultView;
+    if (view) view.cancelAnimationFrame(id);
+    else cancelAnimationFrame(id);
   }
 
   /** 渲染工作簿（首次或换文件）。 */
@@ -166,7 +191,7 @@ export class SheetRenderer {
     this.styleNonce = opts.styleNonce;
 
     if (!this.styleEl) {
-      this.styleEl = document.createElement("style");
+      this.styleEl = this.doc.createElement("style");
       this.styleEl.textContent = BASE_CSS;
       if (this.styleNonce) this.styleEl.setAttribute("nonce", this.styleNonce);
       this.styleRoot.appendChild(this.styleEl);
@@ -174,7 +199,7 @@ export class SheetRenderer {
     }
     if (!this.sheetStyleEl) {
       // sheet 级样式（xf 类 + 网格线）独立元素：切 sheet 时整体替换
-      this.sheetStyleEl = document.createElement("style");
+      this.sheetStyleEl = this.doc.createElement("style");
       if (this.styleNonce)
         this.sheetStyleEl.setAttribute("nonce", this.styleNonce);
       this.styleRoot.appendChild(this.sheetStyleEl);
@@ -197,31 +222,31 @@ export class SheetRenderer {
     this.root.textContent = "";
 
     if (this.showTabs) {
-      this.tabsBar = document.createElement("div");
+      this.tabsBar = this.doc.createElement("div");
       this.tabsBar.className = "xpv-tabs";
       this.root.appendChild(this.tabsBar);
     }
 
-    this.viewport = document.createElement("div");
+    this.viewport = this.doc.createElement("div");
     this.viewport.className = "xpv-viewport";
     this.root.appendChild(this.viewport);
 
-    this.content = document.createElement("div");
+    this.content = this.doc.createElement("div");
     this.content.className = "xpv-content";
     this.viewport.appendChild(this.content);
 
-    this.cellsLayer = document.createElement("div");
+    this.cellsLayer = this.doc.createElement("div");
     this.cellsLayer.className = "xpv-layer";
     this.content.appendChild(this.cellsLayer);
 
-    this.frozenColLayer = document.createElement("div");
-    this.frozenRowLayer = document.createElement("div");
-    this.frozenCorner = document.createElement("div");
-    this.headerRow = document.createElement("div");
-    this.headerCol = document.createElement("div");
-    this.headerCorner = document.createElement("div");
-    this.colHeadFrozen = document.createElement("div");
-    this.rowHeadFrozen = document.createElement("div");
+    this.frozenColLayer = this.doc.createElement("div");
+    this.frozenRowLayer = this.doc.createElement("div");
+    this.frozenCorner = this.doc.createElement("div");
+    this.headerRow = this.doc.createElement("div");
+    this.headerCol = this.doc.createElement("div");
+    this.headerCorner = this.doc.createElement("div");
+    this.colHeadFrozen = this.doc.createElement("div");
+    this.rowHeadFrozen = this.doc.createElement("div");
     for (const el of [
       this.frozenColLayer,
       this.frozenRowLayer,
@@ -241,7 +266,7 @@ export class SheetRenderer {
 
     const onScroll = () => {
       if (this.rafId) return;
-      this.rafId = requestAnimationFrame(() => {
+      this.rafId = this.requestFrame(() => {
         this.rafId = 0;
         this.updateOverlays();
       });
@@ -251,12 +276,17 @@ export class SheetRenderer {
       this.viewport.removeEventListener("scroll", onScroll),
     );
 
-    if (typeof ResizeObserver !== "undefined") {
+    // 用容器所在 realm 的 ResizeObserver（iframe 的布局尺寸由 iframe 窗口
+    // 提供；外层窗口的观察器不一定能收到正确的 resize）。
+    const RO =
+      this.doc.defaultView?.ResizeObserver ??
+      (typeof ResizeObserver !== "undefined" ? ResizeObserver : undefined);
+    if (RO) {
       // 重复 render（同实例换文件/重建渲染）时先断开上一个 RO：它观察的
       // viewport 已被本方法拆下，不断开则持续持有游离节点直到 destroy。
       this.ro?.disconnect();
       // 断开闭包捕获局部实例而非 this.ro——后者在 destroy 时只断得掉最新一个。
-      const ro = new ResizeObserver(() => {
+      const ro = new RO(() => {
         // A detached container or a late-attached shadow root can start with
         // styles unresolved; re-check on layout changes before capping.
         this.refreshCssApplied();
@@ -273,8 +303,14 @@ export class SheetRenderer {
    * 仍是 visible，viewport 会被内容撑高，虚拟化窗口必须用 fallback 封顶。
    */
   private refreshCssApplied(): void {
-    if (typeof getComputedStyle !== "function") return;
-    const overflowY = getComputedStyle(this.viewport).overflowY;
+    // iframe 节点要用 iframe 窗口的 getComputedStyle；无 defaultView
+    // （happy-dom 的 detached document）时回退全局。
+    const view = this.doc.defaultView;
+    const getStyle =
+      view?.getComputedStyle?.bind(view) ??
+      (typeof getComputedStyle === "function" ? getComputedStyle : null);
+    if (!getStyle) return;
+    const overflowY = getStyle(this.viewport).overflowY;
     this.cssApplied = overflowY === "auto" || overflowY === "scroll";
   }
 
@@ -343,7 +379,7 @@ export class SheetRenderer {
     this.tabsBar.textContent = "";
     this.workbook.sheets.forEach((s, i) => {
       if (!s.visible) return;
-      const btn = document.createElement("button");
+      const btn = this.doc.createElement("button");
       btn.type = "button";
       btn.className = "xpv-tab" + (i === this.sheetIndex ? " xpv-active" : "");
       btn.textContent = s.name || `Sheet${i + 1}`;
@@ -680,7 +716,7 @@ export class SheetRenderer {
     height: number,
     spillPx?: number,
   ): void {
-    const el = document.createElement("div");
+    const el = this.doc.createElement("div");
     el.className = this.cellClasses(cell, sheet);
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
@@ -703,12 +739,12 @@ export class SheetRenderer {
         // 溢出截断容器：el 本体保持原格宽（背景/边框不外溢、overflow 放开），
         // 文本在 span 里按溢出上限截断（Excel 溢出到第一个非空格前）
         el.classList.add("xpv-spill");
-        const span = document.createElement("span");
+        const span = this.doc.createElement("span");
         span.textContent = fmt.text;
         span.style.cssText = `max-width:${spillPx}px;overflow:hidden;`;
         el.appendChild(span);
       } else if (rotation) {
-        const span = document.createElement("span");
+        const span = this.doc.createElement("span");
         span.textContent = fmt.text;
         span.style.cssText = rotation;
         el.appendChild(span);
@@ -841,7 +877,7 @@ export class SheetRenderer {
     want.add(key);
     let el = this.renderedHeaders.get(key);
     if (!el) {
-      el = document.createElement("div");
+      el = this.doc.createElement("div");
       el.className = "xpv-hcell";
       el.textContent = label;
       el.style.left = pos.left;
@@ -854,7 +890,7 @@ export class SheetRenderer {
   }
 
   destroy(): void {
-    if (this.rafId) cancelAnimationFrame(this.rafId);
+    if (this.rafId) this.cancelFrame(this.rafId);
     for (const fn of this.destroyFns) fn();
     this.destroyFns = [];
     this.rendered.clear();

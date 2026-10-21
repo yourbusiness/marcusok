@@ -1,6 +1,11 @@
 import type { ColumnConfig, FormatSpec, SheetConfig } from "./types";
 import { columnProp } from "./column-tree";
 import { dateToSerial } from "@marcusok/xlsx-core";
+import {
+  firstInvalidXmlCode,
+  formatCodePoint,
+  sanitizeXmlText,
+} from "./xml-safety";
 
 /** Default display patterns (Excel format codes) when FormatSpec omits `pattern`. */
 export const DEFAULT_DATE_PATTERN = "yyyy-MM-dd";
@@ -14,9 +19,15 @@ export const DEFAULT_DATETIME_PATTERN = "yyyy-MM-dd HH:mm";
  *  the same NaN guard on the parsing side). */
 export function toStr(value: unknown): string {
   if (value == null) return "";
-  if (typeof value === "string") return value;
+  // 数据文本统一清洗 XML 非法控制字符/孤立代理项：modern-xlsx 的 JSON
+  // 序列化遇到孤立代理项会直接拒绝（整份导出降级为无样式 stream），而
+  // fast-xlsx 的 TextEncoder 会替换为 U+FFFD。在这里归一后两条路径写入
+  // 相同内容，也避免一个坏字符触发整份降级。
+  if (typeof value === "string") return sanitizeXmlText(value);
   if (value instanceof Date)
-    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
+    return Number.isNaN(value.getTime())
+      ? sanitizeXmlText(String(value))
+      : value.toISOString();
   if (
     typeof value === "number" ||
     typeof value === "boolean" ||
@@ -24,7 +35,7 @@ export function toStr(value: unknown): string {
   )
     return String(value);
   if (typeof value === "symbol" || typeof value === "function")
-    return String(value);
+    return sanitizeXmlText(String(value));
   // toJSON 可能返回 undefined（不少第三方对象的惯例），JSON.stringify 随之
   // 返回 undefined，与本函数的 string 契约不符：若放行，undefined 直入 aoa，
   // modern-xlsx 会跳过该格不建单元格，破坏"数据行稠密"假设——同行右侧列
@@ -34,10 +45,10 @@ export function toStr(value: unknown): string {
   // （"[object Object]"也远好于静默丢值）。
   try {
     // eslint-disable-next-line @typescript-eslint/no-base-to-string
-    return JSON.stringify(value) ?? String(value);
+    return sanitizeXmlText(JSON.stringify(value) ?? String(value));
   } catch {
     // eslint-disable-next-line @typescript-eslint/no-base-to-string
-    return String(value);
+    return sanitizeXmlText(String(value));
   }
 }
 
@@ -355,6 +366,17 @@ export function validateSheetName(name: string): void {
   if (name.startsWith("'") || name.endsWith("'")) {
     throw new Error(
       `[excel-exporter] sheet name "${name}" must not begin or end with an apostrophe (')`,
+    );
+  }
+  // XML 1.0 不允许的码点会被现代写 API 原样拼进 workbook.xml，Excel 打开
+  // 时要求修复而导出仍返回 success:true。表名无法像单元格文本那样静默
+  // 清洗（改名会改变业务语义），直接拒绝。
+  const invalid = firstInvalidXmlCode(name);
+  if (invalid !== null) {
+    throw new Error(
+      `[excel-exporter] sheet name ${JSON.stringify(
+        name,
+      )} contains ${formatCodePoint(invalid)}, which XML/OOXML does not allow`,
     );
   }
 }

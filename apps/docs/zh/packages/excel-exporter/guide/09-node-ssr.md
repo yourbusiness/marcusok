@@ -11,7 +11,7 @@ Node 服务端（含 SSR）无需部署浏览器静态资源，且**无需初始
 | Worker 路径     | 可用                 | 无 Web Worker，自动回退 main/stream                           |
 | 自动下载        | 触发浏览器下载       | `triggerDownload` 为 no-op                                    |
 | `download` 参数 | 默认 true            | Node 下本就是 no-op；建议显式 `false` 表明意图，自行处理 Blob |
-| 大数据量        | worker + Fast stream | main → ≥ 5 万行 stream（主线程执行）                          |
+| 大数据量        | worker + Fast stream | main → 达行/单元格门槛后 stream（主线程执行）                 |
 | WASM 初始化     | 自动定位（默认）     | 自动定位并初始化                                              |
 
 ## 服务端导出并落盘
@@ -73,4 +73,4 @@ await getWasmLoader().ensureLoaded(); // 一次性读取并编译随包发布的
 
 ## 性能提示
 
-服务端大文件（≥ 5 万行）会自动走 stream 路径；由于没有 Worker，Fast stream 占用当前线程约 0.8s，适合放在异步任务/队列中，避免阻塞请求线程。
+服务端大文件（达到 stream 门槛：行 ≥ 5 万或格 ≥ 150 万）会自动走 stream 路径；由于没有 Worker，Fast stream 占用当前线程约 0.8s，适合放在异步任务/队列中，避免阻塞请求线程。

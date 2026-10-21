@@ -43,6 +43,84 @@ const basicSheet: SheetConfig = {
   ],
 };
 
+const styledSheet = (rows: number): SheetConfig => ({
+  name: "S",
+  columns: [
+    {
+      prop: "a",
+      label: "A",
+      width: 12,
+      style: { font: { bold: true } },
+      headerStyle: { font: { bold: true } },
+    },
+  ],
+  data: Array.from({ length: rows }, (_, i) => ({ a: i })),
+  headerStyle: { fill: { pattern: "solid", fgColor: "1F4E79" } },
+  dataStyle: { alignment: { vertical: "center" } },
+  freezeRows: 1,
+  autoFilter: true,
+});
+
+const ALL_DROPPED = [
+  "width",
+  "headerStyle",
+  "style",
+  "dataStyle",
+  "freezeRows",
+  "autoFilter",
+];
+
+// 正常 auto ≥ 50k 路由也会丢样式/布局：此前只有 console.warn 可感知，
+// 结果仍是 success:true 且 error 为空。degradedFeatures 让调用方能监控
+// "成功但产物降级"，与失败兜底路径共用同一份判定。
+describe("degradedFeatures (structured stream degradation signal)", () => {
+  it("reports every dropped feature on the auto stream route without an error", async () => {
+    const r = await exportExcel({
+      filename: "degraded-auto",
+      download: false,
+      mode: "auto",
+      sheets: [styledSheet(50_000)],
+    });
+    expect(r.success).toBe(true);
+    expect(r.engine).toBe("fast-xlsx");
+    expect(r.mode).toBe("stream");
+    // 正常大文件路由不是失败：error 保持为空，降级信息走新字段
+    expect(r.error).toBeUndefined();
+    expect(r.degradedFeatures).toEqual(ALL_DROPPED);
+  });
+
+  it("leaves the field unset when the styled Workbook path runs", async () => {
+    const r = await exportExcel({
+      filename: "degraded-main",
+      download: false,
+      mode: "main",
+      sheets: [styledSheet(2)],
+    });
+    expect(r.success).toBe(true);
+    expect(r.engine).toBe("modern-xlsx");
+    expect(r.degradedFeatures).toBeUndefined();
+  });
+
+  it("reports dropped features on the failure fallback while keeping the soft error", async () => {
+    const r = await exportWithFallback("degraded-fallback", [styledSheet(2)]);
+    expect(r.success).toBe(true);
+    expect(r.engine).toBe("fast-xlsx");
+    expect(r.degradedFeatures).toEqual(ALL_DROPPED);
+    expect(r.error?.message).toMatch(/styles stripped/);
+  });
+
+  it("leaves the field unset when the stream drops nothing", async () => {
+    const r = await exportExcel({
+      filename: "degraded-none",
+      download: false,
+      mode: "stream",
+      sheets: [basicSheet],
+    });
+    expect(r.success).toBe(true);
+    expect(r.degradedFeatures).toBeUndefined();
+  });
+});
+
 describe("stream fallback (terminal degradation, WebAssembly unavailable)", () => {
   it("exports a real xlsx blob on the stream engine with degradation markers", async () => {
     const r = await exportWithFallback("fallback-direct", [basicSheet]);

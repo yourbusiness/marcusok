@@ -197,7 +197,7 @@ sheets: [
 
 预设各自声明了对齐，因此保持自己的对齐：`StylePresets.dataRow` 的设计就是**左对齐**，在基底之上仍是左对齐。想让它也居中，派生一个变体即可——`{ ...StylePresets.dataRow, alignment: { horizontal: "center", vertical: "center" } }`。
 
-> 基底属于样式层，因此流式路径（≥ 50,000 行或降级导出）会连同其它样式一并剥离——见[样式的生效范围](#样式的生效范围)。
+> 基底属于样式层，因此流式路径（达到行/单元格 stream 门槛或降级导出）会连同其它样式一并剥离——见[样式的生效范围](#样式的生效范围)。
 
 ## 表级 dataStyle
 
@@ -223,7 +223,7 @@ await exportExcel({
 });
 ```
 
-合并是**字段级**的，不是整体替换：`dataStyle` 提供基底，列级 `style` 只覆盖它声明了的字段——整表边框不会被一个只设置了 `numFormat` 的列冲掉，反之亦然。合并只深入一层：`font` / `fill` / `alignment` / `border` 各自做字段合并；但 `border` 内部的单个边对象（`border.bottom` 等）是整体替换的，只写 `{ style: "medium" }` 会丢掉基底的 `color`，需要自己把基底边对象展开回来。这与 `headerStyle` 的整体替换语义是刻意不同的。与其他样式一样，`dataStyle` 在流式路径（≥ 50,000 行 / 降级导出）会被丢弃并告警。
+合并是**字段级**的，不是整体替换：`dataStyle` 提供基底，列级 `style` 只覆盖它声明了的字段——整表边框不会被一个只设置了 `numFormat` 的列冲掉，反之亦然。合并只深入一层：`font` / `fill` / `alignment` / `border` 各自做字段合并；但 `border` 内部的单个边对象（`border.bottom` 等）是整体替换的，只写 `{ style: "medium" }` 会丢掉基底的 `color`，需要自己把基底边对象展开回来。这与 `headerStyle` 的整体替换语义是刻意不同的。与其他样式一样，`dataStyle` 在流式路径（达到 stream 门槛 / 降级导出）会被丢弃并告警。
 
 ## 表头样式：表级默认、列级覆盖
 
@@ -283,7 +283,7 @@ sheets: [
 
 ## 样式的生效范围
 
-- **样式仅在 Workbook 路径渲染**：auto 模式 50,000 行以下（主线程，或浏览器 20,000–49,999 行的 Worker + Workbook）。流式路径（≥ 50,000 行或降级导出）会剥离全部样式——`style` / `headerStyle` / `dataStyle` / `width` / `freezeRows`——并输出 console 告警。大文件导出不要依赖样式。
+- **样式仅在 Workbook 路径渲染**：auto 模式低于两个门槛（行 < 50,000 且格 < 1,500,000；主线程，或浏览器中的 Worker + Workbook）。流式路径（达到行/单元格 stream 门槛或降级导出）会剥离全部样式——`style` / `headerStyle` / `dataStyle` / `width` / `freezeRows`——并输出 console 告警。大文件导出不要依赖样式。
 - **颜色是 6 位 RGB hex、不带 `#`**（`"1F4E79"`），与 modern-xlsx 的类型约定一致。
 - **复用预设零成本**：`WorkbookBuilder` 会按 `JSON.stringify` 缓存结构相同的样式并复用同一样式索引，N 个列引用 `StylePresets.currency` 不会膨胀文件——无需手工共享对象。（去重发生在本包的构建器里；modern-xlsx 的 `StyleBuilder` 本身每次调用都会追加新记录。）
 

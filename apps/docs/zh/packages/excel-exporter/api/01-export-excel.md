@@ -6,7 +6,7 @@
 exportExcel(options: ExportOptions): Promise<ExportResult>
 ```
 
-核心入口函数（`exportTable` / `exportEcharts` 等便捷封装最终都委托给它）。根据数据量与环境自动路由到 main / worker / stream，WASM 不可用时降级无样式快速流。auto 模式阈值（浏览器）：< 20,000 行 → main · 20,000–49,999 → worker + Workbook · ≥ 50,000 → worker + 快速流；Node/SSR：< 50,000 → main · ≥ 50,000 → stream——见[自动模式路由](/zh/packages/excel-exporter/guide/03-auto-mode)。
+核心入口函数（`exportTable` / `exportEcharts` 等便捷封装最终都委托给它）。根据总行数、估算单元格数与环境自动路由到 main / worker / stream，WASM 不可用时降级无样式快速流。auto 模式门槛（浏览器）：低于 20,000 行**且** 250,000 格 → main；达到任一 Worker 门槛但低于 stream 门槛 → worker + Workbook；达到 50,000 行**或** 1,500,000 格 → worker + 快速流。Node/SSR：低于 50,000 行**且** 1,500,000 格 → main，否则 stream——见[自动模式路由](/zh/packages/excel-exporter/guide/03-auto-mode)。
 
 ## ExportOptions
 
@@ -14,7 +14,7 @@ exportExcel(options: ExportOptions): Promise<ExportResult>
 | ------------ | -------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sheets`     | `SheetConfig[]`                                    | 是   | 工作表配置，至少一个                                                                                                                                                                                                                                                              |
 | `filename`   | `string`                                           | 是   | 下载文件名，不以 `.xlsx` 结尾时末尾自动追加（判定不区分大小写——`"REPORT.XLSX"` 不会再追加）                                                                                                                                                                                       |
-| `mode`       | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`，按行数自动路由。该字段有枚举校验：传入其它值（如 `"Main"`）会以 `{ success: false }` 前置失败，而不是被静默当作 `auto`                                                                                                                                             |
+| `mode`       | `"auto" \| "main" \| "worker" \| "stream"`         | —    | 默认 `"auto"`，按行数/估算单元格数自动路由。该字段有枚举校验：传入其它值（如 `"Main"`）会以 `{ success: false }` 前置失败，而不是被静默当作 `auto`                                                                                                                                |
 | `onProgress` | `(progress: number) => void`                       | —    | 0 → 1；首尾 0 与 1 由 `exportExcel` 在所有路径各上报一次（含流式兜底与最终失败的导出）；分段进度仅 stream 路径有（每 1000 行上报一次）                                                                                                                                            |
 | `onPhase`    | `(phase: ExportPhase, durationMs: number) => void` | —    | `init` / `build` / `download` 阶段耗时，在阶段**结束时**触发——上报规则见下文                                                                                                                                                                                                      |
 | `download`   | `boolean`                                          | —    | 默认 `true` 触发浏览器下载；`false` 只返回 Blob                                                                                                                                                                                                                                   |
@@ -31,15 +31,16 @@ exportExcel(options: ExportOptions): Promise<ExportResult>
 
 ## ExportResult
 
-| 字段        | 类型                           | 说明                                                                                                                                                                                     |
-| ----------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `success`   | `boolean`                      | 是否成功                                                                                                                                                                                 |
-| `blob?`     | `Blob`                         | 导出文件内容                                                                                                                                                                             |
-| `engine?`   | `"modern-xlsx" \| "fast-xlsx"` | 实际使用的引擎：`"modern-xlsx"`（Rust+WASM，完整样式）或 `"fast-xlsx"`（本包自带的纯 JS 无样式流式写出器——≥5 万行的 stream 路由与最终降级）。区分引擎请看本字段而非 `mode`               |
-| `mode?`     | `ExportMode`                   | 实际使用的模式                                                                                                                                                                           |
-| `duration?` | `number`                       | 完整导出耗时（ms）。主线程路径度量整次导出；worker 路径在主线程从调用 `exportInWorker` 起量（含 postMessage 前序列化与 worker 往返）直到 Blob 构建完成，因此**宽于** worker 内纯构建耗时 |
-| `rowCount?` | `number`                       | 导出的数据行数——不含表头行                                                                                                                                                               |
-| `error?`    | `Error`                        | `success` 为 `false` 时的失败原因。**同时**——与 `success: true` 一起——也会在经无样式快速流兜底**成功**的导出上设置，内容为降级原因；请先看 `success`：仅有 `error` 不代表导出失败        |
+| 字段                | 类型                           | 说明                                                                                                                                                                                                                 |
+| ------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `success`           | `boolean`                      | 是否成功                                                                                                                                                                                                             |
+| `blob?`             | `Blob`                         | 导出文件内容                                                                                                                                                                                                         |
+| `engine?`           | `"modern-xlsx" \| "fast-xlsx"` | 实际使用的引擎：`"modern-xlsx"`（Rust+WASM，完整样式）或 `"fast-xlsx"`（本包自带的纯 JS 无样式流式写出器——≥5 万行的 stream 路由与最终降级）。区分引擎请看本字段而非 `mode`                                           |
+| `mode?`             | `ExportMode`                   | 实际使用的模式                                                                                                                                                                                                       |
+| `degradedFeatures?` | `string[]`                     | 被快速流丢弃的特性（`width`、`headerStyle`、`style`、`dataStyle`、`freezeRows`、`autoFilter`）。正常的大文件 auto stream 路由即使 `success: true`、`error` 为空也会设置；失败驱动的降级还会同时设置 `error` 说明原因 |
+| `duration?`         | `number`                       | 完整导出耗时（ms）。主线程路径度量整次导出；worker 路径在主线程从调用 `exportInWorker` 起量（含 postMessage 前序列化与 worker 往返）直到 Blob 构建完成，因此**宽于** worker 内纯构建耗时                             |
+| `rowCount?`         | `number`                       | 导出的数据行数——不含表头行                                                                                                                                                                                           |
+| `error?`            | `Error`                        | `success` 为 `false` 时的失败原因。**同时**——与 `success: true` 一起——也会在经无样式快速流兜底**成功**的导出上设置，内容为降级原因；请先看 `success`：仅有 `error` 不代表导出失败                                    |
 
 ## configureWasm
 

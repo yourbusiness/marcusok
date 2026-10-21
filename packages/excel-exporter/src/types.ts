@@ -266,7 +266,7 @@ export interface ExportOptions {
   sheets: SheetConfig[];
   /** Download file name; `.xlsx` appended unless already present. Validated as a non-empty string at export time. */
   filename: string;
-  /** Mode selection: auto = auto-decide by row count (default). */
+  /** Mode selection: auto = auto-decide by rows and estimated cells (default). */
   mode?: ExportMode;
   /**
    * Progress callback (0-1). The leading 0 and the trailing 1 are each emitted
@@ -332,6 +332,16 @@ export interface ExportResult {
   engine?: "modern-xlsx" | "fast-xlsx";
   /** Mode actually used. */
   mode?: ExportMode;
+  /**
+   * 因使用 Fast stream 而被丢弃的功能特性（`width` / `headerStyle` /
+   * `style` / `dataStyle` / `freezeRows` / `autoFilter`）。
+   *
+   * Fast stream 不写样式与布局：显式 `mode: "stream"`、auto 达到行/单元格
+   * 阈值、以及样式降级兜底都会丢这些特性。此前只有 console.warn 可感知，
+   * 正常的大文件路由甚至不设置 `error`；本字段让调用方可以程序化监控
+   * "成功但产物降级"。空数组/未设置表示没有特性被丢弃。
+   */
+  degradedFeatures?: string[];
   duration?: number; // ms
   rowCount?: number;
   /**

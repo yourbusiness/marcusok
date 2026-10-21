@@ -51,7 +51,7 @@ The tab bar (rendered by default) does the same thing visually; sheets marked `h
 
 Timing matters: these methods only take effect **after the parse resolves**. `createPreview` boots asynchronously, so calling `setSheet()` on the line right after it returns is a silent no-op — no return value, no `onError` — and `getSheetNames()` returns `[]` until then. Call them from `onParsed`, from your own UI, or let the tab bar drive them. After boot, invalid values (unknown name, out-of-range index, non-integer number, `NaN`) report `Sheet not found: …` through `onError` instead of throwing. After `destroy()` both are no-ops again; note that `destroy()` **also aborts an in-flight parse** — the boot path returns silently as `ABORTED` (`onError` / `onParsed` never fire for a cancelled preview; see the API reference for the cancellation semantics).
 
-The container may live inside a ShadowRoot: styles are injected into the container's root node, and an optional `styleNonce` (renderer option / `createPreview` option) is applied to the injected `<style>` elements for CSP setups.
+The container may live inside a ShadowRoot **or an iframe document**: styles are injected into the container's root node / `ownerDocument`, and an optional `styleNonce` (renderer option / `createPreview` option) is applied to the injected `<style>` elements for CSP setups.
 
 ## The low-level parse API
 

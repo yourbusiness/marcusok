@@ -51,7 +51,7 @@ preview.getSheetNames(); // 全部 sheet（含隐藏，按文件顺序）
 
 时机很重要：这两个方法只在**解析完成后**才生效。`createPreview` 是异步启动的，在它返回后的下一行就调用 `setSheet()` 属于静默空操作——没有返回值、也不触发 `onError`；在此期间 `getSheetNames()` 返回 `[]`。请在 `onParsed` 里、或由你自己的 UI、或交给页签栏来调用。解析完成后，无效值（名称不存在、索引越界、非整数、`NaN`）经 `onError` 报出 `Sheet not found: …`，不会抛裸异常。`destroy()` 之后两者同样变回空操作；注意 `destroy()` **同时会中止在途解析**——boot 路径以 `ABORTED` 静默返回（取消的预览不会触发 `onError` / `onParsed`；取消语义详见 API 参考表中的 `ABORTED` 码）。
 
-容器可以位于 ShadowRoot 内：样式会注入容器的 root node；可选的 `styleNonce`（渲染器 / `createPreview` 选项）会应用到注入的 `<style>` 元素，适配 CSP。
+容器可以位于 ShadowRoot **或 iframe Document** 内：样式会注入容器的 root node / `ownerDocument`；可选的 `styleNonce`（渲染器 / `createPreview` 选项）会应用到注入的 `<style>` 元素，适配 CSP。
 
 ## 低层解析 API
 

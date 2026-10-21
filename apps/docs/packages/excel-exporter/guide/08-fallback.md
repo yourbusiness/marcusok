@@ -1,14 +1,14 @@
 # Fallback (style-less fast stream)
 
-When the WASM path is unavailable, the library automatically degrades to the pure-JS fast stream, so most failures still produce a file (one exception is listed under "When it triggers"). The fallback needs no WASM, no Worker and no network access — it is the same stream writer used for ≥ 50,000-row exports, run on the main thread without styles.
+When the WASM path is unavailable, the library automatically degrades to the pure-JS fast stream, so most failures still produce a file (one exception is listed under "When it triggers"). The fallback needs no WASM, no Worker and no network access — it is the same stream writer used at/above the row/cell stream gate (rows ≥ 50,000 or cells ≥ 1,500,000), run on the main thread without styles.
 
 ## When it triggers
 
-- The environment does not support `WebAssembly` (this only affects the main and Worker + Workbook paths; the ≥ 50,000-row stream path does not use WASM and is unaffected);
+- The environment does not support `WebAssembly` (this only affects the main and Worker + Workbook paths; the stream-gate path does not use WASM and is unaffected);
 - `modern-xlsx.wasm` fails to load (after `maxRetries` attempts, default 3);
-- The Worker path fails (e.g. the worker asset 404s) **and** the automatic main-thread retry also fails — on the Workbook route the retry runs modern-xlsx on the main thread first (styles preserved), so the stream is the last resort, not the immediate next step. On the ≥ 50,000-row stream route the retry is the fast stream itself (identical code, identical input), so a failure there is terminal — no third attempt;
+- The Worker path fails (e.g. the worker asset 404s) **and** the automatic main-thread retry also fails — on the Workbook route the retry runs modern-xlsx on the main thread first (styles preserved), so the stream is the last resort, not the immediate next step. On the stream-gate route the retry is the fast stream itself (identical code, identical input), so a failure there is terminal — no third attempt;
 - A **worker timeout** never enters the chain at all (see below).
-- The build throws on a main-thread Workbook route (e.g. an internal modern-xlsx build error). The same error on a Node stream route (no `window`, explicit `mode: "stream"` or auto ≥ 50,000 rows) is terminal — the first attempt already ran the fast stream on the identical input, so there is nothing to retry or fall back to. Note: structural input errors (invalid/duplicate sheet names, sheets exceeding Excel's 1,048,576-row / 16,384-column hard limits, out-of-bounds merges, non-numeric or negative `width` / fractional `freezeRows`, out-of-range `format.decimals`, …) never enter this chain — pre-flight validation rejects them before any route runs, so the export resolves with `success: false` without a fallback attempt.
+- The build throws on a main-thread Workbook route (e.g. an internal modern-xlsx build error). The same error on a Node stream route (no `window`, explicit `mode: "stream"` or auto at/above the stream gate) is terminal — the first attempt already ran the fast stream on the identical input, so there is nothing to retry or fall back to. Note: structural input errors (invalid/duplicate sheet names, sheets exceeding Excel's 1,048,576-row / 16,384-column hard limits, out-of-bounds merges, non-numeric or negative `width` / fractional `freezeRows`, out-of-range `format.decimals`, …) never enter this chain — pre-flight validation rejects them before any route runs, so the export resolves with `success: false` without a fallback attempt.
 
 ## The one failure that never degrades: worker timeout
 
@@ -31,7 +31,11 @@ When the shared worker exceeds `workerTimeoutMs` (default 120 s), it is terminat
 ```ts
 const result = await exportExcel(options);
 if (result.success && result.error) {
-  // Degraded export: styles stripped, reason in result.error.message
+  // Failure-driven fallback: styles stripped, reason in result.error.message
+}
+if (result.success && result.degradedFeatures?.length) {
+  // Normal fast-stream route (at/above the row/cell gate) dropped these
+  // features; result.error is unset in this case.
 }
 ```
 

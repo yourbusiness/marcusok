@@ -117,6 +117,50 @@ describe("layout 几何", () => {
     expect(l.coveredBy.size).toBe(0);
   });
 
+  it("buildLayout：把声明的超大维度钳制到 Excel 上限（低层防御）", () => {
+    // 模型层已拒绝越界声明；直接构造 PreviewSheet 的低层调用方仍可能传入
+    // 超大值，布局层不得按原值分配 TypedArray。
+    const l = buildLayout({
+      name: "S",
+      visible: true,
+      showGridLines: true,
+      rightToLeft: false,
+      rowCount: 100_000_000,
+      colCount: 100_000_000,
+      rows: [],
+      colSpans: [],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+      styles: { fonts: [], fills: [], borders: [], xfs: [] },
+    });
+    expect(l.rowCount).toBe(1_048_576);
+    expect(l.colCount).toBe(16_384);
+  });
+
+  it("buildLayout：负/非有限行高列宽回退默认，不产生负几何", () => {
+    const l = buildLayout({
+      name: "S",
+      visible: true,
+      showGridLines: true,
+      rightToLeft: false,
+      rowCount: 2,
+      colCount: 2,
+      rows: [{ index: 1, height: -50, hidden: false, cells: [] }],
+      colSpans: [
+        { min: 1, max: 1, width: -100, hidden: false, customWidth: true },
+      ],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+      styles: { fonts: [], fills: [], borders: [], xfs: [] },
+    });
+    expect(l.colWidths[0]).toBe(charsToPx(8.43));
+    expect(l.rowHeights[0]).toBe(ptToPx(15));
+    expect(l.totalWidth).toBeGreaterThan(0);
+    expect(l.totalHeight).toBeGreaterThan(0);
+  });
+
   it("buildLayout：面积上限边界的合并仍逐格展开（不误伤正常大合并）", () => {
     // 1000 × 1000 = 1M 格，恰在上限：整列合并（A1:A100000 ≈ 10 万格）等
     // Excel 模板常态必须继续展开，否则覆盖格的抑制渲染失效

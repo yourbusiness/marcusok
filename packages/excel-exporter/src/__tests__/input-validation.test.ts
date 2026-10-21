@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
 import { exportAsStream } from "../streaming-builder";
+import { WorkbookBuilder } from "../workbook-builder";
 import { exportExcel } from "../index";
 import { validateMerges, validateSheetLimits } from "../format-utils";
-import type { SheetConfig } from "../types";
+import type { ColumnConfig, SheetConfig } from "../types";
 // Node's fetch rejects file://, so sync-init the WASM (see setup.ts);
 // importing the module already runs the side-effectful bootstrap.
 import { readBuffer } from "./setup";
@@ -1097,5 +1098,250 @@ describe("Excel sheet dimension limits", () => {
     expect(() => validateSheetLimits(mk(1), 16_385, 1)).toThrow(
       /16,384-column limit/,
     );
+  });
+});
+
+const C = (n: number): string => String.fromCharCode(n);
+
+// XML 1.0 之外的控制字符/非字符/孤立代理项不能出现在 OOXML 中：modern-xlsx
+// 对 sheet 名、font.name、numFormat、format.pattern 会原样写进 XML，导致
+// Excel 打开即要求修复，而导出返回 success:true。这些字段无法静默清洗
+// （改名/改格式码会改变业务语义），必须前置拒绝。
+describe("XML-illegal characters in configuring strings", () => {
+  const cases: {
+    label: string;
+    sheet: SheetConfig;
+    message: RegExp;
+  }[] = [
+    {
+      label: "sheet name U+0001",
+      sheet: baseSheet({ name: `S${C(1)}X` }),
+      message: /sheet name .* contains U\+0001/,
+    },
+    {
+      label: "sheet name U+FFFE",
+      sheet: baseSheet({ name: `S${C(0xfffe)}X` }),
+      message: /sheet name .* contains U\+FFFE/,
+    },
+    {
+      label: "sheet name lone surrogate",
+      sheet: baseSheet({ name: `S${C(0xd800)}X` }),
+      message: /sheet name .* contains U\+D800/,
+    },
+    {
+      label: "font.name U+0001",
+      sheet: baseSheet({
+        columns: [
+          { prop: "a", label: "A", style: { font: { name: `F${C(1)}X` } } },
+        ],
+      }),
+      message: /font\.name contains U\+0001/,
+    },
+    {
+      label: "numFormat U+FFFE",
+      sheet: baseSheet({
+        columns: [
+          { prop: "a", label: "A", style: { numFormat: `0.00${C(0xfffe)}` } },
+        ],
+      }),
+      message: /numFormat contains U\+FFFE/,
+    },
+    {
+      label: "date pattern U+0001",
+      sheet: baseSheet({
+        columns: [
+          {
+            prop: "a",
+            label: "A",
+            format: { type: "date", pattern: `yyyy${C(1)}` },
+          },
+        ],
+      }),
+      message: /format\.pattern contains U\+0001/,
+    },
+  ];
+
+  for (const { label, sheet, message } of cases) {
+    it(`rejects ${label} before building (no engine call, no fallback)`, async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        for (const mode of ["main", "stream"] as const) {
+          const r = await exportExcel({
+            filename: "xml-config",
+            download: false,
+            mode,
+            sheets: [sheet],
+          });
+          expect(r.success).toBe(false);
+          expect(r.error?.message).toMatch(message);
+          expect(warn).not.toHaveBeenCalled();
+        }
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  }
+});
+
+// 数据/表头文本是"可清洗"的：删除 XML 非法控制字符、孤立代理项替换为
+// U+FFFD。两条导出路径必须写出相同内容，且不得出现原始非法字节。
+describe("XML-safe text sanitization for data/headers", () => {
+  const cases = [
+    { label: "U+0001", text: `a${C(1)}b`, expected: "ab" },
+    {
+      label: "lone surrogate",
+      text: `a${C(0xd800)}b`,
+      expected: `a${C(0xfffd)}b`,
+    },
+  ];
+
+  for (const { label, text, expected } of cases) {
+    it(`sanitizes ${label} identically on workbook and stream paths`, async () => {
+      for (const mode of ["main", "stream"] as const) {
+        const r = await exportExcel({
+          filename: "xml-data",
+          download: false,
+          mode,
+          sheets: [
+            {
+              name: "S",
+              columns: [{ prop: "v", label: `H${C(1)}X` }],
+              data: [{ v: text }],
+            },
+          ],
+        });
+        expect(r.success).toBe(true);
+        expect(r.error).toBeUndefined();
+        const bytes = new Uint8Array(await r.blob!.arrayBuffer());
+        const wb = await readBuffer(bytes);
+        const ws = wb.getSheet("S")!;
+        // 表头同样经过清洗；数据值按 XML 1.0 规则归一
+        expect(ws.cell("A1").value).toBe("HX");
+        expect(ws.cell("A2").value).toBe(expected);
+        // 所有 XML 部件不得残留原始控制字符/非字符
+        for (const [name, part] of Object.entries(unzipSync(bytes))) {
+          if (!name.endsWith(".xml")) continue;
+          expect(strFromU8(part)).not.toMatch(
+            /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/,
+          );
+        }
+      }
+    });
+  }
+});
+
+// TypeScript 只能约束 TS 调用方；JS 调用方的非法枚举/类型会被引擎原样
+// 写进 styles.xml（Excel 判损），或在 serde 处失败并整份降级。这里统一
+// 前置为结构化失败。
+describe("style enum/type runtime validation (JS callers)", () => {
+  const cases: {
+    label: string;
+    style: Record<string, unknown>;
+    message: RegExp;
+  }[] = [
+    {
+      label: "fill.pattern misspelled",
+      style: { fill: { pattern: "bogus", fgColor: "FF0000" } },
+      message: /fill\.pattern must be "solid" or "none"/,
+    },
+    {
+      label: "horizontal alignment unsupported",
+      style: { alignment: { horizontal: "middle" } },
+      message: /alignment\.horizontal must be "left", "center" or "right"/,
+    },
+    {
+      label: "vertical alignment unsupported",
+      style: { alignment: { vertical: "middle" } },
+      message: /alignment\.vertical must be "top", "center" or "bottom"/,
+    },
+    {
+      label: "font.bold non-boolean",
+      style: { font: { bold: "yes" } },
+      message: /font\.bold must be a boolean/,
+    },
+    {
+      label: "font.name non-string",
+      style: { font: { name: 123 } },
+      message: /font\.name must be a string/,
+    },
+    {
+      label: "numFormat non-string",
+      style: { numFormat: 123 },
+      message: /numFormat must be a string/,
+    },
+    {
+      label: "fill non-object",
+      style: { fill: "solid" },
+      message: /fill must be an object/,
+    },
+  ];
+
+  for (const { label, style, message } of cases) {
+    it(`rejects ${label} before building`, async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        // 测试运行时校验：把非法样式以 Object.assign 注入（绕过类型系统，
+        // 模拟 JS 调用方），避免为构造非法值写无意义的类型断言。
+        const column: ColumnConfig = { prop: "a", label: "A" };
+        Object.assign(column, { style });
+        const r = await exportExcel({
+          filename: "style-validation",
+          download: false,
+          mode: "main",
+          sheets: [baseSheet({ columns: [column] })],
+        });
+        expect(r.success).toBe(false);
+        expect(r.error?.message).toMatch(message);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  }
+
+  it("keeps all documented enum values legal", async () => {
+    const r = await exportExcel({
+      filename: "style-validation-legal-2",
+      download: false,
+      mode: "main",
+      sheets: [
+        baseSheet({
+          columns: [
+            {
+              prop: "a",
+              label: "A",
+              style: {
+                font: { bold: true, italic: false, name: "Arial" },
+                fill: { pattern: "none" },
+                alignment: {
+                  horizontal: "left",
+                  vertical: "bottom",
+                  wrapText: false,
+                },
+              },
+            },
+          ],
+        }),
+      ],
+    });
+    expect(r.success).toBe(true);
+    expect(r.error).toBeUndefined();
+  });
+
+  it("low-level WorkbookBuilder rejects invalid styles too", async () => {
+    const builder = await WorkbookBuilder.create();
+    expect(() =>
+      builder.addSheet(
+        baseSheet({
+          columns: [
+            {
+              prop: "a",
+              label: "A",
+              style: { fill: { pattern: "bogus" as never } },
+            },
+          ],
+        }),
+      ),
+    ).toThrow(/fill\.pattern must be "solid" or "none"/);
   });
 });

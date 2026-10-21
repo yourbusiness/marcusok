@@ -21,6 +21,17 @@ import type {
 import { getBuiltinFormat } from "@marcusok/xlsx-core";
 import { resolveFormatCode } from "../numfmt/builtin-table";
 import { argbToCss, type ThemePalette } from "../color";
+import { EXCEL_MAX_COLS, EXCEL_MAX_ROWS } from "../limits";
+import {
+  assertColIndex,
+  assertColumnSpan,
+  assertMerge,
+  assertRowIndex,
+  clampFrozen,
+  corruptSheet,
+  normalizeRowHeight,
+  normalizeWidth,
+} from "./limits";
 import {
   buildStylesOverlay,
   resolveColorSpec,
@@ -291,11 +302,15 @@ function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
   let maxCol = 0;
   for (const r of (ws.rows ?? []) as RowData[]) {
     if (!r || typeof r.index !== "number") continue;
+    // 文件声明的行号直接决定布局数组长度：越界（含超大值）在模型层拒绝，
+    // 不能留给主线程 buildLayout 分配。
+    assertRowIndex(ws.name ?? "", r.index);
     const cells: PreviewCell[] = [];
     for (const c of r.cells ?? []) {
       if (!c || typeof c.reference !== "string") continue;
       const col = decodeRef(c.reference);
       if (col < 0) continue;
+      assertColIndex(ws.name ?? "", col);
       // 空单元格（无值且无样式）不进模型——稀疏化，虚拟渲染受益
       if (c.value == null && c.styleIndex == null) continue;
       cells.push({
@@ -312,7 +327,8 @@ function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
     if (cells.length === 0 && !r.hidden && r.height == null) continue;
     rows.push({
       index: r.index,
-      height: typeof r.height === "number" ? r.height : null,
+      // 负/非有限行高在 OOXML 中非法；归一为默认行高，避免布局出现负高度
+      height: normalizeRowHeight(r.height),
       hidden: !!r.hidden,
       cells,
     });
@@ -321,13 +337,20 @@ function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
   let rowCount = rows.length > 0 ? rows[rows.length - 1].index : 0;
 
   const colSpans: PreviewColSpan[] = ((ws.columns ?? []) as ColumnInfo[]).map(
-    (c) => ({
-      min: num(c?.min, 1),
-      max: num(c?.max, c?.min ?? 1),
-      width: num(c?.width, 8.43),
-      hidden: !!c?.hidden,
-      customWidth: !!c?.customWidth,
-    }),
+    (c) => {
+      const min = num(c?.min, 1);
+      const max = num(c?.max, c?.min ?? 1);
+      // <col max="100000000"> 会把 colCount 抬到一亿，必须有上限
+      assertColumnSpan(ws.name ?? "", min, max);
+      return {
+        min,
+        max,
+        // 负列宽会被布局换算成负前缀和；回退默认列宽
+        width: normalizeWidth(num(c?.width, 8.43)),
+        hidden: !!c?.hidden,
+        customWidth: !!c?.customWidth,
+      };
+    },
   );
   for (const s of colSpans) {
     if (s.max > maxCol) maxCol = s.max;
@@ -351,6 +374,8 @@ function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
+  for (const m of merges) assertMerge(ws.name ?? "", m);
+
   // 数据边界并入合并区末行/列：Excel 对纯合并不写覆盖格（实测引擎 rows 只
   // 回主格行、无自定义行高/列宽的空行空列整体缺席），只按内容归约时
   // "A1:C3 合并、仅 A1 有值"的 rowCount/colCount 会是 1×1，渲染层把合并
@@ -358,6 +383,17 @@ function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
   for (const m of merges) {
     if (m.row + m.rowSpan > rowCount) rowCount = m.row + m.rowSpan;
     if (m.col + m.colSpan > maxCol) maxCol = m.col + m.colSpan;
+  }
+  // 防御性终检：上面各入口已分别校验，万一遗漏也不允许越界维度进入布局
+  if (rowCount > EXCEL_MAX_ROWS) {
+    corruptSheet(
+      `Sheet "${ws.name ?? ""}" has ${rowCount} rows, exceeding Excel's ${EXCEL_MAX_ROWS}-row limit. The file is corrupt or unsupported.`,
+    );
+  }
+  if (maxCol > EXCEL_MAX_COLS) {
+    corruptSheet(
+      `Sheet "${ws.name ?? ""}" has ${maxCol} columns, exceeding Excel's ${EXCEL_MAX_COLS}-column limit. The file is corrupt or unsupported.`,
+    );
   }
 
   const frozen = ws.frozenPane;
@@ -374,8 +410,8 @@ function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
     rows,
     colSpans,
     merges,
-    frozenRows: typeof frozen?.rows === "number" ? Math.max(0, frozen.rows) : 0,
-    frozenCols: typeof frozen?.cols === "number" ? Math.max(0, frozen.cols) : 0,
+    frozenRows: clampFrozen(frozen?.rows, EXCEL_MAX_ROWS),
+    frozenCols: clampFrozen(frozen?.cols, EXCEL_MAX_COLS),
     styles,
   };
 }

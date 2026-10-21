@@ -325,7 +325,7 @@ export default function StylesDemo() {
         type="warning"
         showIcon
         title="样式仅在 50,000 行以下的 Workbook 路径渲染"
-        description="auto 模式下浏览器 <20,000 行走主线程、20,000–49,999 行走 Worker + Workbook，两者样式均生效；流式路径（≥50,000 行或降级导出）会剥离全部样式并输出 console 告警。本页数据固定 8 行，恒走 Workbook 路径。"
+        description="auto 模式下浏览器低于 20,000 行且低于 250,000 格走主线程；达到任一 Worker 门槛但低于 stream 门槛（50,000 行或 1,500,000 格）走 Worker + Workbook，两者样式均生效；流式路径（达到 stream 门槛或降级导出）会剥离全部样式并在 result.degradedFeatures 中列出。本页数据固定 8 行，恒走 Workbook 路径。"
       />
       <PresetCheatCards />
       <ScenarioPanel />

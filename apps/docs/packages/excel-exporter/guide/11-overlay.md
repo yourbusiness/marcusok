@@ -61,12 +61,12 @@ await exportExcel({
 
 Progress comes from the library's existing callbacks (`onProgress` / `onPhase` are **chained**, never replaced — a metrics panel wired to the same callbacks keeps working), so the overlay is only as good as the data behind it:
 
-| Route                | Condition                                                            | Intermediate progress |
-| -------------------- | -------------------------------------------------------------------- | --------------------- |
-| main + Workbook      | browser < 20,000 rows                                                | none                  |
-| main + Fast stream   | Node (auto ≥ 50,000 rows, or explicit `stream` — Node has no Worker) | every 1,000 rows      |
-| Worker + Workbook    | auto, 20,000–49,999 rows                                             | none                  |
-| Worker + Fast stream | auto ≥ 50,000 rows, or explicit `stream` in the browser              | every 1,000 rows      |
+| Route                | Condition                                                                       | Intermediate progress |
+| -------------------- | ------------------------------------------------------------------------------- | --------------------- |
+| main + Workbook      | browser < 20,000 rows                                                           | none                  |
+| main + Fast stream   | Node (auto at/above the stream gate, or explicit `stream` — Node has no Worker) | every 1,000 rows      |
+| Worker + Workbook    | auto below the stream gate (rows < 50k and cells < 1.5M)                        | none                  |
+| Worker + Fast stream | auto at/above the stream gate, or explicit `stream` in the browser              | every 1,000 rows      |
 
 Only the Fast stream path emits values between `0` and `1` (`onProgress`). The overlay therefore renders an **animated spinner** until the first intermediate value arrives, then switches to a determinate bar. Workbook routes stay indeterminate for their whole run — that is the granularity of the data source, not a rendering problem.
 

@@ -307,7 +307,7 @@ export const packages: PackageEntry[] = [
         title: { zh: "自动路由", en: "Auto Routing" },
         details: {
           zh: "自动模式根据数据量选择最优路径，数据量变化时业务代码零改动。",
-          en: "Auto mode picks the best path by row count; business code never changes as data grows.",
+          en: "Auto mode picks the best path by rows and estimated cells; business code never changes as data grows.",
         },
       },
       {
