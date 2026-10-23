@@ -123,7 +123,7 @@ function getOrCreateWorker(): Worker | null {
     return null;
   }
   // 预览的 worker URL 走独立字段 parseWorkerUrl，不读导出包的 workerUrl：
-  // loader 源码由两个业务包共用（各自打包一份单例），单字段会让两包互拿
+  // loader 源码由两个 Excel 业务包共用（各自打包一份单例），单字段会让两包互拿
   // 对方的 worker 脚本（预览会拉起 export worker）。
   const { parseWorkerUrl } = getWasmLoader().getOptions();
   // 提升到变量再构造（与 excel-exporter 同因）：内联 new URL 字面量会让

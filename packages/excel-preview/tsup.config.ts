@@ -9,8 +9,8 @@ const shared: Partial<Options> = {
 
 // 与 excel-exporter 相同的双配置模式：
 //  - 主入口把引擎层（@marcusok/xlsx-core，含 modern-xlsx）打进本包产物
-//    （私有包，消费方只依赖本包；npm 发布面收敛为两个业务包）。代价是
-//    同页同时使用两个业务包时主线程各持一份引擎与 wasm——业务后台通常
+//    （私有包，消费方只依赖本包；npm 发布面收敛为各业务包）。代价是
+//    同页同时使用两个 Excel 业务包时主线程各持一份引擎与 wasm——业务后台通常
 //    一页只用其一，详见文档站 package-relationships 指南。fflate（样式
 //    覆盖层用）同样 bundle 进产物。注意 dts 侧无法内联 modern-xlsx 的
 //    类型再导出（见 xlsx-core/tsup.config.ts 实测记录），dist/index.d.ts

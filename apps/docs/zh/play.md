@@ -27,6 +27,16 @@
 
 完整用法见 [excel-preview 文档](/zh/packages/excel-preview/)。
 
+## Word 预览 —— `@marcusok/word-preview`
+
+把 `.docx` / `.docm` 文件拖入面板：文档按 Word 存盘的样子视觉保真渲染（分页、页眉页脚、脚注），每次渲染的完整耗时经 `onRendered` 上报。渲染在主线程完成（引擎约束——没有 Worker 模式）；不可信输入的加固默认开启（altChunk 关闭、超链接 scheme 白名单）。面板里内置了 1000 段落合成文档与双实例隔离演示。
+
+<ClientOnly>
+  <PackageDemo dir="word-preview" />
+</ClientOnly>
+
+完整用法见 [word-preview 文档](/zh/packages/word-preview/)。
+
 ## 进度遮罩 —— 内置于 `@marcusok/excel-exporter`
 
 导出过程中看到的那个遮罩，这里经 `/overlay` 子路径直接驱动，任务与 Excel 无关。模拟任务前 1.5 秒不上报进度——那就是不确定态的旋转圆环；随后流式推进并切换为百分比条。两态渲染的是同一个实现、同一个毛玻璃面板，与 `overlay` 选项同源。

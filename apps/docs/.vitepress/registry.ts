@@ -1,5 +1,6 @@
 import excelExporterPkg from "@marcusok/excel-exporter/package.json" with { type: "json" };
 import excelPreviewPkg from "@marcusok/excel-preview/package.json" with { type: "json" };
+import wordPreviewPkg from "@marcusok/word-preview/package.json" with { type: "json" };
 
 export interface LocalizedText {
   zh: string;
@@ -196,9 +197,9 @@ export function getAllHomeStats(
       key: "packages",
       value: pkgs.length,
       decimals: 0,
-      // 口径是"文档站收录的包"，即两个对外发布的业务包——引擎层
+      // 口径是"文档站收录的包"，即对外发布的业务包——引擎层
       // （xlsx-core）与遮罩层（progress-overlay）已转为仓库私有包、构建期
-      // 打进业务包 dist，不再独立发布，故不设独立页面。
+      // 打进 Excel 业务包 dist，不再独立发布，故不设独立页面。
       // 与 guide/index.md 的仓库结构表一致。
       zh: "文档站收录库包",
       en: "Documented packages",
@@ -379,5 +380,46 @@ export const packages: PackageEntry[] = [
       },
     ],
     demo: "PreviewDemo",
+  },
+  {
+    dir: "word-preview",
+    npmName: "@marcusok/word-preview",
+    category: "preview",
+    version: wordPreviewPkg.version,
+    // 首版 0.x：上游分页/TOC 限制与本包嗅探/后处理逻辑需要观察期
+    status: "beta",
+    zh: true,
+    tagline: {
+      zh: "docx 只读预览（视觉保真渲染 + 格式嗅探 + 安全加固默认值）",
+      en: "Read-only docx preview (visual-faithful rendering, format sniffing, hardened defaults)",
+    },
+    keywords: ["word", "docx", "preview", "viewer", "docx-preview"],
+    highlights: [
+      {
+        icon: "pen",
+        title: { zh: "视觉保真", en: "Visual fidelity" },
+        details: {
+          zh: "基于 docx-preview 引擎渲染 Word 文档的分页、页眉页脚、脚注尾注、批注与修订；分页遵循 Word 存盘标记，贴近原版观感。",
+          en: "Built on the docx-preview engine: pagination, headers/footers, footnotes/endnotes, comments and tracked changes render as Word saved them.",
+        },
+      },
+      {
+        icon: "shield",
+        title: { zh: "安全加固默认值", en: "Hardened defaults" },
+        details: {
+          zh: "altChunk（内嵌 HTML 的 iframe）默认关闭；超链接仅放行 http/https/mailto/tel 与锚点/相对形态；渲染前先做格式嗅探与 zip 必需部件校验，坏文件给出可读错误码。",
+          en: "altChunks (embedded HTML iframes) are off by default; hyperlink hrefs pass an http/https/mailto/tel allowlist; input is sniffed (magic bytes + required ZIP parts) before rendering, so broken files get readable error codes.",
+        },
+      },
+      {
+        icon: "route",
+        title: { zh: "多实例隔离", en: "Multi-instance isolation" },
+        details: {
+          zh: "每个实例生成唯一样式类名，同页渲染多份文档互不串扰（上游固定类名会让后渲染的文档覆盖前者的编号/主题样式）。",
+          en: "Each instance gets a unique style class name, so multiple documents on one page never clobber each other's numbering/theme styles (the engine's fixed class name would).",
+        },
+      },
+    ],
+    demo: "WordPreviewDemo",
   },
 ];

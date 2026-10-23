@@ -22,6 +22,9 @@ export default tseslint.config(
       "packages/progress-overlay/vitest.config.ts",
       "packages/excel-preview/tsup.config.ts",
       "packages/excel-preview/vitest.config.ts",
+      // word-preview 无 scripts/ 目录（无 wasm/资产拷贝需求），只需两个配置文件
+      "packages/word-preview/tsup.config.ts",
+      "packages/word-preview/vitest.config.ts",
       "packages/xlsx-core/scripts/**",
       "packages/xlsx-core/tsup.config.ts",
       "packages/xlsx-core/vitest.config.ts",

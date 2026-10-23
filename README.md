@@ -1,15 +1,16 @@
 # marcusok
 
-A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Two packages are published, organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — a read-only xlsx preview is available today). The capability layers they are built on — the modern-xlsx engine ([`xlsx-core`](./packages/xlsx-core)) and the progress overlay UI ([`progress-overlay`](./packages/progress-overlay)) — are private workspace packages bundled into the published packages' dist at build time (the engine layer into both packages, the overlay into the exporter only; see the table below).
+A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Three packages are published, organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — a read-only xlsx preview and a read-only docx preview are available today). The capability layers the Excel packages are built on — the modern-xlsx engine ([`xlsx-core`](./packages/xlsx-core)) and the progress overlay UI ([`progress-overlay`](./packages/progress-overlay)) — are private workspace packages bundled into the published packages' dist at build time (the engine layer into the two Excel packages, the overlay into the exporter only; the word preview bundles docx-preview + jszip directly; see the table below).
 
 ## Packages
 
-| Package                                                     | Category | Description                                                                                                                       |
-| ----------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](./packages/excel-exporter)     | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)                  |
-| [`@marcusok/excel-preview`](./packages/excel-preview)       | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery)               |
-| [`xlsx-core`](./packages/xlsx-core) (private)               | —        | The repo's single modern-xlsx engine layer (WASM loading, asset distribution, stable re-export surface); bundled into both        |
-| [`progress-overlay`](./packages/progress-overlay) (private) | —        | Framework-agnostic progress overlay (spinner / percentage bar, glass panel, themes); bundled into the exporter's `overlay` option |
+| Package                                                     | Category | Description                                                                                                                                  |
+| ----------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](./packages/excel-exporter)     | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)                             |
+| [`@marcusok/excel-preview`](./packages/excel-preview)       | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery)                          |
+| [`@marcusok/word-preview`](./packages/word-preview)         | Preview  | Read-only docx preview (docx-preview engine bundled, format sniffing, hardened defaults, multi-instance style isolation)                     |
+| [`xlsx-core`](./packages/xlsx-core) (private)               | —        | The repo's single modern-xlsx engine layer (WASM loading, asset distribution, stable re-export surface); bundled into the two Excel packages |
+| [`progress-overlay`](./packages/progress-overlay) (private) | —        | Framework-agnostic progress overlay (spinner / percentage bar, glass panel, themes); bundled into the exporter's `overlay` option            |
 
 ## Quick Start
 
@@ -21,8 +22,8 @@ pnpm lint        # ESLint
 pnpm typecheck   # TypeScript type checking
 ```
 
-Note on `pnpm test`: locally it includes the two published packages' performance baselines (the product SLA — no environment slack, so a heavily loaded machine may fail them occasionally; re-run once before investigating). CI, the release pipeline and the pre-push hook all set `RUN_PERF=0` to skip them.
-Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages declare Node >= 22 and CI runs a functional Node 22 job), pnpm >= 9. Development/CI is pinned to **Node 24.21.0** via `.nvmrc`: the bundled modern-xlsx WASM `readBuffer` is ~10x slower on Node 22.x (and on 24.14) for numeric-heavy sheets, which makes the local performance baselines fail. Functional support is unchanged, but preview throughput on Node 22 should not be compared against the browser/pinned-runtime numbers. The modern-xlsx@1.2.0 dependency (a real `dependencies` entry of both published packages — kept for consumer-side d.ts resolution only, while the engine itself is bundled into their dist at build time) declares `engines.node >= 24`; `.npmrc` sets `engine-strict=false` to allow installation. Consumers are unaffected at runtime — nothing from modern-xlsx loads, and the published packages are self-contained (each carries the engine and its WASM binary inside its own dist).
+Note on `pnpm test`: locally it includes the published packages' performance baselines (the product SLA — no environment slack, so a heavily loaded machine may fail them occasionally; re-run once before investigating). CI, the release pipeline and the pre-push hook all set `RUN_PERF=0` to skip them.
+Environment: Node >= 22.12 (the floor Vite 8 requires; the published packages declare Node >= 22 and CI runs a functional Node 22 job), pnpm >= 9. Development/CI is pinned to **Node 24.21.0** via `.nvmrc`: the bundled modern-xlsx WASM `readBuffer` is ~10x slower on Node 22.x (and on 24.14) for numeric-heavy sheets, which makes the local performance baselines fail. Functional support is unchanged, but preview throughput on Node 22 should not be compared against the browser/pinned-runtime numbers. The modern-xlsx@1.2.0 dependency (a real `dependencies` entry of both published Excel packages — kept for consumer-side d.ts resolution only, while the engine itself is bundled into their dist at build time) declares `engines.node >= 24`; `.npmrc` sets `engine-strict=false` to allow installation. Consumers are unaffected at runtime — nothing from modern-xlsx loads, and the published packages are self-contained (each carries the engine and its WASM binary inside its own dist).
 
 ## Tooling
 
@@ -49,12 +50,14 @@ marcusok/
 │                               # dist/ from tsup; scales horizontally)
 │   ├── excel-exporter/         # Export: Excel export core (published)
 │   ├── excel-preview/          # Preview: read-only xlsx preview (published)
+│   ├── word-preview/           # Preview: read-only docx preview (published)
 │   ├── progress-overlay/       # Private: progress overlay UI (bundled into exporter)
-│   └── xlsx-core/              # Private: modern-xlsx engine layer (bundled into both)
+│   └── xlsx-core/              # Private: modern-xlsx engine layer (bundled into the two Excel packages)
 ├── docs/                       # Design documents (Chinese) — intentionally
 │                               # untracked (.gitignore), local-only
 │   ├── excel-export-design.md  # Excel export core design doc (~250k chars, the main one)
 │   ├── excel-preview-plan.md   # Excel preview design & verification notes
+│   ├── word-preview-plan.md    # Word preview design & verification notes
 │   └── release-*.md / ci-*.md  # Release & CI walkthroughs, debug notes, docs-site plan
 ├── scripts/                    # Repo-level scripts (dev.mjs unified dev launcher)
 ├── .changeset/                 # Changesets config
@@ -109,6 +112,7 @@ pnpm changeset publish         # publish with the next dist-tag
 
 - [`docs/excel-export-design.md`](./docs/excel-export-design.md) — Excel export core design doc
 - [`docs/excel-preview-plan.md`](./docs/excel-preview-plan.md) — Excel preview design & verification notes
+- [`docs/word-preview-plan.md`](./docs/word-preview-plan.md) — Word preview design & verification notes
 - [`docs/release-guide.md`](./docs/release-guide.md) — Release guide
 - [`docs/release-publish-logic.md`](./docs/release-publish-logic.md) — Release logic in depth
 - [`docs/release-workflow-analysis.md`](./docs/release-workflow-analysis.md) — Release workflow analysis

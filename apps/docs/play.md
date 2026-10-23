@@ -27,6 +27,16 @@ Drop an `.xlsx` / `.xlsm` / `.csv` file on the panel: the parse runs in a Web Wo
 
 Full usage docs: [excel-preview](/packages/excel-preview/).
 
+## Word preview — `@marcusok/word-preview`
+
+Drop a `.docx` / `.docm` file on the panel: the document renders with visual fidelity (pagination, headers/footers, footnotes as saved by Word), with per-render timing reported via `onRendered`. Rendering runs on the main thread (an engine constraint — there is no worker mode); untrusted-input hardening is on by default (altChunks off, hyperlink scheme allowlist). A synthetic 1000-paragraph document and a two-instance isolation demo are built into the panel.
+
+<ClientOnly>
+  <PackageDemo dir="word-preview" />
+</ClientOnly>
+
+Full usage docs: [word-preview](/packages/word-preview/).
+
 ## Progress overlay — built into `@marcusok/excel-exporter`
 
 The overlay the exporter shows during an export, driven here directly (through the `/overlay` subpath) for a task that has nothing to do with Excel. The simulated task reports no progress for its first 1.5 seconds — that is the indeterminate spinner — then streams progress and switches to the percentage bar. It is the same two-state panel, on the same implementation the `overlay` option uses.

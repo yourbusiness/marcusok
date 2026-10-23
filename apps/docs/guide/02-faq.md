@@ -105,7 +105,7 @@ Concurrent tasks share one reference-counted DOM node, and the last writer wins:
 
 Yes. Without a `document` the call returns a no-op handle, so the same call site works in both environments — no branching, no `typeof window` check.
 
-## Engine layer (bundled inside both packages)
+## Engine layer (bundled inside both Excel packages)
 
 ### Is there a separate engine package to install?
 
@@ -117,4 +117,4 @@ No. The engine runtime is bundled **into** each package's `dist/` at build time,
 
 ### The exporter and the preview on one page
 
-Each package carries its own bundled engine copy, so that page has two engine instances and two loader states by design — `configureWasm` from one package does not configure the other's loader. The WASM transfer is usually deduplicated (identical binary, content-hash assets, HTTP cache); the memory cost is real but only matters when both packages actually run on one page. See [Package Relationships & Selection](/guide/03-package-relationships) for the full picture.
+Each of the two Excel packages carries its own bundled engine copy, so a page using both has two engine instances and two loader states by design — `configureWasm` from one package does not configure the other's loader. (The word preview is unaffected: it has no WASM engine.) The WASM transfer is usually deduplicated (identical binary, content-hash assets, HTTP cache); the memory cost is real but only matters when both Excel packages actually run on one page. See [Package Relationships & Selection](/guide/03-package-relationships) for the full picture.

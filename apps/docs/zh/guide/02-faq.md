@@ -105,16 +105,16 @@ try {
 
 能。没有 `document` 时调用返回一个空操作句柄，因此同一处调用在两种环境下都成立——不需要分支判断，也不需要 `typeof window`。
 
-## 引擎层（内置于两个包）
+## 引擎层（内置于两个 Excel 包）
 
 ### 有需要单独安装的引擎包吗？
 
-没有。引擎集成（WASM 加载器 + 对 modern-xlsx 的稳定再导出面）是仓库私有的内部层，构建期整体打进各业务包的 `dist`。两个包都**再导出**了它的 `configureWasm` / `getWasmLoader`——即便要自托管 WASM 二进制，也不必往你自己的依赖里加任何东西。
+没有。引擎集成（WASM 加载器 + 对 modern-xlsx 的稳定再导出面）是仓库私有的内部层，构建期整体打进各 Excel 业务包的 `dist`。两个 Excel 包都**再导出**了它的 `configureWasm` / `getWasmLoader`——即便要自托管 WASM 二进制，也不必往你自己的依赖里加任何东西。
 
 ### `modern-xlsx` 要求 `engines.node >= 24`，会影响我的应用吗？
 
-不会。引擎运行时在构建期已被**打进**各业务包的 `dist/`，消费方不会执行任何上游 modern-xlsx 代码。两个业务包自身要求 Node `>= 22`，浏览器侧需要支持 WebAssembly。manifest 里那条精确钉版的 `modern-xlsx` 依赖，只是为了 TypeScript 消费方能解析再导出的类型——运行时不加载它的任何代码。安装期 npm 仍可能为这条传递依赖打印 `EBADENGINE` 警告（它声明的地板是 Node 24）；该警告可安全忽略，只有开启 `engine-strict` 的安装器才会把它变成失败。
+不会。引擎运行时在构建期已被**打进**各 Excel 业务包的 `dist/`，消费方不会执行任何上游 modern-xlsx 代码。两个 Excel 业务包自身要求 Node `>= 22`，浏览器侧需要支持 WebAssembly。manifest 里那条精确钉版的 `modern-xlsx` 依赖，只是为了 TypeScript 消费方能解析再导出的类型——运行时不加载它的任何代码。安装期 npm 仍可能为这条传递依赖打印 `EBADENGINE` 警告（它声明的地板是 Node 24）；该警告可安全忽略，只有开启 `engine-strict` 的安装器才会把它变成失败。
 
 ### 导出包与预览包同在一页
 
-各包各持一份内置引擎，因此该页面天然就是两个引擎实例、两份加载器状态——从其中一个包调 `configureWasm` 不会配置另一个包的 loader。WASM 的网络传输通常会被去重（同一份二进制、内容 hash 资产、HTTP 缓存）；内存开销真实存在，但只有两包真的同页运行时才需要在意。完整说明见[包关系与选型](/zh/guide/03-package-relationships)。
+两个 Excel 包各持一份内置引擎，因此该页面天然就是两个引擎实例、两份加载器状态——从其中一个包调 `configureWasm` 不会配置另一个包的 loader。（word 预览不受影响：它没有 WASM 引擎。）WASM 的网络传输通常会被去重（同一份二进制、内容 hash 资产、HTTP 缓存）；内存开销真实存在，但只有两个 Excel 包真的同页运行时才需要在意。完整说明见[包关系与选型](/zh/guide/03-package-relationships)。

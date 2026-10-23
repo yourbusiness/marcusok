@@ -48,7 +48,7 @@ export default defineConfig([
     sourcemap: true,
     target: "es2022",
     // 引擎层（xlsx-core，含 modern-xlsx）与遮罩层（progress-overlay）打进
-    // 本包产物——二者已私有化，发布面只剩两个业务包。dts 侧实测：本包自身
+    // 本包产物——二者已私有化，发布面只剩两个 Excel 业务包。dts 侧实测：本包自身
     // 的类型声明只"引用"引擎类型（不作纯 re-export），rollup-dts 能顺着
     // core 的 d.ts 解析到 modern-xlsx 并整体内联（dist 无 'modern-xlsx'
     // 外部引用）；但内联行为不保证稳定（excel-preview 的纯 re-export 面就

@@ -1,45 +1,49 @@
 # Package Relationships & Selection
 
-The ecosystem publishes two packages across two categories (see [Ecosystem](/guide/) for the category definitions). This page answers the questions that come up when you pick packages: which one does what, what each of them bundles, whether the export and the preview can live on the same page, and how versions relate.
+The ecosystem publishes three packages across two categories (see [Ecosystem](/guide/) for the category definitions). This page answers the questions that come up when you pick packages: which one does what, what each of them bundles, whether several can live on the same page, and how versions relate.
 
-## The two published packages
+## The three published packages
 
-| Package                                                 | Category | What it does                                                                        | Runtime dependencies                                     |
-| ------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | Data → `.xlsx` download: styling, formatting, worker/stream routing, fallbacks      | `modern-xlsx` (types only; the engine itself is bundled) |
-| [`@marcusok/excel-preview`](/packages/excel-preview/)   | Preview  | Read-only `.xlsx` / `.xlsm` / `.csv` rendering with worker parsing + virtual scroll | `modern-xlsx` (types only; the engine itself is bundled) |
+| Package                                                 | Category | What it does                                                                                  | Runtime dependencies                                     |
+| ------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | Data → `.xlsx` download: styling, formatting, worker/stream routing, fallbacks                | `modern-xlsx` (types only; the engine itself is bundled) |
+| [`@marcusok/excel-preview`](/packages/excel-preview/)   | Preview  | Read-only `.xlsx` / `.xlsm` / `.csv` rendering with worker parsing + virtual scroll           | `modern-xlsx` (types only; the engine itself is bundled) |
+| [`@marcusok/word-preview`](/packages/word-preview/)     | Preview  | Read-only `.docx` / `.docm` rendering (docx-preview engine) with sniffing + hardened defaults | none (docx-preview and jszip are bundled)                |
 
-Each package is self-contained at runtime. The two capability layers they are built on — the modern-xlsx engine layer (internally `xlsx-core`, WASM loader plus a stable re-export surface) and the progress overlay UI (internally `progress-overlay`) — are **private workspace packages**: they are bundled into the business packages' `dist` at build time (the engine layer into both packages, the overlay into the exporter only — see the table below) and are not published to npm. There is nothing to install beyond the package you use, and no shared-package versions to reconcile.
+Each package is self-contained at runtime. The two Excel packages are built on two capability layers — the modern-xlsx engine layer (internally `xlsx-core`, WASM loader plus a stable re-export surface) and the progress overlay UI (internally `progress-overlay`) — which are **private workspace packages**: they are bundled into the Excel business packages' `dist` at build time (the engine layer into both Excel packages, the overlay into the exporter only — see the table below) and are not published to npm. The word preview bundles its own engine (docx-preview + jszip, both devDependencies) the same way and has **zero** runtime dependencies. There is nothing to install beyond the package you use, and no shared-package versions to reconcile.
 
-Two consequences worth internalizing:
+Three consequences worth internalizing:
 
-- **The exporter and the preview are siblings, not layers.** Neither depends on the other; you can install either alone. Nothing about the export engine leaks into the preview API, and the preview does not exist to serve the exporter.
-- **Each package bundles the whole engine.** The modern-xlsx JS glue and the WASM binary ship inside each package's `dist` (and inside each package's worker — see below). The `modern-xlsx` entry that remains in `dependencies` is a **types-only** declaration: the published `.d.ts` files keep external type imports resolvable, but no modern-xlsx code is loaded at runtime.
+- **The three packages are siblings, not layers.** None depends on another; you can install any of them alone. Nothing about the Excel engine leaks into the word preview's API, and the previews do not exist to serve the exporter.
+- **Each Excel package bundles the whole WASM engine.** The modern-xlsx JS glue and the WASM binary ship inside each Excel package's `dist` (and inside each package's worker — see below). The `modern-xlsx` entry that remains in their `dependencies` is a **types-only** declaration: the published `.d.ts` files keep external type imports resolvable, but no modern-xlsx code is loaded at runtime. The word preview avoids even that: its public types are fully self-contained.
+- **Same-page combinations are all fine** — see below.
 
 ### When to use which
 
 - **`@marcusok/excel-exporter`** — you have data in the app (tables, arrays, ECharts options) and need a file the user downloads. Start at [Getting Started](/guide/01-getting-started); the convenience adapters are in [Table & ECharts](/packages/excel-exporter/api/05-table-and-echarts).
 - **`@marcusok/excel-preview`** — you have a `.xlsx` the user uploaded and need to _show_ it, without editing. Start at [Quick Start](/packages/excel-preview/guide/01-quick-start).
+- **`@marcusok/word-preview`** — you have a `.docx` the user uploaded and need to _show_ it, without editing. Start at [Quick Start](/packages/word-preview/guide/01-quick-start).
 
-## Using the exporter and the preview on the same page
+## Using several packages on the same page
 
-Yes — they coexist without knowing about each other. Since each bundles its own copy of the engine, a page using **both** packages loads two engine instances on the main thread. What that means in practice:
+Yes — they coexist without knowing about each other. The one combination with a real cost is the two Excel packages together: since each bundles its own copy of the engine, a page using **both** loads two engine instances on the main thread. What that means in practice:
 
-- **Network cost is usually deduplicated.** Both packages ship the identical WASM binary; bundlers that name assets by content hash (Vite, webpack 5) emit one file for identical content, and the browser's HTTP cache covers the rest.
-- **Memory is the real cost.** Each copy compiles and instantiates its own WASM module (a ~1.9 MB binary plus its linear memory). On a typical admin page — which uses the exporter _or_ the preview, rarely both — this never comes up; if you do run both on one performance-sensitive page, keep it in mind.
+- **Network cost is usually deduplicated.** Both Excel packages ship the identical WASM binary; bundlers that name assets by content hash (Vite, webpack 5) emit one file for identical content, and the browser's HTTP cache covers the rest.
+- **Memory is the real cost.** Each copy compiles and instantiates its own WASM module (a ~1.9 MB binary plus its linear memory). On a typical admin page — which uses one package, rarely two — this never comes up; if you do run both on one performance-sensitive page, keep it in mind.
 - **Workers were always like this.** A browser module worker cannot resolve bare specifiers (import maps do not apply inside `WorkerGlobalScope`), so each worker script has always been a single self-contained file bundling its own engine copy — `export.worker.js` (exporter) and `parse.worker.js` (preview) each carry one, unchanged from before.
+- **The word preview adds none of this.** No WASM, no workers — it is plain JS/DOM and style-isolated per instance, so combining it with either or both Excel packages costs only its own bundle size.
 
 ### What is bundled, and what stays separate
 
-| Thing                       | Per package or common?                                                                                                                                          |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Main-thread engine + WASM   | **Per package** — each package's `dist` carries its own engine copy and its own `modern-xlsx.wasm`                                                              |
-| WASM loader & configuration | **Per package** — `configureWasm` / `getWasmLoader` from `@marcusok/excel-exporter` affect the exporter's copy; the preview's exports affect the preview's copy |
-| Worker script               | **Per package** — `export.worker.js` (exporter) and `parse.worker.js` (preview) are different files, each shipped by its own package                            |
-| Worker URL option           | **Per package field** — `workerUrl` is the export worker's, `parseWorkerUrl` is the parse worker's. One field could not serve both                              |
-| Overlay UI                  | **Exporter only** — the preview does not bundle or use it                                                                                                       |
+| Thing                       | Per package or common?                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main-thread engine + WASM   | **Per Excel package** — each Excel package's `dist` carries its own engine copy and its own `modern-xlsx.wasm`; the word preview carries docx-preview + jszip instead (no WASM) |
+| WASM loader & configuration | **Per package** — `configureWasm` / `getWasmLoader` from `@marcusok/excel-exporter` affect the exporter's copy; the preview's exports affect the preview's copy                 |
+| Worker script               | **Per package** — `export.worker.js` (exporter) and `parse.worker.js` (preview) are different files, each shipped by its own package; the word preview has no worker            |
+| Worker URL option           | **Per package field** — `workerUrl` is the export worker's, `parseWorkerUrl` is the parse worker's. One field could not serve both                                              |
+| Overlay UI                  | **Exporter only** — the previews do not bundle or use it                                                                                                                        |
 
-The loader row is the one that changes behaviour when both packages are present: **one `configureWasm` call configures one package's loader, not both.** If you self-host assets on a page using both packages, call `configureWasm` once per package you use, passing the same `wasmUrl`:
+The loader row is the one that changes behaviour when both Excel packages are present: **one `configureWasm` call configures one package's loader, not both.** If you self-host assets on a page using both Excel packages, call `configureWasm` once per Excel package you use, passing the same `wasmUrl`:
 
 ```ts
 import { configureWasm as configureExportWasm } from "@marcusok/excel-exporter";
@@ -51,15 +55,15 @@ configurePreviewWasm({ wasmUrl, parseWorkerUrl }); // preview's loader + parse w
 
 Timeouts (`timeoutMs`, `maxRetries`, `workerTimeoutMs`) live on each loader and apply to that package's asset loads and worker dispatches. Fallbacks are per package as well: the exporter degrades to the style-less fast stream, the preview falls back to main-thread parsing; one package falling back does not change the other's route.
 
-## The engine layer inside the packages
+## The engine layer inside the Excel packages
 
-The engine integration — WASM loading (browser fetch / Node sync-init, timeout, retry, state machine), asset distribution and a stable re-export surface over modern-xlsx — lives in a single internal layer that both packages bundle. What that means for you:
+The engine integration — WASM loading (browser fetch / Node sync-init, timeout, retry, state machine), asset distribution and a stable re-export surface over modern-xlsx — lives in a single internal layer that both Excel packages bundle. What that means for you:
 
 - **You never think about engine versions.** There is no engine package to install or pin: upgrading the engine arrives as a release of the package you already use.
-- **`configureWasm` / `getWasmLoader` are re-exported by both packages** with identical signatures and behaviour — import them from whichever package you already use; there is no second dependency to add for asset self-hosting.
-- **The WASM binary ships under each package's `exports` map** (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`, `@marcusok/excel-preview/dist/modern-xlsx.wasm`), so `?url` imports resolve with zero plugin configuration. Node locates the binary on disk next to the installed package and initializes synchronously — no boilerplate.
+- **`configureWasm` / `getWasmLoader` are re-exported by both Excel packages** with identical signatures and behaviour — import them from whichever package you already use; there is no second dependency to add for asset self-hosting.
+- **The WASM binary ships under each Excel package's `exports` map** (`@marcusok/excel-exporter/dist/modern-xlsx.wasm`, `@marcusok/excel-preview/dist/modern-xlsx.wasm`), so `?url` imports resolve with zero plugin configuration. Node locates the binary on disk next to the installed package and initializes synchronously — no boilerplate.
 
-> Within one package, "single loader instance" is a module-instance guarantee: `getWasmLoader()` always returns the same object for that package. Across the two packages the loaders are separate by design (each bundles its own copy).
+> Within one package, "single loader instance" is a module-instance guarantee: `getWasmLoader()` always returns the same object for that package. Across the two Excel packages the loaders are separate by design (each bundles its own copy).
 
 ## The overlay inside the exporter
 
@@ -70,10 +74,10 @@ The engine integration — WASM loading (browser fetch / Node sync-init, timeout
 
 ## Versions, releases and compatibility
 
-- **Each package carries its own version, and the numbers are not aligned** — the two packages are released independently by Changesets (`.changeset/config.json` declares no `fixed` or `linked` groups). Do not read compatibility out of the version numbers: exporter 3.x and preview 2.x say nothing about each other.
-- **They are both released from this one repository**, by the same CI, on the same `main`. Anything published close together was built from the same workspace state, which is the real compatibility statement.
+- **Each package carries its own version, and the numbers are not aligned** — the three packages are released independently by Changesets (`.changeset/config.json` declares no `fixed` or `linked` groups). Do not read compatibility out of the version numbers: exporter 3.x, preview 2.x and word-preview 0.x say nothing about each other.
+- **They are all released from this one repository**, by the same CI, on the same `main`. Anything published close together was built from the same workspace state, which is the real compatibility statement.
 - **There are no peer dependencies anywhere in the repo**, so there is no peer range for you to reconcile.
-- **Engine upgrades are package releases.** A modern-xlsx bump lands in the internal engine layer and in the type-only pin each consuming business package keeps for type resolution (three manifests move together; the runtime version is decided solely by the engine layer), then ships as a new version of whichever business package consumes it — there is no separate engine release and no cross-package version coupling.
+- **Engine upgrades are package releases.** A modern-xlsx bump lands in the internal engine layer and in the type-only pin each consuming Excel business package keeps for type resolution (three manifests move together; the runtime version is decided solely by the engine layer), then ships as a new version of whichever business package consumes it — there is no separate engine release and no cross-package version coupling. A docx-preview bump lands in the word preview alone.
 
 ### How to judge whether two versions go together
 
@@ -84,16 +88,18 @@ Rather than a compatibility matrix, use the manifests — they are authoritative
 
 ## Which package should I install?
 
-| I need to…                                                            | Install                                                                                                    |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Export data to a downloadable `.xlsx`                                 | [`@marcusok/excel-exporter`](/packages/excel-exporter/)                                                    |
-| Export from an Ant Design / Element Plus table or ECharts options     | `@marcusok/excel-exporter` — the adapters ship in the main entry                                           |
-| Show an uploaded `.xlsx` / `.xlsm` / `.csv` read-only                 | [`@marcusok/excel-preview`](/packages/excel-preview/)                                                      |
-| Parse a workbook headlessly (SSR, custom renderer, framework wrapper) | `@marcusok/excel-preview` — `parseWorkbookBytes`, no DOM required                                          |
-| Do both — preview a file _and_ let the user export a corrected copy   | Both packages; each carries its own engine copy (see above)                                                |
-| Drive the same progress overlay for non-Excel work                    | `@marcusok/excel-exporter` — the `/overlay` subpath exports the generic overlay entry                      |
-| Configure WASM hosting (self-hosted / CDN copies)                     | Whichever package you use — its exported `configureWasm` covers its loader and worker URLs                 |
-| Preview a `.csv` without touching the engine                          | `@marcusok/excel-preview` — its CSV path is pure JS; `.xlsx` / `.xlsm` parsing always uses the WASM engine |
+| I need to…                                                            | Install                                                                                                               |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Export data to a downloadable `.xlsx`                                 | [`@marcusok/excel-exporter`](/packages/excel-exporter/)                                                               |
+| Export from an Ant Design / Element Plus table or ECharts options     | `@marcusok/excel-exporter` — the adapters ship in the main entry                                                      |
+| Show an uploaded `.xlsx` / `.xlsm` / `.csv` read-only                 | [`@marcusok/excel-preview`](/packages/excel-preview/)                                                                 |
+| Show an uploaded `.docx` / `.docm` read-only                          | [`@marcusok/word-preview`](/packages/word-preview/)                                                                   |
+| Parse a workbook headlessly (SSR, custom renderer, framework wrapper) | `@marcusok/excel-preview` — `parseWorkbookBytes`, no DOM required                                                     |
+| Preview a Word document with visual fidelity (pagination, footnotes)  | `@marcusok/word-preview` — note it is main-thread rendering, see its [Limits](/packages/word-preview/guide/02-limits) |
+| Do both — preview a file _and_ let the user export a corrected copy   | The two Excel packages; each carries its own engine copy (see above)                                                  |
+| Drive the same progress overlay for non-Excel work                    | `@marcusok/excel-exporter` — the `/overlay` subpath exports the generic overlay entry                                 |
+| Configure WASM hosting (self-hosted / CDN copies)                     | Whichever Excel package you use — its exported `configureWasm` covers its loader and worker URLs                      |
+| Preview a `.csv` without touching the engine                          | `@marcusok/excel-preview` — its CSV path is pure JS; `.xlsx` / `.xlsm` parsing always uses the WASM engine            |
 
 ## See also
 

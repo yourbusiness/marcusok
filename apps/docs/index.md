@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "MarcusOK"
   text: "Frontend libraries for admin products"
-  tagline: Declarative, composable TypeScript libraries. Export 100k rows to Excel in under a second.
+  tagline: Declarative, composable TypeScript libraries. Export 100k rows to Excel in under a second, and preview xlsx / docx documents in the browser.
   image:
     src: /logo.svg
     alt: MarcusOK logo
