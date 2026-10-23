@@ -16,9 +16,11 @@ jobs:
       HUSKY: "0"
       # 发版必须过性能门（PR CI 仍设 RUN_PERF=0 跳过防 flake）：不设
       # RUN_PERF 让 `pnpm release` 内的 test 跑性能基线，PERF_SLACK 给共享
-      # runner 显式宽限（本地缺省 1 = 本地阈值即 SLA；基线余量约 2x，
-      # 3x 覆盖 ubuntu runner 与本地 M 系的常态差距，只防数量级回归）。
-      PERF_SLACK: "3"
+      # runner 显式宽限（本地缺省 1 = 本地阈值即 SLA）。取 4：word-preview
+      # 的 DOM 构建基线在 CI 实测慢 ~3x（446ms vs 150ms 阈值，2026-10-24），
+      # 3x 会卡在边界无余量；excel 两包基线余量 ~2x，同步放大无影响。
+      # 门只防数量级回归，不追求复刻本地 SLA。
+      PERF_SLACK: "4"
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }

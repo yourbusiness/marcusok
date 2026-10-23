@@ -3,9 +3,12 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { renderAsync } from "docx-preview";
 import { bigDocxBytes } from "./fixtures";
 
-// 与 excel-preview 同一模式：本地阈值即产品 SLA（无环境宽限）；CI 与
-// release 链路设 RUN_PERF=0 跳过。机器高负载偶发失败先复跑排除抖动。
-const SLACK = 1.0;
+// 与 excel-exporter / excel-preview 同一模式：本地阈值即产品 SLA
+// （PERF_SLACK 缺省为 1）；PR CI 设 RUN_PERF=0 跳过，release 链路
+// （release.yml）以显式宽限因子（PERF_SLACK）跑性能门——CI 共享 runner
+// 上 DOM 构建实测慢 ~3x（2026-10-24：446ms vs 本地中位 ~96ms），无宽限
+// 必挂（此前遗漏接入导致发版被卡）。机器高负载偶发失败先复跑排除抖动。
+const SLACK = Number(process.env.PERF_SLACK ?? "1") || 1;
 const RUN_PERF = process.env.RUN_PERF !== "0";
 
 // 口径：happy-dom 度量的是**DOM 构建**耗时（1000 段落 + 100×5 表格的纯
