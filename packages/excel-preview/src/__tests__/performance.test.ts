@@ -5,9 +5,10 @@ import { buildPreviewWorkbook } from "../parse/model";
 import { SheetRenderer } from "../render/renderer";
 import { bigWorkbookBytes } from "./fixtures";
 
-// 与 excel-exporter 同一模式：本地阈值即产品 SLA（无环境宽限）；CI 与
-// release 链路设 RUN_PERF=0 跳过。机器高负载偶发失败先复跑排除抖动。
-const SLACK = 1.0;
+// 与 excel-exporter 同一模式：本地阈值即产品 SLA（PERF_SLACK 缺省为 1）；
+// PR CI 设 RUN_PERF=0 跳过，release 链路（release.yml）以显式宽限因子
+// （PERF_SLACK）跑性能门。机器高负载偶发失败先复跑排除抖动。
+const SLACK = Number(process.env.PERF_SLACK ?? "1") || 1;
 const RUN_PERF = process.env.RUN_PERF !== "0";
 
 // 口径（规划第七节第 6 条）：vitest 只测"解析 + 视图模型构建 + 首屏 DOM

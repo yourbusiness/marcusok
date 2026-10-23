@@ -5,7 +5,7 @@
     "eslint.config.mjs",
     "apps/docs/eslint.config.mjs"
   ],
-  "globalEnv": ["NODE_ENV", "CI", "RUN_PERF", "DOCS_BASE"],
+  "globalEnv": ["NODE_ENV", "CI", "RUN_PERF", "PERF_SLACK", "DOCS_BASE"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

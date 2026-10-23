@@ -1,1 +1,4 @@
-RUN_PERF=0 pnpm exec turbo run typecheck test build --force
+# 检查集与 CI 对齐：lint 与 format:check 在此一并拦截（lint-staged 只覆盖
+# 暂存文件且 pre-commit 可被绕过，此前这两类问题要到推上去之后才红）。
+# format:check 是根 package.json 的 prettier 脚本、非 turbo 任务，单独串行。
+RUN_PERF=0 pnpm exec turbo run lint typecheck test build --force && pnpm run format:check
