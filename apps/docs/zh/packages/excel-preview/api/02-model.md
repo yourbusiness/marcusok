@@ -177,7 +177,7 @@ type PreviewFill =
 | `left` / `right` / `top` / `bottom` | 格子矩形的某条边；`null` = 该边无边框         |
 | `diagonal`                          | 格子的对角线；`null` = 无（方向标志规则见下） |
 
-文件未声明该边样式、或声明为 `style="none"` 时，该边为 `null`。`color: null` 是自动色，渲染为 `#000000`。与下文的 `AlignmentData` 同理，`BorderStyle` 是内置引擎层的联合类型、原样引用且**不从本包导出**——`import type { BorderStyle } from "@marcusok/excel-preview"` 无法解析；取值即下表的「Excel style」列，或直接从钉版依赖 `modern-xlsx` 导入该类型。
+文件未声明该边样式、或声明为 `style="none"` 时，该边为 `null`。`color: null` 是自动色，渲染为 `#000000`。与下文的 `AlignmentData` 同理，`BorderStyle` 自内置引擎的声明（钉版 modern-xlsx 1.2.0）内联进本包，发布的 `.d.ts` 因此自包含——`import type { BorderStyle } from "@marcusok/excel-preview"` 可直接解析；取值即下表的「Excel style」列。
 
 四条边映射到 CSS 的 `border-<side>` 声明：
 
@@ -201,7 +201,7 @@ CSS 没有原生对角线，因此 `diagonal` 不是边框，而是横跨格子�
 
 ### 对齐（PreviewXf.alignment）
 
-类型是 `AlignmentData | null`——内置引擎层的对齐结构体原样引用（解析层未另行声明，字段清单见下表）。它**不从本包导出**：`import type { AlignmentData } from "@marcusok/excel-preview"` 无法解析，需要在自己的代码里引用时请按下表自行声明，或 `import type { AlignmentData } from "modern-xlsx"`——它是本包钉版的 types-only 依赖。`null` 表示文件未设置对齐，此时按渲染器「按类型分流」的 General 规则处理。引擎类型声明了六个字段，但**渲染层只消费其中五个**：
+类型是 `AlignmentData | null`——自内置引擎（钉版 modern-xlsx 1.2.0）内联进本包的对齐结构体，发布的 `.d.ts` 因此自包含；`import type { AlignmentData } from "@marcusok/excel-preview"` 可直接解析（字段清单见下表）。`null` 表示文件未设置对齐，此时按渲染器「按类型分流」的 General 规则处理。该结构体声明了六个字段，但**渲染层只消费其中五个**：
 
 | 字段           | 类型                                                                                                               | 是否消费 | 渲染层行为                                                                                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -11,7 +11,6 @@
  */
 import type {
   CellData,
-  BorderStyle,
   FillData,
   RowData,
   ColumnInfo,
@@ -40,7 +39,9 @@ import {
   type OverlayFont,
   type StylesOverlay,
 } from "./styles-overlay";
+// BorderStyle 用本包内联定义：公共类型面不再引用引擎类型，发布 d.ts 自包含
 import type {
+  BorderStyle,
   PreviewBorder,
   PreviewCell,
   PreviewCellType,

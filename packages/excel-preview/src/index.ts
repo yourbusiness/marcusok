@@ -11,6 +11,9 @@ import { SheetRenderer } from "./render/renderer";
 import { parseWorkbookSource } from "./worker/worker-client";
 
 export type {
+  // 内联自引擎 dts 的两个样式类型（自定义渲染器常需；见 types.ts 注释）
+  AlignmentData,
+  BorderStyle,
   PreviewCell,
   PreviewCellType,
   PreviewColSpan,

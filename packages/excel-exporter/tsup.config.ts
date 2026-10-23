@@ -51,9 +51,10 @@ export default defineConfig([
     // 本包产物——二者已私有化，发布面只剩两个 Excel 业务包。dts 侧实测：本包自身
     // 的类型声明只"引用"引擎类型（不作纯 re-export），rollup-dts 能顺着
     // core 的 d.ts 解析到 modern-xlsx 并整体内联（dist 无 'modern-xlsx'
-    // 外部引用）；但内联行为不保证稳定（excel-preview 的纯 re-export 面就
-    // 保留外部引用），package.json 的 dependencies 仍保留 modern-xlsx
-    // （仅类型用、与打包版本精确钉同版）兜底消费方 TS 解析。
+    // 外部引用）。但内联行为不保证稳定（曾以 excel-preview 的纯 re-export 面
+    // 为反例；该包后来自行内联类型并把 modern-xlsx 移回 devDependencies），
+    // 本包 dependencies 里钉版的 modern-xlsx 保留为兜底：若某次构建 dts
+    // 意外保留外部引用，消费方 TS 仍能经它解析（运行时代码始终整体打包）。
     noExternal: ["@marcusok/xlsx-core", "@marcusok/progress-overlay"],
     // copy-wasm 挂在 onSuccess 而非只在 "build" script：本配置 clean:true，
     // watch 模式首次构建即清空 dist（连带删掉上次 build 复制的 wasm）且

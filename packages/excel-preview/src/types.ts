@@ -1,5 +1,3 @@
-import type { AlignmentData, BorderStyle } from "@marcusok/xlsx-core";
-
 /**
  * @marcusok/excel-preview 公共类型。
  *
@@ -8,6 +6,58 @@ import type { AlignmentData, BorderStyle } from "@marcusok/xlsx-core";
  * （null/undefined）保持防御——modern-xlsx 读取侧的"无内容"形态不统一
  * （实测 null / 空数组 / undefined 三种并存）。
  */
+
+/**
+ * Cell border line style. Inlined from modern-xlsx's BorderStyle
+ * (dist/validate-chart-D1O7LOfU.d.mts @ 1.2.0) so the published `.d.ts` is
+ * fully self-contained — with no type-level re-export of the engine left,
+ * modern-xlsx moves back to devDependencies and consumers no longer install
+ * it as a transitive runtime dependency (same approach as excel-exporter's
+ * types.ts; keep in sync when the engine is upgraded).
+ */
+export type BorderStyle =
+  | "thin"
+  | "medium"
+  | "thick"
+  | "dashed"
+  | "dotted"
+  | "double"
+  | "hair"
+  | "mediumDashed"
+  | "dashDot"
+  | "mediumDashDot"
+  | "dashDotDot"
+  | "mediumDashDotDot"
+  | "slantDashDot";
+
+/**
+ * Cell alignment properties. Inlined verbatim from modern-xlsx's
+ * AlignmentData (dist/validate-chart-D1O7LOfU.d.mts @ 1.2.0) for the same
+ * self-contained-d.ts reason as {@link BorderStyle} above.
+ */
+export interface AlignmentData {
+  /** Horizontal alignment. */
+  horizontal?:
+    | "general"
+    | "left"
+    | "center"
+    | "right"
+    | "fill"
+    | "justify"
+    | "centerContinuous"
+    | "distributed"
+    | null;
+  /** Vertical alignment. */
+  vertical?: "top" | "center" | "bottom" | "justify" | "distributed" | null;
+  /** Whether text wraps within the cell. */
+  wrapText?: boolean;
+  /** Text rotation in degrees (0-180, or 255 for vertical text). */
+  textRotation?: number | null;
+  /** Text indent level. */
+  indent?: number | null;
+  /** Whether text shrinks to fit the cell width. */
+  shrinkToFit?: boolean;
+}
 
 /** 解析后的工作簿（纯数据，结构化克隆安全）。 */
 export interface PreviewWorkbook {
