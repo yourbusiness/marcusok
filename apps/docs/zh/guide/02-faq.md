@@ -113,7 +113,7 @@ try {
 
 ### `modern-xlsx` 要求 `engines.node >= 24`，会影响我的应用吗？
 
-不会。引擎运行时在构建期已被**打进**各 Excel 业务包的 `dist/`，消费方不会执行任何上游 modern-xlsx 代码。两个 Excel 业务包自身要求 Node `>= 22`，浏览器侧需要支持 WebAssembly。manifest 里那条精确钉版的 `modern-xlsx` 依赖，只是为了 TypeScript 消费方能解析再导出的类型——运行时不加载它的任何代码。安装期 npm 仍可能为这条传递依赖打印 `EBADENGINE` 警告（它声明的地板是 Node 24）；该警告可安全忽略，只有开启 `engine-strict` 的安装器才会把它变成失败。
+不会。引擎运行时在构建期已被**打进**各 Excel 业务包的 `dist/`，消费方不会执行任何上游 modern-xlsx 代码。两个 Excel 业务包自身要求 Node `>= 22`，浏览器侧需要支持 WebAssembly。发布后的 manifest 没有 modern-xlsx 运行时依赖；仓库中保留的钉版声明只用于构建期的引擎/类型解析，发布出的 `.d.ts` 已自包含。因此消费方不会安装 modern-xlsx，也不会继承它的 `engines.node >= 24` 要求。
 
 ### 导出包与预览包同在一页
 

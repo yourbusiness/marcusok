@@ -5,11 +5,9 @@
  * at build time, and this package is a PRIVATE workspace layer (not on npm):
  * the two business packages bundle its dist into their own builds, so
  * consumers depend on @marcusok/excel-exporter / @marcusok/excel-preview
- * alone. Neither installs modern-xlsx as a runtime dependency anymore —
- * excel-preview inlines the last two engine type references into its own
- * types (fully self-contained d.ts), and excel-exporter keeps its pinned
- * devDependency solely as a dts-resolution safety net (its d.ts already
- * inlines; see its tsup.config.ts). Either way modern-xlsx's
+ * alone. Neither business package publishes modern-xlsx as a runtime
+ * dependency: both keep a pinned devDependency for build-time type resolution,
+ * while their published d.ts files are self-contained. Either way modern-xlsx's
  * engines.node>=24 declaration no longer reaches consumer installs.
  *
  * Trade-off of bundling-in (instead of keeping this package external):

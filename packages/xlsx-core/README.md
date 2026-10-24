@@ -53,10 +53,10 @@ d.ts 类型解析**：tsup 的 dts pass 会把类型再导出保留为外部的
 `from "modern-xlsx"` 导入（modern-xlsx 是纯 exports-map 包、无顶层
 `types`，tsup 的 dts resolver 解析不了，2026-09 实测：devDependencies
 放置与 import+re-export 写法均不改变该行为），不声明则未安装它的项目
-直接 TS2307。同样的声明与理由现随打包一并上移到两个 Excel 业务包的
-`dependencies`。运行时不加载任何 modern-xlsx 代码，其
-`engines.node>=24` 对运行时无效（engine-strict 安装器除外——npm/pnpm
-默认仅告警）。
+直接 TS2307。两个 Excel 业务包也在各自的 `devDependencies` 保留钉版，供构建期
+类型解析；它们的公开 `.d.ts` 已自包含，不再把 modern-xlsx 作为发布时的
+`dependencies`。运行时不加载任何 modern-xlsx 代码，其 `engines.node>=24`
+只影响仓库或直接安装本私有包的场景，不影响业务包消费方。
 
 ## 为什么收敛为私有层
 

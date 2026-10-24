@@ -12,10 +12,9 @@ const shared: Partial<Options> = {
 //    （私有包，消费方只依赖本包；npm 发布面收敛为各业务包）。代价是
 //    同页同时使用两个 Excel 业务包时主线程各持一份引擎与 wasm——业务后台通常
 //    一页只用其一，详见文档站 package-relationships 指南。fflate（样式
-//    覆盖层用）同样 bundle 进产物。注意 dts 侧无法内联 modern-xlsx 的
-//    类型再导出（见 xlsx-core/tsup.config.ts 实测记录），dist/index.d.ts
-//    保留 `from 'modern-xlsx'` 外部引用——package.json 的 dependencies
-//    因此保留 modern-xlsx（仅类型用、精确钉打包同版）。
+//    覆盖层用）同样 bundle 进产物。dts 侧已将所需引擎类型内联进本包
+//    types，dist/index.d.ts 不再保留 `from 'modern-xlsx'` 外部引用；
+//    modern-xlsx 仅作 devDependency 供构建期类型解析，不进入消费方运行时依赖。
 //  - worker 入口单文件自包含（browser module worker 不能解析裸导入），
 //    core（含 modern-xlsx）与 fflate 一并打入。构建后
 //    `grep -c "^import" dist/parse.worker.js` 必须为 0。

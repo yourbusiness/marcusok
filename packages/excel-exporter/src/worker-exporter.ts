@@ -33,6 +33,9 @@ interface QueueEntry {
 }
 
 let worker: Worker | null = null;
+// 同步构造失败（如跨域 workerUrl）置位后不再重复构造；换 URL 后须先调用
+// terminateWorker() 清除该标志，才能按新配置重建。
+let workerBroken = false;
 let requestIdSeq = 0;
 let active: QueueEntry | null = null;
 const queue: QueueEntry[] = [];
@@ -146,6 +149,11 @@ function handleError(w: Worker, err: Error): void {
 }
 
 function getOrCreateWorker(): Worker {
+  if (workerBroken) {
+    throw new Error(
+      "export worker construction previously failed; call terminateWorker() before retrying with a new workerUrl",
+    );
+  }
   if (worker) return worker;
   const { workerUrl } = getWasmLoader().getOptions();
   // Hoisted deliberately. The inline `new Worker(new URL(<literal>,
@@ -157,7 +165,20 @@ function getOrCreateWorker(): Worker {
   // and dist/export.worker.js is a self-contained ESM with zero imports,
   // built precisely so the verbatim copy loads as-is.
   const url = workerUrl ?? new URL("./export.worker.js", import.meta.url);
-  const w = new Worker(url, { type: "module" });
+  let w: Worker;
+  try {
+    w = new Worker(url, { type: "module" });
+  } catch (err) {
+    // 跨域脚本会在构造时同步抛 SecurityError。标记后让后续导出直接走主线程
+    // 降级，避免固定错误配置在每次导出时重复构造；原始异常继续交给路由层。
+    workerBroken = true;
+    console.warn(
+      "[excel-exporter] export worker failed to construct: " +
+        (err instanceof Error ? err.message : String(err)) +
+        ". Falling back to main-thread export. Worker scripts must be same-origin — serve workerUrl from your own origin; only the WASM binary may be cross-origin.",
+    );
+    throw err;
+  }
   worker = w;
   w.onmessage = (e: MessageEvent<WorkerResponse>) => handleMessage(w, e.data);
   w.onerror = (err) => handleError(w, new Error(err.message || "worker error"));
@@ -350,6 +371,7 @@ export async function exportInWorker(
 export function terminateWorker(): void {
   worker?.terminate();
   worker = null;
+  workerBroken = false;
   const entries = active ? [active, ...queue] : [...queue];
   active = null;
   queue.length = 0;

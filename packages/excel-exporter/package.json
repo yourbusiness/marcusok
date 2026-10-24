@@ -69,9 +69,6 @@
     "wasm",
     "monorepo"
   ],
-  "dependencies": {
-    "modern-xlsx": "1.2.0"
-  },
   "devDependencies": {
     "@marcusok/progress-overlay": "workspace:*",
     "@marcusok/xlsx-core": "workspace:*",
@@ -79,6 +76,7 @@
     "eslint": "^9.16.0",
     "fflate": "^0.8.3",
     "happy-dom": "^20.14.5",
+    "modern-xlsx": "1.2.0",
     "tsup": "^8.3.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"

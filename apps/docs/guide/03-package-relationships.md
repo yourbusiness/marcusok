@@ -4,18 +4,18 @@ The ecosystem publishes three packages across two categories (see [Ecosystem](/g
 
 ## The three published packages
 
-| Package                                                 | Category | What it does                                                                                  | Runtime dependencies                                     |
-| ------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | Data → `.xlsx` download: styling, formatting, worker/stream routing, fallbacks                | `modern-xlsx` (types only; the engine itself is bundled) |
-| [`@marcusok/excel-preview`](/packages/excel-preview/)   | Preview  | Read-only `.xlsx` / `.xlsm` / `.csv` rendering with worker parsing + virtual scroll           | `modern-xlsx` (types only; the engine itself is bundled) |
-| [`@marcusok/word-preview`](/packages/word-preview/)     | Preview  | Read-only `.docx` / `.docm` rendering (docx-preview engine) with sniffing + hardened defaults | none (docx-preview and jszip are bundled)                |
+| Package                                                 | Category | What it does                                                                                  | Runtime dependencies                      |
+| ------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | Data → `.xlsx` download: styling, formatting, worker/stream routing, fallbacks                | none (the engine itself is bundled)       |
+| [`@marcusok/excel-preview`](/packages/excel-preview/)   | Preview  | Read-only `.xlsx` / `.xlsm` / `.csv` rendering with worker parsing + virtual scroll           | none (the engine itself is bundled)       |
+| [`@marcusok/word-preview`](/packages/word-preview/)     | Preview  | Read-only `.docx` / `.docm` rendering (docx-preview engine) with sniffing + hardened defaults | none (docx-preview and jszip are bundled) |
 
 Each package is self-contained at runtime. The two Excel packages are built on two capability layers — the modern-xlsx engine layer (internally `xlsx-core`, WASM loader plus a stable re-export surface) and the progress overlay UI (internally `progress-overlay`) — which are **private workspace packages**: they are bundled into the Excel business packages' `dist` at build time (the engine layer into both Excel packages, the overlay into the exporter only — see the table below) and are not published to npm. The word preview bundles its own engine (docx-preview + jszip, both devDependencies) the same way and has **zero** runtime dependencies. There is nothing to install beyond the package you use, and no shared-package versions to reconcile.
 
 Three consequences worth internalizing:
 
 - **The three packages are siblings, not layers.** None depends on another; you can install any of them alone. Nothing about the Excel engine leaks into the word preview's API, and the previews do not exist to serve the exporter.
-- **Each Excel package bundles the whole WASM engine.** The modern-xlsx JS glue and the WASM binary ship inside each Excel package's `dist` (and inside each package's worker — see below). The `modern-xlsx` entry that remains in their `dependencies` is a **types-only** declaration: the published `.d.ts` files keep external type imports resolvable, but no modern-xlsx code is loaded at runtime. The word preview avoids even that: its public types are fully self-contained.
+- **Each Excel package bundles the whole WASM engine.** The modern-xlsx JS glue and the WASM binary ship inside each Excel package's `dist` (and inside each package's worker — see below). Their published manifests have no modern-xlsx runtime dependency: the pinned entries in the repository are build-time dependencies used for engine/type resolution, and the published `.d.ts` files are self-contained. The word preview likewise has no runtime dependencies.
 - **Same-page combinations are all fine** — see below.
 
 ### When to use which
@@ -77,7 +77,7 @@ The engine integration — WASM loading (browser fetch / Node sync-init, timeout
 - **Each package carries its own version, and the numbers are not aligned** — the three packages are released independently by Changesets (`.changeset/config.json` declares no `fixed` or `linked` groups). Do not read compatibility out of the version numbers: exporter 3.x, preview 2.x and word-preview 0.x say nothing about each other.
 - **They are all released from this one repository**, by the same CI, on the same `main`. Anything published close together was built from the same workspace state, which is the real compatibility statement.
 - **There are no peer dependencies anywhere in the repo**, so there is no peer range for you to reconcile.
-- **Engine upgrades are package releases.** A modern-xlsx bump lands in the internal engine layer and in the type-only pin each consuming Excel business package keeps for type resolution (three manifests move together; the runtime version is decided solely by the engine layer), then ships as a new version of whichever business package consumes it — there is no separate engine release and no cross-package version coupling. A docx-preview bump lands in the word preview alone.
+- **Engine upgrades are package releases.** A modern-xlsx bump lands in the internal engine layer and in the pinned build-time manifests of the two Excel business packages (three manifests move together; the runtime version is decided solely by the engine layer), then ships as a new version of whichever business package consumes it — there is no separate engine release and no cross-package version coupling. A docx-preview bump lands in the word preview alone.
 
 ### How to judge whether two versions go together
 

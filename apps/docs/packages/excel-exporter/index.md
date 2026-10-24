@@ -59,7 +59,7 @@ await exportExcel({
 ## Version & dependencies
 
 - Version: read from the workspace `package.json` at build time (single source of truth; this site never queries the npm registry)
-- Runtime dependencies: `modern-xlsx` — a types-only entry so published `.d.ts` files resolve external type imports; the engine itself (and the overlay UI) are bundled into this package's `dist` at build time, and the WASM binary ships under this package's own `exports` map
+- Runtime dependencies: none — the engine itself (and the overlay UI) is bundled into this package's `dist` at build time, and the WASM binary ships under this package's own `exports` map. modern-xlsx is only a pinned build-time devDependency in the repository; the published `.d.ts` is self-contained
 - Environment: Node >= 22; browsers need WebAssembly support
 
 > Performance numbers are local measurements (real Chrome, 6 mixed-type columns). See [Performance](/packages/excel-exporter/guide/07-performance).

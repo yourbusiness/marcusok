@@ -59,7 +59,7 @@ await exportExcel({
 ## 版本与依赖
 
 - 当前版本：构建时从工作区 `package.json` 读取（单一数据源；文档站不查询 npm registry）
-- 运行时依赖：`modern-xlsx`——**仅类型**声明，让发布的 `.d.ts` 里的外部类型导入可解析；引擎本体（及遮罩 UI）在构建期打包进本包 `dist`，WASM 二进制通过本包自己的 `exports` 映射分发
+- 运行时依赖：无——引擎本体（及遮罩 UI）在构建期打包进本包 `dist`，WASM 二进制通过本包自己的 `exports` 映射分发；modern-xlsx 仅是仓库中的构建期 devDependency，发布出的 `.d.ts` 已自包含
 - 环境：Node >= 22；浏览器需支持 WebAssembly
 
 > 性能数字为本机实测（真实 Chrome，6 列混合类型），详见 [性能参考](/zh/packages/excel-exporter/guide/07-performance)。

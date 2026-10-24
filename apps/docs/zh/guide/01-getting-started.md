@@ -20,7 +20,7 @@ MarcusOK 共发布三个包、分属两个大类——它们之间的关系见 [
 pnpm add @marcusok/excel-exporter
 ```
 
-这就是全部——没有需要额外操心的同 scope 运行时依赖：导出引擎（modern-xlsx JS 胶水 + fflate）与进度遮罩 UI 都在构建期打包进本包 `dist`，WASM 二进制通过本包自己的 `exports` 映射分发，因此没有需要额外接线的引擎包。安装期仍有一个注意点：钉版的 `modern-xlsx` 依赖声明了 `engines.node >= 24`，npm/pnpm 可能打印 `EBADENGINE` 警告（只有启用 `engine-strict` 的安装器才会因此失败）；包本身在运行时支持 Node >= 22，因为不会加载 `modern-xlsx` 的任何代码。
+这就是全部——没有需要额外操心的同 scope 运行时依赖：导出引擎（modern-xlsx JS 胶水 + fflate）与进度遮罩 UI 都在构建期打包进本包 `dist`，WASM 二进制通过本包自己的 `exports` 映射分发，因此没有需要额外接线的引擎包。发布包没有 modern-xlsx 运行时依赖：它在仓库中仅是构建期 devDependency，发布出的 `.d.ts` 也已自包含，因此上游的 `engines.node >= 24` 声明不会影响消费方安装。
 
 ## 2. 第一个导出
 

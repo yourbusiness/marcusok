@@ -113,7 +113,7 @@ No. The engine integration (WASM loader plus a stable surface over modern-xlsx) 
 
 ### Does `modern-xlsx`'s `engines.node >= 24` affect my app?
 
-No. The engine runtime is bundled **into** each package's `dist/` at build time, so consumers never execute upstream modern-xlsx code. Both business packages require Node `>= 22`, and browsers need WebAssembly support. The pinned `modern-xlsx` entry in their manifests exists purely so TypeScript consumers can resolve re-exported types — nothing from it loads at runtime. At install time npm may still print an `EBADENGINE` warning for that transitive pin (its declared floor is Node 24); the warning is safe to ignore, and only an installer running with `engine-strict` would turn it into a failure.
+No. The engine runtime is bundled **into** each package's `dist/` at build time, so consumers never execute upstream modern-xlsx code. Both business packages require Node `>= 22`, and browsers need WebAssembly support. Their published manifests have no modern-xlsx runtime dependency; the pinned entries in the repository are build-time dependencies used for engine/type resolution, and the published `.d.ts` files are self-contained. Consumers therefore do not install modern-xlsx or inherit its `engines.node >= 24` requirement.
 
 ### The exporter and the preview on one page
 

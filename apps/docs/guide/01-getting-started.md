@@ -20,7 +20,7 @@ Everything below walks through `@marcusok/excel-exporter`; both previews' quick 
 pnpm add @marcusok/excel-exporter
 ```
 
-That is the entire setup — no same-scope runtime dependencies to think about. The export engine (modern-xlsx JS glue + fflate) and the progress overlay UI are bundled into the package's `dist` at build time, and the WASM binary ships under the package's own `exports` map, so there is no engine package to wire in. One install-time caveat remains: the pinned `modern-xlsx` dependency declares `engines.node >= 24`, so npm/pnpm may print an `EBADENGINE` warning (and only an installer with `engine-strict` enabled would turn it into a failure); the package itself supports Node >= 22 at runtime because nothing from `modern-xlsx` is loaded.
+That is the entire setup — no same-scope runtime dependencies to think about. The export engine (modern-xlsx JS glue + fflate) and the progress overlay UI are bundled into the package's `dist` at build time, and the WASM binary ships under the package's own `exports` map, so there is no engine package to wire in. The published package has no modern-xlsx runtime dependency: it is only a build-time devDependency in the repository, and the published `.d.ts` is self-contained. Its upstream `engines.node >= 24` declaration therefore does not affect consumer installs.
 
 ## 2. First export
 
