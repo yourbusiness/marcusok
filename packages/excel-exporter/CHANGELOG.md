@@ -1,5 +1,11 @@
 # @marcusok/excel-exporter
 
+## 3.4.1
+
+### Patch Changes
+
+- 45f7fa3: Keep modern-xlsx as a build-time-only dependency and avoid repeated worker construction after synchronous worker URL failures.
+
 ## 3.4.0
 
 ### Minor Changes
