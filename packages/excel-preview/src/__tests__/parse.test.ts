@@ -15,6 +15,7 @@ import {
   encryptedBytes,
   entityStylesBytes,
   fakeOle2Bytes,
+  quotedFmtStylesBytes,
   richTextBytes,
   sampleWorkbookBytes,
   selfClosedStylesBytes,
@@ -364,6 +365,37 @@ describe("模型构建（含覆盖层合并）", () => {
     const row2 = model.sheets[0].rows.find((r) => r.index === 2);
     expect(row2).toMatchObject({ height: 42, hidden: false });
     expect(row2?.cells).toEqual([]);
+  });
+
+  it("numFmt formatCode 的 XML 实体解码（引擎读取侧原样返回 &quot;）", async () => {
+    // 回归（2026-10 真实浏览器复现）：引号字面量格式在 styles.xml 属性里
+    // 转义为 &quot;，引擎 readBuffer 不做实体解码。模型层不补解码时，
+    // 渲染出 "2026&quot;1&quot;15&quot;" 一类乱码（exporter 自家写出的文件
+    // 读回即触发）。断言覆盖模型层（numFmtCode 解码）与渲染全链路（两条
+    // 格式化路径：日期段自实现 + 数字段边字面量回注）。
+    const bytes = quotedFmtStylesBytes();
+    const model = buildPreviewWorkbook(await readBuffer(bytes), bytes);
+    const { formatCellValue } = await import("../numfmt/format");
+    const xfs = model.sheets[0].styles.xfs;
+    // 模型层：formatCode 已解码为带真实引号的格式串
+    expect(xfs[0].numFmtCode).toBe('yyyy"年"m"月"d"日"');
+    expect(xfs[1].numFmtCode).toBe('0"元"');
+    // 渲染层：日期段（自实现路径）按字面量渲染，无 &quot; 残留
+    const date = formatCellValue(
+      "number",
+      "45678",
+      xfs[0].numFmtCode,
+      model.dateSystem,
+    );
+    expect(date.text).toMatch(/^\d{4}年\d{1,2}月\d{1,2}日$/);
+    // 渲染层：数字段（边字面量回注路径）后缀字面量精确匹配
+    const money = formatCellValue(
+      "number",
+      "123",
+      xfs[1].numFmtCode,
+      model.dateSystem,
+    );
+    expect(money.text).toBe("123元");
   });
 
   it("sheet 可见性与 activeTab", async () => {

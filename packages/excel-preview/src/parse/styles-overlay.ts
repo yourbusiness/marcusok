@@ -130,8 +130,12 @@ function parseAttrs(tag: string): Record<string, string> {
  * U+FFFD。覆盖层是尽力而为的增强（见文件头"任何异常吞掉、返回降级
  * 形态"），本函数不得成为逃逸源：实测 &#1114112; 曾把整份解析打成
  * UNKNOWN 失败而非降级。
+ *
+ * 导出供模型层复用：引擎读取侧返回的 numFmt formatCode 同样携带未解码
+ * 的属性实体（见 model.ts 的 customFmt 构建处），与覆盖层的属性解析是
+ * 同一解码需求，不复制第二份实现。
  */
-function decodeXmlEntities(s: string): string {
+export function decodeXmlEntities(s: string): string {
   return s
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")

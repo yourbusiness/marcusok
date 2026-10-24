@@ -33,6 +33,7 @@ import {
 } from "./limits";
 import {
   buildStylesOverlay,
+  decodeXmlEntities,
   resolveColorSpec,
   type OverlayBorder,
   type OverlayFill,
@@ -278,11 +279,16 @@ function buildStyles(
       }
     : stylesFromEngine(wb);
 
-  // 自定义 numFmts：数组形态 [{id, formatCode}] → Map（实测数组非映射）
+  // 自定义 numFmts：数组形态 [{id, formatCode}] → Map（实测数组非映射）。
+  // formatCode 必须过 XML 实体解码（复用 styles-overlay 的实现）：引擎读取侧
+  // 把 styles.xml 属性值原样返回、不做实体解码（2026-10 实测，读自
+  // modern-xlsx 1.2.0 写出的文件），含引号字面量的格式（'yyyy"年"m"月"d"日"'、
+  // 0"元" 一类中文报表常态）拿到的是 "yyyy&quot;年&quot;…"，不解码则格式化层
+  // 把 &quot; 当字面量渲染成乱码。
   const customFmt = new Map<number, string>();
   for (const nf of st.numFmts ?? []) {
     if (nf && typeof nf.id === "number" && nf.formatCode) {
-      customFmt.set(nf.id, nf.formatCode);
+      customFmt.set(nf.id, decodeXmlEntities(nf.formatCode));
     }
   }
 

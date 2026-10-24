@@ -200,6 +200,27 @@ export function entityStylesBytes(entity: string): Uint8Array {
   });
 }
 
+/**
+ * 引号字面量 numFmt 样本（Excel 真实写法）：属性内的双引号必须转义为
+ * &quot;，formatCode 因此携带 XML 实体。回归锚点：引擎读取侧把属性值原样
+ * 返回、不做实体解码（2026-10 实测），模型层若不补解码，'yyyy"年"m"月"d"日"'
+ * 与 0"元" 一类中文报表常态格式会被格式化层渲染出 &quot; 字面量乱码。
+ * A1(xf4)=日期 serial 45678、B1(xf5)=数字 123，两条渲染路径分别覆盖
+ * 日期段自实现与数字段边字面量回注。
+ */
+export function quotedFmtStylesBytes(): Uint8Array {
+  const styles = `<styleSheet xmlns="http://schemas.openxmlformats-officedocument.spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy&quot;年&quot;m&quot;月&quot;d&quot;日&quot;"/><numFmt numFmtId="165" formatCode="0&quot;元&quot;"/></numFmts><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>`;
+  return buildXlsx({
+    sheets: [
+      {
+        name: "QF",
+        xml: `<row r="1"><c r="A1" s="0"><v>45678</v></c><c r="B1" s="1"><v>123</v></c></row>`,
+      },
+    ],
+    styles,
+  });
+}
+
 /** sharedStrings 富文本样本。 */
 export function richTextBytes(): Uint8Array {
   return buildXlsx({
