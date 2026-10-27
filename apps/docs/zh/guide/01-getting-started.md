@@ -1,6 +1,6 @@
 # 快速开始
 
-MarcusOK 共发布三个包、分属两个大类——它们之间的关系见 [生态介绍](/zh/guide/)。本文先把最先要决定的事说清楚（该装哪个包），再用其中最常用的那个带你跑通第一次导出。
+MarcusOK 共发布四个包、分属两个大类——它们之间的关系见 [生态介绍](/zh/guide/)。本文先把最先要决定的事说清楚（该装哪个包），再用其中最常用的那个带你跑通第一次导出。
 
 运行环境要求：Node `>= 22`。示例命令使用 pnpm，用 npm / yarn 安装等价（`pnpm >= 9` 只是本仓库自身的开发环境要求，与消费方无关）。
 
@@ -11,8 +11,9 @@ MarcusOK 共发布三个包、分属两个大类——它们之间的关系见 [
 | 把数据导出成可下载的 `.xlsx`                  | `@marcusok/excel-exporter` | 下方的[导出演练](#_2-第一个导出)                                    |
 | 只读预览用户上传的 `.xlsx` / `.xlsm` / `.csv` | `@marcusok/excel-preview`  | [预览快速开始](/zh/packages/excel-preview/guide/01-quick-start)     |
 | 只读预览用户上传的 `.docx` / `.docm`          | `@marcusok/word-preview`   | [word 预览快速开始](/zh/packages/word-preview/guide/01-quick-start) |
+| 只读预览用户上传的 `.pdf`                     | `@marcusok/pdf-preview`    | [PDF 预览快速开始](/zh/packages/pdf-preview/guide/01-quick-start)   |
 
-下文演练走 `@marcusok/excel-exporter`；两个预览包的快速开始见上表链接。两件曾以独立包形式提供的事：进度遮罩经导出包的 `/overlay` 子路径取用（见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)）；独立的引擎包已不存在——两个 Excel 业务包各自内置引擎并再导出其加载器（word 预览没有那类引擎层，它直接内置 docx-preview）。完整对比——依赖图、运行时各自内置什么、版本如何对应——见[包关系与选型](/zh/guide/03-package-relationships)。
+下文演练走 `@marcusok/excel-exporter`；各预览包的快速开始见上表链接。两件曾以独立包形式提供的事：进度遮罩经导出包的 `/overlay` 子路径取用（见[进度遮罩指南](/zh/packages/excel-exporter/guide/11-overlay)）；独立的引擎包已不存在——两个 Excel 业务包各自内置引擎并再导出其加载器（word 预览没有那类引擎层，它直接内置 docx-preview）。完整对比——依赖图、运行时各自内置什么、版本如何对应——见[包关系与选型](/zh/guide/03-package-relationships)。
 
 ## 1. 安装
 

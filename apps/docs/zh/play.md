@@ -37,6 +37,16 @@
 
 完整用法见 [word-preview 文档](/zh/packages/word-preview/)。
 
+## PDF 预览 —— `@marcusok/pdf-preview`
+
+把 `.pdf` 文件拖入面板：解析在 pdf.js Web Worker 内完成，页面滚动进入视口才懒渲染（远离视口的页自动释放 canvas 显存），首页出图与端到端耗时经 `onRendered` 上报。透明文本层让预览内容可选中、可复制；加密 PDF 上报 `PASSWORD_PROTECTED`。本站的 CMap / 标准字体目录由 `public/` 提供（bundler 只 emit worker）。
+
+<ClientOnly>
+  <PackageDemo dir="pdf-preview" />
+</ClientOnly>
+
+完整用法见 [pdf-preview 文档](/zh/packages/pdf-preview/)。
+
 ## 进度遮罩 —— 内置于 `@marcusok/excel-exporter`
 
 导出过程中看到的那个遮罩，这里经 `/overlay` 子路径直接驱动，任务与 Excel 无关。模拟任务前 1.5 秒不上报进度——那就是不确定态的旋转圆环；随后流式推进并切换为百分比条。两态渲染的是同一个实现、同一个毛玻璃面板，与 `overlay` 选项同源。

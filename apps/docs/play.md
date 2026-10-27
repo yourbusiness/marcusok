@@ -37,6 +37,16 @@ Drop a `.docx` / `.docm` file on the panel: the document renders with visual fid
 
 Full usage docs: [word-preview](/packages/word-preview/).
 
+## PDF preview — `@marcusok/pdf-preview`
+
+Drop a `.pdf` file on the panel: parsing runs in a pdf.js Web Worker and pages render lazily as they scroll into view (far-away pages release their canvas memory), with first-paint and end-to-end timings reported via `onRendered`. The transparent text layer makes the preview selectable and copyable; encrypted PDFs report `PASSWORD_PROTECTED`. On this site the CMap / standard-font directories are served from `public/` (the bundler only emits the worker).
+
+<ClientOnly>
+  <PackageDemo dir="pdf-preview" />
+</ClientOnly>
+
+Full usage docs: [pdf-preview](/packages/pdf-preview/).
+
 ## Progress overlay — built into `@marcusok/excel-exporter`
 
 The overlay the exporter shows during an export, driven here directly (through the `/overlay` subpath) for a task that has nothing to do with Excel. The simulated task reports no progress for its first 1.5 seconds — that is the indeterminate spinner — then streams progress and switches to the percentage bar. It is the same two-state panel, on the same implementation the `overlay` option uses.

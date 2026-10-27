@@ -4,11 +4,12 @@
 
 ## Current packages
 
-| Package                                                 | Category | Status | Description                                                                                                  |
-| ------------------------------------------------------- | -------- | ------ | ------------------------------------------------------------------------------------------------------------ |
-| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback |
-| [`@marcusok/excel-preview`](/packages/excel-preview/)   | Preview  | stable | Read-only xlsx preview: worker parsing + virtual scrolling, styles/merges/freeze/number formats restored     |
-| [`@marcusok/word-preview`](/packages/word-preview/)     | Preview  | beta   | Read-only docx preview: visual-faithful rendering (docx-preview engine), format sniffing, hardened defaults  |
+| Package                                                 | Category | Status | Description                                                                                                   |
+| ------------------------------------------------------- | -------- | ------ | ------------------------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](/packages/excel-exporter/) | Export   | stable | Excel export engine: modern-xlsx + Fast stream, full styling, Worker threading, fast writes, stream fallback  |
+| [`@marcusok/excel-preview`](/packages/excel-preview/)   | Preview  | stable | Read-only xlsx preview: worker parsing + virtual scrolling, styles/merges/freeze/number formats restored      |
+| [`@marcusok/word-preview`](/packages/word-preview/)     | Preview  | beta   | Read-only docx preview: visual-faithful rendering (docx-preview engine), format sniffing, hardened defaults   |
+| [`@marcusok/pdf-preview`](/packages/pdf-preview/)       | Preview  | beta   | Read-only PDF preview: lazy continuous scroll (pdf.js), selectable text layer, worker/cmaps shipped in `dist` |
 
 Two more capability layers exist in the repo as **private internal packages** — the modern-xlsx engine layer (`xlsx-core`: WASM loading, asset distribution, stable re-export surface) and the progress overlay UI (`progress-overlay`, behind the exporter's `overlay` option). They are bundled into the two Excel business packages' `dist` at build time (the engine layer into both Excel packages, the overlay into the exporter only) and are intentionally not on npm: installing a business package brings everything it needs.
 
@@ -26,8 +27,8 @@ Two more capability layers exist in the repo as **private internal packages** �
 
 The ecosystem grows on demand and is organized around two published package categories:
 
-- **Export** — turn application data into downloadable documents. Excel export ([`@marcusok/excel-exporter`](/packages/excel-exporter/)) is available today; other document formats (e.g. PDF) may follow.
-- **Document preview** — preview documents in the browser. A read-only xlsx preview ([`@marcusok/excel-preview`](/packages/excel-preview/)) and a read-only docx preview ([`@marcusok/word-preview`](/packages/word-preview/)) are available today; other document formats may follow.
+- **Export** — turn application data into downloadable documents. Excel export ([`@marcusok/excel-exporter`](/packages/excel-exporter/)) is available today; other document formats may follow.
+- **Document preview** — preview documents in the browser. Read-only xlsx ([`@marcusok/excel-preview`](/packages/excel-preview/)), docx ([`@marcusok/word-preview`](/packages/word-preview/)) and PDF ([`@marcusok/pdf-preview`](/packages/pdf-preview/)) previews are available today; other document formats may follow.
 
 Common capability layers (engine, overlay UI) stay private inside the repo and ship bundled into the packages above — keeping the npm surface at exactly what applications install.
 

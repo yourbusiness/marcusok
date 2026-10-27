@@ -145,6 +145,14 @@ const srcAssetOverrides: {
     dir: resolve(packagesDir, "excel-preview"),
     files: ["parse.worker.js"],
   },
+  // pdf-preview 以 worker 单文件字面量为唯一锚点（assets.ts）；cmaps 与
+  // standard_fonts 从锚点 URL 推导同层目录（dev 下解析到包内 dist 磁盘文件，
+  // 同源可 fetch——rewriteAssetLiterals 不支持目录，目录不经字面量改写）。
+  {
+    pkg: "@marcusok/pdf-preview",
+    dir: resolve(packagesDir, "pdf-preview"),
+    files: ["pdf.worker.min.mjs"],
+  },
 ];
 
 const srcAssetOverridePlugin: Plugin = {

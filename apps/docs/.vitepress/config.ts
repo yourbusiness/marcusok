@@ -1,13 +1,5 @@
 import { defineConfig } from "vitepress";
-import { createRequire } from "node:module";
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-} from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -15,10 +7,10 @@ import {
   groupPackagesByCategory,
   resolvePackageSections,
   type PackageEntry,
-  type RuntimeAsset,
   packages,
 } from "./registry";
 import { validateRegistry } from "./registry-validate";
+import { copyRuntimeAssets, stableAssetNamesFor } from "./runtime-assets";
 
 const configDir = dirname(fileURLToPath(import.meta.url));
 const docsRoot = join(configDir, "..");
@@ -112,46 +104,14 @@ const base = isDev ? "/" : (process.env.DOCS_BASE ?? `/${github.repo}/`);
 
 /* ------------------------- runtime assets (wasm/worker) ------------------------- */
 
-const require = createRequire(import.meta.url);
-
 /**
- * Resolve the directory containing a package's dist assets. When `through`
- * is set, the resolution happens within that package's dependency context
- * (so peer-dep assets like modern-xlsx's wasm can be found without listing
- * modern-xlsx as a direct dependency of the docs app).
+ * Copy every package's declared runtimeAssets (wasm, worker, whole asset
+ * directories) from their dist directories into public/, so a new package
+ * only has to declare `runtimeAssets` in the registry — no build-config
+ * edit needed. Implementation lives in runtime-assets.ts (testable).
  */
-function resolveAssetDir(asset: RuntimeAsset): string {
-  if (asset.through) {
-    const throughReq = createRequire(
-      require.resolve(join(asset.through, "package.json")),
-    );
-    return dirname(throughReq.resolve(asset.resolveFrom));
-  }
-  return dirname(require.resolve(asset.resolveFrom));
-}
-
-/**
- * Copy every package's declared runtimeAssets (wasm, worker, ...) from
- * their dist directories into public/, so a new package only has to
- * declare `runtimeAssets` in the registry — no build-config edit needed.
- */
-function copyRuntimeAssets() {
-  const publicDir = join(docsRoot, "public");
-  for (const p of packages) {
-    for (const asset of p.runtimeAssets ?? []) {
-      const src = join(resolveAssetDir(asset), asset.file);
-      const dest = join(publicDir, asset.to);
-      mkdirSync(dirname(dest), { recursive: true });
-      if (!statSync(src, { throwIfNoEntry: false })) {
-        throw new Error(
-          `[docs] runtime asset not found: ${asset.resolveFrom}${asset.through ? ` (through ${asset.through})` : ""}/${asset.file} ` +
-            `(declared by ${p.npmName} runtimeAssets). ` +
-            "Run `pnpm build:docs` from the repo root (turbo builds deps first).",
-        );
-      }
-      copyFileSync(src, dest);
-    }
-  }
+function copyRuntimeAssetsToPublic() {
+  copyRuntimeAssets(packages, join(docsRoot, "public"));
 }
 
 /* ------------------------- auto sidebar from files ------------------------- */
@@ -351,14 +311,13 @@ const zhSearchTranslations = {
 /* -------------------------------- site config -------------------------------- */
 
 /**
- * Destination basenames of all registry-declared runtime assets. Rollup
- * emits these without a content hash so they land at the same path as the
- * copies in public/ (placed there by copyRuntimeAssets). Anything not in
- * this set gets a normal hashed filename.
+ * Destination basenames of registry-declared **file-form** runtime assets.
+ * Rollup emits these without a content hash so they land at the same path as
+ * the copies in public/. Dir-form assets (cmaps, ...) are excluded — they
+ * are fetched at runtime, never emitted (see runtime-assets.ts). Anything
+ * not in this set gets a normal hashed filename.
  */
-const stableAssetNames = new Set(
-  packages.flatMap((p) => p.runtimeAssets ?? []).map((a) => basename(a.to)),
-);
+const stableAssetNames = stableAssetNamesFor(packages);
 
 /**
  * Per-page social metadata. The static `head` array applies verbatim to every
@@ -488,7 +447,7 @@ export default defineConfig({
       {
         name: "copy-marcus-runtime-assets",
         buildStart() {
-          copyRuntimeAssets();
+          copyRuntimeAssetsToPublic();
         },
       },
     ],

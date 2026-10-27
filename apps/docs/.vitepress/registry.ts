@@ -1,6 +1,7 @@
 import excelExporterPkg from "@marcusok/excel-exporter/package.json" with { type: "json" };
 import excelPreviewPkg from "@marcusok/excel-preview/package.json" with { type: "json" };
 import wordPreviewPkg from "@marcusok/word-preview/package.json" with { type: "json" };
+import pdfPreviewPkg from "@marcusok/pdf-preview/package.json" with { type: "json" };
 
 export interface LocalizedText {
   zh: string;
@@ -35,8 +36,10 @@ export interface PackageSection {
   collapsed?: boolean;
 }
 
-/** A dist asset (wasm, worker, ...) copied into public/ at build time. */
-export interface RuntimeAsset {
+/** A single-file dist asset (wasm, worker, ...) copied into public/ at build
+ *  time. `file` resolves relative to the directory of `resolveFrom`'s entry
+ *  (e.g. a wasm sitting next to the package entry). */
+export interface RuntimeFileAsset {
   resolveFrom: string;
   /**
    * Optional: resolve `resolveFrom` within another package's dependency
@@ -50,6 +53,22 @@ export interface RuntimeAsset {
   /** Destination path relative to the docs public/ directory. */
   to: string;
 }
+
+/** A whole asset directory (cmaps, standard_fonts, ...) copied recursively
+ *  into public/ at build time. `dir` resolves relative to the package root of
+ *  `resolveFrom` (pdfjs-dist's cmaps/ sits at the package root, not under
+ *  build/). Dir entries never enter stableAssetNames — they are fetched at
+ *  runtime, not emitted by Rollup (see runtime-assets.ts). */
+export interface RuntimeDirAsset {
+  resolveFrom: string;
+  through?: string;
+  /** Directory within the resolved package directory. */
+  dir: string;
+  /** Destination directory relative to the docs public/ directory. */
+  to: string;
+}
+
+export type RuntimeAsset = RuntimeFileAsset | RuntimeDirAsset;
 
 /** One series (legend entry + bar color) in a benchmark chart. */
 export interface BenchmarkSeriesDef {
@@ -421,5 +440,72 @@ export const packages: PackageEntry[] = [
       },
     ],
     demo: "WordPreviewDemo",
+  },
+  {
+    dir: "pdf-preview",
+    npmName: "@marcusok/pdf-preview",
+    category: "preview",
+    version: pdfPreviewPkg.version,
+    // 首版 0.x：懒渲染释放策略与 bundler 场景的资产接入指引需要观察期
+    status: "beta",
+    zh: true,
+    tagline: {
+      zh: "PDF 只读预览（pdf.js 连续滚动懒渲染 + 文本层可选中复制）",
+      en: "Read-only PDF preview (pdf.js continuous lazy rendering, selectable text layer)",
+    },
+    keywords: ["pdf", "preview", "viewer", "pdfjs", "text-layer"],
+    // worker 零配置（bundler 对锚点字面量自动 emit）；cmaps/standard_fonts
+    // 是目录资产、bundler 不复制——经 runtimeAssets 拷入 public/，demo 显式
+    // 传 withBase URL（锚点推导在 build 下落在 hashed assets 目录，与
+    // public 拷贝对不上，且 cmap 缺失是静默劣化不报错）
+    runtimeAssets: [
+      {
+        resolveFrom: "pdfjs-dist",
+        through: "@marcusok/pdf-preview",
+        dir: "cmaps",
+        to: "cmaps",
+      },
+      {
+        resolveFrom: "pdfjs-dist",
+        through: "@marcusok/pdf-preview",
+        dir: "standard_fonts",
+        to: "standard_fonts",
+      },
+    ],
+    highlights: [
+      {
+        icon: "zap",
+        title: { zh: "大文档流畅滚动", en: "Smooth on large documents" },
+        details: {
+          zh: "解析在 Web Worker；连续滚动懒渲染——进入视口的页才渲染，远离视口的页自动释放 canvas 显存，重新进入按需重渲。",
+          en: "Parsing runs in a Web Worker; continuous scroll with lazy per-page rendering — pages render as they enter the viewport and release their canvas memory when far away.",
+        },
+      },
+      {
+        icon: "pen",
+        title: { zh: "文本可选中复制", en: "Selectable, copyable text" },
+        details: {
+          zh: "透明文本层与 canvas 像素精确对齐（pdf.js TextLayer），预览即文档：可选中、复制、检索；不需要时一行选项关闭。",
+          en: "A transparent text layer aligns with the canvas pixels (pdf.js TextLayer) — select, copy and search the preview like real text; one option turns it off.",
+        },
+      },
+      {
+        icon: "shield",
+        title: { zh: "安全加固默认值", en: "Hardened defaults" },
+        details: {
+          zh: "渲染前先做 %PDF- 魔数嗅探（Adobe 1024 字节窗口口径）；加密文档给出明确错误码；不加载 sandbox 模块，PDF 内嵌 JavaScript 永不执行；注释/超链接层首版不渲染。",
+          en: "Input is sniffed for the %PDF- magic (Adobe's 1024-byte window) before the engine runs; encrypted files report a clear code; the sandbox module is never loaded, so embedded PDF JavaScript never executes; the annotation layer is not rendered in v1.",
+        },
+      },
+      {
+        icon: "route",
+        title: { zh: "资产接入简单", en: "Simple asset wiring" },
+        details: {
+          zh: "worker/cmaps/standard_fonts 全部随包分发（dist 约 7.5MB 含 sourcemap）；bundler 场景 worker 零配置，cmaps/字体目录可自托管或配 copy 插件（文档给出配方）。",
+          en: "The worker, cmaps and standard fonts all ship with the package; workers need zero config under bundlers, while the cmaps/font directories can be self-hosted or wired with a copy plugin (recipes in the docs).",
+        },
+      },
+    ],
+    demo: "PdfPreviewDemo",
   },
 ];

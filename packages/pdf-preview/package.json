@@ -1,0 +1,68 @@
+{
+  "name": "@marcusok/pdf-preview",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Read-only PDF preview in the browser: continuous scroll with lazy per-page rendering powered by pdf.js, selectable/copyable text layer, format sniffing and normalized error codes.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourbusiness/marcusok.git",
+    "directory": "packages/pdf-preview"
+  },
+  "bugs": {
+    "url": "https://github.com/yourbusiness/marcusok/issues"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dist/pdf.worker.min.mjs": {
+      "import": "./dist/pdf.worker.min.mjs",
+      "default": "./dist/pdf.worker.min.mjs"
+    },
+    "./dist/cmaps/*": "./dist/cmaps/*",
+    "./dist/standard_fonts/*": "./dist/standard_fonts/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.13.0 || >=24"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pdf",
+    "preview",
+    "viewer",
+    "pdfjs",
+    "text-layer"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "eslint": "^9.16.0",
+    "happy-dom": "^20.14.5",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "6.4.299",
+    "tsup": "^8.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

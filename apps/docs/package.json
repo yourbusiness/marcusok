@@ -11,14 +11,15 @@
     "dev": "vitepress dev --port 5174",
     "build": "vitepress build",
     "preview": "vitepress preview --port 4174",
-    "lint": "eslint .vitepress src env.d.ts && node --check scripts/check-i18n.mjs",
+    "lint": "eslint .vitepress src env.d.ts && node --check scripts/check-i18n.mjs && node --check scripts/check-runtime-assets.mjs",
     "typecheck": "vue-tsc --noEmit",
     "check-i18n": "node scripts/check-i18n.mjs",
-    "test": "node scripts/check-i18n.mjs"
+    "test": "node scripts/check-i18n.mjs && node scripts/check-runtime-assets.mjs"
   },
   "dependencies": {
     "@marcusok/excel-exporter": "workspace:*",
     "@marcusok/excel-preview": "workspace:*",
+    "@marcusok/pdf-preview": "workspace:*",
     "@marcusok/word-preview": "workspace:*",
     "vue": "^3.5.13"
   },

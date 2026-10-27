@@ -9,6 +9,12 @@ coverage/
 # docs site (apps/docs)
 apps/docs/.vitepress/cache/
 apps/docs/.vitepress/config.ts.timestamp-*.mjs
+# runtimeAssets 的 public/ 拷贝是构建期产物（config.ts copyRuntimeAssets
+# 在 buildStart 重新生成），不入库
+apps/docs/public/cmaps/
+apps/docs/public/standard_fonts/
+# Playwright MCP 验收会话的本地快照
+.playwright-mcp/
 
 CLAUDE.md
 AGENTS.md
