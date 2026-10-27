@@ -36,6 +36,11 @@ jobs:
       - name: Create Release Pull Request or Publish
         uses: changesets/action@v1
         with:
+          # test 阶段单独串行执行（turbo run test --concurrency=1）：性能基线
+          # 是单次冷调用测量，与 pdf-preview 的多次解析测试并发时会被共享
+          # runner 的 CPU 争用抬高（2026-10-27：word-preview 630-746ms >
+          # 150×4=600ms，而前一提交同一测试通过）。阈值与 PERF_SLACK 均未
+          # 放宽，只隔离测量环境。
           publish: pnpm release
           version: pnpm version-packages
           commit: "chore: release packages"
