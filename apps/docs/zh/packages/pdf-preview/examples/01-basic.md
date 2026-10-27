@@ -66,4 +66,4 @@ createPdfPreview(el, {
 });
 ```
 
-200 页合成文本文档的解析 + 首页文本提取本地实测约 66ms（Node 基线，见包 README）——终端用户真正感知的是 `firstPageMs`（含 canvas 绘制）。
+200 页合成文本文档的解析 + 首页文本提取本地实测约 66ms（热态中位；一次性的 pdf.js worker/模块初始化由预热运行排除，见包 README）——终端用户真正感知的是 `firstPageMs`（含 canvas 绘制）。

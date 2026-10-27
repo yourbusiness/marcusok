@@ -66,4 +66,4 @@ createPdfPreview(el, {
 });
 ```
 
-For a 200-page synthetic text document, parse + first-page text extraction measures ~66 ms locally (Node baseline; see the package README) — the number end users care about is `firstPageMs`, which includes canvas paint.
+For a 200-page synthetic text document, parse + first-page text extraction measures ~66 ms as a warm median locally (Node baseline; one-time pdf.js worker/module init is excluded by a warm-up run — see the package README) — the number end users care about is `firstPageMs`, which includes canvas paint.

@@ -7,7 +7,24 @@
  * 字体，中文 PDF 的 cmap 链路在 play/docs demo 真实浏览器验收，node
  * fixture 只覆盖拉丁文本管线。
  */
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+
+const require = createRequire(import.meta.url);
+
+/**
+ * pdfjs-dist 随包的标准字体目录（Node 本地路径，末尾带 `/`）。
+ *
+ * 测试里的 getDocument 应显式传它：本包生产环境总是提供该目录，不传会
+ * 触发上游 "Ensure that the standardFontDataUrl API parameter is provided"
+ * 警告，并让解析测试混入字体回退的噪音（CI 日志里那条 Warning 即此）。
+ */
+export const STANDARD_FONT_DATA_URL =
+  resolve(
+    dirname(require.resolve("pdfjs-dist/package.json")),
+    "standard_fonts",
+  ) + "/";
 
 export interface PdfFixtureOptions {
   pages?: number;

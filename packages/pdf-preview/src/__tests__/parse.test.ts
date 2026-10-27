@@ -12,12 +12,15 @@
 import { describe, it, expect } from "vitest";
 import { getDocument } from "pdfjs-dist";
 import type { PDFDocumentLoadingTask } from "pdfjs-dist";
-import { makePdfBytes, truncated } from "./fixtures";
+import { makePdfBytes, STANDARD_FONT_DATA_URL, truncated } from "./fixtures";
 
 describe("pdf.js legacy parse pipeline (real engine)", () => {
   it("parses a 3-page fixture: numPages, per-page viewport, text content", async () => {
     const bytes = await makePdfBytes({ pages: 3 });
-    const task: PDFDocumentLoadingTask = getDocument({ data: bytes });
+    const task: PDFDocumentLoadingTask = getDocument({
+      data: bytes,
+      standardFontDataUrl: STANDARD_FONT_DATA_URL,
+    });
     const pdf = await task.promise;
     expect(pdf.numPages).toBe(3);
 
@@ -40,7 +43,10 @@ describe("pdf.js legacy parse pipeline (real engine)", () => {
 
   it("streams text content (streamTextContent used by the text layer)", async () => {
     const bytes = await makePdfBytes({ pages: 1 });
-    const task = getDocument({ data: bytes });
+    const task = getDocument({
+      data: bytes,
+      standardFontDataUrl: STANDARD_FONT_DATA_URL,
+    });
     const pdf = await task.promise;
     const page = await pdf.getPage(1);
     const reader = page.streamTextContent().getReader();
@@ -58,7 +64,10 @@ describe("pdf.js legacy parse pipeline (real engine)", () => {
 
   it("rejects a truncated PDF (magic intact, body cut) — error shape for CORRUPT mapping", async () => {
     const bytes = await makePdfBytes({ pages: 2 });
-    const task = getDocument({ data: truncated(bytes, 200) });
+    const task = getDocument({
+      data: truncated(bytes, 200),
+      standardFontDataUrl: STANDARD_FONT_DATA_URL,
+    });
     await expect(task.promise).rejects.toSatisfy((err: unknown) => {
       // 上游归 InvalidPDFException（render.test 的 CORRUPT 映射依据）
       return err instanceof Error && /InvalidPDF/i.test(err.name);
@@ -69,7 +78,10 @@ describe("pdf.js legacy parse pipeline (real engine)", () => {
     const garbage = new Uint8Array(600);
     garbage.set([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34], 0);
     for (let i = 8; i < garbage.length; i++) garbage[i] = 0x00;
-    const task = getDocument({ data: garbage });
+    const task = getDocument({
+      data: garbage,
+      standardFontDataUrl: STANDARD_FONT_DATA_URL,
+    });
     await expect(task.promise).rejects.toBeInstanceOf(Error);
   });
 });
