@@ -73,9 +73,11 @@ describe("WasmLoader error recovery", () => {
       await loader.ensureLoaded();
       expect(loader.isReady).toBe(true);
       expect(initWasmMock).toHaveBeenCalledTimes(2);
-      expect(initWasmMock).toHaveBeenLastCalledWith(
-        "https://example.com/b.wasm",
-      );
+      // 对象形式（module_or_path）是胶水函数的官方入参：位置参数会触发
+      // wasm-bindgen 的 deprecated 警告（见 wasm-loader.ts 的 initWasm 注释）
+      expect(initWasmMock).toHaveBeenLastCalledWith({
+        module_or_path: "https://example.com/b.wasm",
+      });
     } finally {
       warn.mockRestore();
     }
@@ -223,7 +225,22 @@ describe("WasmLoader error recovery", () => {
     await loader.ensureLoaded();
     expect(loader.isReady).toBe(true);
     expect(initWasmMock).toHaveBeenCalledTimes(1);
-    expect(String(initWasmMock.mock.calls[0][0])).toMatch(/modern-xlsx\.wasm$/);
+    const arg = initWasmMock.mock.calls[0][0] as { module_or_path?: unknown };
+    expect(String(arg?.module_or_path)).toMatch(/modern-xlsx\.wasm$/);
+  });
+
+  it("forwards the wasm URL to the engine in wasm-bindgen's object form", async () => {
+    // 位置参数（string/URL）会让胶水打 "using deprecated parameters for
+    // the initialization function" 警告（线上实测消费方控制台可见）；对象
+    // 形式是官方入参。此断言钉住包装层的转发形态，防止改回位置透传。
+    initWasmMock.mockResolvedValue(undefined);
+    const loader = makeLoader("https://example.com/x.wasm");
+
+    await loader.ensureLoaded();
+    expect(initWasmMock).toHaveBeenCalledTimes(1);
+    expect(initWasmMock).toHaveBeenCalledWith({
+      module_or_path: "https://example.com/x.wasm",
+    });
   });
 
   it("self-heals to ready when the underlying init succeeds after the retries gave up", async () => {

@@ -38,6 +38,12 @@ import {
   type GridLayout,
 } from "./layout";
 import { compileStylesheet, rotationCss } from "./css";
+import {
+  buildRowIndex,
+  cellAt,
+  forEachCellInRange,
+  type CellRowIndex,
+} from "./cell-index";
 import type { PreviewCell, PreviewSheet, PreviewWorkbook } from "../types";
 
 const BASE_CSS = `
@@ -137,7 +143,7 @@ export class SheetRenderer {
   private sheetIndex = -1;
   private layout: GridLayout | null = null;
   /** row(0-based) → (col → cell)（每 sheet 重建）。 */
-  private rowIndex = new Map<number, Map<number, PreviewCell>>();
+  private rowIndex: CellRowIndex = new Map();
   /**
    * 象限前缀 + "r:c" → 元素。四个象限各用互不为前缀的非空前缀（m:/fr:/
    * fc:/fcol:）：updateLayer 的清理以 key.startsWith(prefix) 判归属，主象限
@@ -335,12 +341,9 @@ export class SheetRenderer {
 
     const t0 = performance.now();
     this.layout = buildLayout(sheet);
-    this.rowIndex.clear();
-    for (const r of sheet.rows) {
-      const m = new Map<number, PreviewCell>();
-      for (const c of r.cells) m.set(c.col, c);
-      this.rowIndex.set(r.index - 1, m);
-    }
+    // 按列有序的行索引（二分窗口扫描，见 cell-index.ts 头注释）；模型
+    // 不可变，setSheet 一次构建后只读
+    this.rowIndex = buildRowIndex(sheet.rows);
     // 网格线规则前置于 xf 类（级联依据见 GRID_COLOR 注释），数据边框才能
     // 在同特异性下按源序覆盖网格线；两条规则都带实例作用域前缀，多实例
     // 共存时才不会互相串样式。
@@ -680,19 +683,20 @@ export class SheetRenderer {
     };
 
     for (let r = range.rowStart; r < range.rowEnd; r++) {
-      const rowMap = this.rowIndex.get(r);
-      if (!rowMap) continue;
-      for (const cell of rowMap.values()) {
-        if (cell.col < range.colStart || cell.col >= range.colEnd) continue;
-        if (l.coveredBy.has(`${r}:${cell.col}`)) continue;
+      const rowCells = this.rowIndex.get(r);
+      if (!rowCells) continue;
+      // 有序数组 + 二分：每帧只触碰窗口内的格子。旧的 per-row Map 全量
+      // 遍历在宽表（行内上万格）下每帧扫行内全部格（cell-index.ts 背景）
+      forEachCellInRange(rowCells, range.colStart, range.colEnd, (cell) => {
+        if (l.coveredBy.has(`${r}:${cell.col}`)) return;
         ensure(r, cell);
-      }
+      });
     }
     for (const a of anchors) {
       // anchor 正常不是被覆盖格（coveredBy 不含 anchor 自身）；重叠合并的
       // 异常文件里后写覆盖先写，防御性跳过
       if (l.coveredBy.has(`${a.row}:${a.col}`)) continue;
-      const cell = this.rowIndex.get(a.row)?.get(a.col);
+      const cell = cellAt(this.rowIndex.get(a.row), a.col);
       if (cell) ensure(a.row, cell);
     }
 
@@ -787,10 +791,10 @@ export class SheetRenderer {
    */
   private spillLimitPx(col: number, row: number, colEnd: number): number {
     const l = this.layout!;
-    const rowMap = this.rowIndex.get(row);
+    const rowCells = this.rowIndex.get(row);
     const stop = Math.min(l.colCount, Math.max(colEnd + 1, col + 2));
     for (let c = col + 1; c < stop; c++) {
-      const blocker = rowMap?.get(c);
+      const blocker = cellAt(rowCells, c);
       const hasContent =
         blocker != null && blocker.value !== null && blocker.value !== "";
       if (hasContent || l.coveredBy.has(`${row}:${c}`)) {

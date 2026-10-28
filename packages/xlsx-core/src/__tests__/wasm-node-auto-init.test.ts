@@ -81,9 +81,11 @@ describe("WasmLoader Node auto-init (initWasmSync path)", () => {
     expect(loader.isReady).toBe(true);
     expect(initWasmSyncMock).toHaveBeenCalledTimes(1);
     // No retry loop around the sync path: exactly one attempt, then the
-    // standard initWasm run with the default URL.
+    // standard initWasm run with the default URL (object form — the engine
+    // wrapper forwards wasm-bindgen's official shape, see wasm-loader.ts).
     expect(initWasmMock).toHaveBeenCalledTimes(1);
-    expect(String(initWasmMock.mock.calls[0][0])).toMatch(/modern-xlsx\.wasm$/);
+    const arg = initWasmMock.mock.calls[0][0] as { module_or_path?: unknown };
+    expect(String(arg?.module_or_path)).toMatch(/modern-xlsx\.wasm$/);
   });
 
   it("logs the auto-init root cause before degrading (no silent swallow)", async () => {
@@ -119,7 +121,11 @@ describe("WasmLoader Node auto-init (initWasmSync path)", () => {
     expect(loader.isReady).toBe(true);
     expect(initWasmSyncMock).not.toHaveBeenCalled();
     expect(readFileSyncMock).not.toHaveBeenCalled();
-    expect(initWasmMock).toHaveBeenCalledWith("https://cdn.example/x.wasm");
+    // 对象形式（module_or_path）：wasm-bindgen 胶水的官方入参，位置参数
+    // 会打 deprecated 警告（wasm-loader.ts 的 initWasm 包装层注释）
+    expect(initWasmMock).toHaveBeenCalledWith({
+      module_or_path: "https://cdn.example/x.wasm",
+    });
   });
 
   it("reads a configured file: URL synchronously (Node/Electron self-hosting)", async () => {
@@ -167,10 +173,10 @@ describe("WasmLoader Node auto-init (initWasmSync path)", () => {
 
       expect(loader.isReady).toBe(true);
       expect(initWasmSyncMock).not.toHaveBeenCalled();
-      // No configured URL -> the default (shipped binary next to the entry).
-      expect(String(initWasmMock.mock.calls[0][0])).toMatch(
-        /modern-xlsx\.wasm$/,
-      );
+      // No configured URL -> the default (shipped binary next to the entry),
+      // forwarded in the engine's object form (module_or_path).
+      const arg = initWasmMock.mock.calls[0][0] as { module_or_path?: unknown };
+      expect(String(arg?.module_or_path)).toMatch(/modern-xlsx\.wasm$/);
     } finally {
       vi.unstubAllGlobals();
     }

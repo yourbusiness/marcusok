@@ -3,6 +3,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { readBuffer } from "@marcusok/xlsx-core";
 import { buildPreviewWorkbook } from "../parse/model";
 import { SheetRenderer } from "../render/renderer";
+import { buildRowIndex, forEachCellInRange } from "../render/cell-index";
+import type { PreviewCell } from "../types";
 import { bigWorkbookBytes } from "./fixtures";
 
 // 与 excel-exporter 同一模式：本地阈值即产品 SLA（PERF_SLACK 缺省为 1）；
@@ -55,6 +57,41 @@ describe.runIf(RUN_PERF)(
       );
       expect(dt).toBeLessThan(150 * SLACK);
       r.destroy();
+    });
+
+    it("wide-row window scan (60 rows x 16384 cols, 200 probes) < 30ms", () => {
+      // 宽表横向滚动的每帧成本守卫：窗口差量循环经 cell-index 二分后，
+      // 每次探测只触碰窗口内的格子。旧形态（per-row Map 全量遍历再按列
+      // 过滤）在同一数据上本机实测 ~430ms（67x），回归会在本阈值爆红。
+      const COLS = 16_384;
+      const ROWS = 60;
+      const WIN = 40;
+      const rows = Array.from({ length: ROWS }, (_, r) => ({
+        index: r + 1,
+        height: null,
+        hidden: false,
+        cells: Array.from({ length: COLS }, (_, c): PreviewCell => ({
+          col: c,
+          type: "number" as const,
+          value: String(r * COLS + c),
+          styleIndex: null,
+        })),
+      }));
+      const index = buildRowIndex(rows);
+      const t0 = performance.now();
+      let hits = 0;
+      for (let k = 0; k < 200; k++) {
+        // 7919 与 16000 互素，起点在列轴上充分散布
+        const colStart = (k * 7919) % (COLS - WIN);
+        for (let r = 0; r < ROWS; r++) {
+          forEachCellInRange(index.get(r), colStart, colStart + WIN, () => {
+            hits++;
+          });
+        }
+      }
+      const dt = performance.now() - t0;
+      expect(hits).toBe(200 * ROWS * WIN); // 规模断言防空跑
+      expect(dt).toBeLessThan(30 * SLACK);
     });
   },
 );

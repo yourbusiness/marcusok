@@ -132,7 +132,10 @@ function csvCellType(v: string): { type: "number" | "string"; value: string } {
 
 /**
  * CSV 字节 → PreviewWorkbook（单 sheet、无样式、无冻结/合并）。
- * 超 16384 列/超宽行按原样保留（渲染层无列数上限，前缀和按列数线性分配）。
+ * 注意口径：超 Excel 上限的宽行/长行会被渲染层静默截断——layout.ts 的
+ * buildLayout 把 colCount/rowCount 封顶到 16384/1048576，越界格不渲染、
+ * 无告警（xlsx 路径的同类输入在模型层直接拒绝为 CORRUPT，两条路径口径
+ * 不一致，属已知取舍）。
  */
 export function csvToWorkbook(bytes: Uint8Array): PreviewWorkbook {
   const text = decodeBytes(bytes);

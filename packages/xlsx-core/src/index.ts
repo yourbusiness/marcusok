@@ -32,6 +32,9 @@ export {
   configureWasm,
   getWasmLoader,
   defaultWasmUrl,
+  // 静默版 initWasm（对象形式转发，见 wasm-loader.ts 实现注释）：worker
+  // 入口与 loader 的消费入口——勿改回从 modern-xlsx 直接 re-export
+  initWasm,
 } from "./wasm-loader";
 export type { LoaderOptions, LoadState } from "./wasm-loader";
 
@@ -41,8 +44,8 @@ export type { LoaderOptions, LoadState } from "./wasm-loader";
 export {
   Workbook,
   readBuffer,
-  // wasm init — consumed by worker entrypoints and the loader's tests
-  initWasm,
+  // 同步初始化原生走对象形式（initWasmSync({module})），无 deprecated
+  // 警告；异步 initWasm 由上方 wasm-loader 的静默包装提供
   initWasmSync,
   // cell / range reference utilities
   encodeCellRef,

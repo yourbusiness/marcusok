@@ -117,6 +117,27 @@ continue on a fresh instance. Aborting the active parse also terminates the
 worker (queued parses are re-dispatched); aborting a queued parse only removes
 that request.
 
+**One bundler exception: Vite's dev server.** Dependency pre-bundling
+(`optimizeDeps`) does not rewrite the `new URL(<file>, import.meta.url)`
+expressions inside pre-bundled dependencies, so both assets 404 in dev: the
+parse worker script fails to load and the session silently falls back to
+main-thread parsing (`workerBroken` — sticky until `terminateParseWorker()`
+or a page reload); the fallback then fetches the wasm and gets Vite's HTML
+fallback instead of the binary, so every preview reports a `WASM` error.
+Fix it once in `vite.config.ts`, then restart the dev server (production
+builds are unaffected):
+
+```ts
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  optimizeDeps: { exclude: ["@marcusok/excel-preview"] },
+});
+```
+
+Full diagnosis and `?url`-import alternatives:
+[Assets & Self-hosting](https://yourbusiness.github.io/marcusok/packages/excel-preview/guide/02-assets).
+
 ## Documentation
 
 - [Docs site](https://yourbusiness.github.io/marcusok/) (English + 中文)

@@ -273,7 +273,10 @@ export interface PreviewInstance {
    * 卸载渲染 DOM 并释放资源（Worker 为模块级共享，不随实例销毁）。
    * 同时中止在途解析（code ABORTED，见 PreviewErrorCode）：调用方立即
    * 解除等待；主线程回退路径在 await 边界放弃后续大计算，worker 路径的
-   * 迟到结果到达即丢弃（共享 worker 不为此 terminate——会拒绝兄弟请求）。
+   * 迟到结果到达即丢弃。中止**活动中**的请求会 terminate 共享 worker
+   * （worker 内的同步 WASM 解析只能靠终止打断）并把排队请求重派发到
+   * 新实例——不会拒绝兄弟请求；中止仅排队中的请求只摘除自身
+   * （worker-client.ts 的 enqueue 实现口径）。
    */
   destroy(): void;
   /** 切换 sheet（名称或 0-based 索引）。 */

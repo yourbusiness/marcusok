@@ -1,6 +1,27 @@
-import { initWasm, initWasmSync } from "modern-xlsx";
+import { initWasm as engineInitWasm, initWasmSync } from "modern-xlsx";
 
 export type LoadState = "idle" | "loading" | "ready" | "error";
+
+/**
+ * 静默版 initWasm：以 wasm-bindgen 胶水的对象形式（`{ module_or_path }`）
+ * 转发。modern-xlsx 1.2.0 的包装层只做位置透传，而胶水函数对非对象参数
+ * （string/URL）会打 "using deprecated parameters for the initialization
+ * function" 警告——消费方控制台每次 WASM 初始化都会出现一条（线上实测）。
+ * 对象形式是胶水的官方入参且运行时语义等价（解构后同样走 fetch 分支）。
+ * modern-xlsx 锁死在 devDependencies 且构建期整体打进业务包 dist，升级
+ * 版本时必须复核此透传形态仍成立。undefined 原样透传，保留上游
+ * detectWasmUrl 回退（本仓三个调用点——loader 与两个 worker——都会先
+ * 解析出具体 URL 再调用，undefined 实际不可达）。
+ */
+export function initWasm(wasmSource?: string | URL): Promise<void> {
+  return engineInitWasm(
+    wasmSource === undefined
+      ? undefined
+      : ({
+          module_or_path: wasmSource,
+        } as unknown as Parameters<typeof engineInitWasm>[0]),
+  );
+}
 
 export interface LoaderOptions {
   /**
