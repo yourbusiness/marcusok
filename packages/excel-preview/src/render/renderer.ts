@@ -788,20 +788,50 @@ export class SheetRenderer {
    * 稀疏化会保留仅有样式的空格）也不是 Excel 语义上的截断点——Excel 中
    * 空单元格无论有无格式都不阻挡溢出。被合并覆盖的格仍阻挡（合并区域是
    * 实体内容）。
+   *
+   * 扫描实现：一次二分定位后顺次迭代行内有序数组（forEachCellInRange），
+   * 行索引里不存在的空隙列单独查合并覆盖——替代旧逐列 cellAt 二分。本
+   * 方法是每滚动帧的热路径（updateLayer 对窗口内每个 string/formulaStr
+   * 格各调一次），稀疏宽行下旧形态为纯空列逐列付 log(行内格数) 成本。
    */
   private spillLimitPx(col: number, row: number, colEnd: number): number {
     const l = this.layout!;
     const rowCells = this.rowIndex.get(row);
     const stop = Math.min(l.colCount, Math.max(colEnd + 1, col + 2));
-    for (let c = col + 1; c < stop; c++) {
-      const blocker = cellAt(rowCells, c);
-      const hasContent =
-        blocker != null && blocker.value !== null && blocker.value !== "";
-      if (hasContent || l.coveredBy.has(`${row}:${c}`)) {
-        return l.colLeft[c] - l.colLeft[col];
+    let prev = col; // 已确认无阻挡的最右实格列（含溢出源格自身）
+    let blockedAt = -1;
+    forEachCellInRange(rowCells, col + 1, stop, (cell) => {
+      // cb 的 return 只结束当次回调、不中止迭代：已找到 blocker 后，后续
+      // 实格的回调（含其空隙重扫）必须短路，否则会用过期 prev 改写结果
+      if (blockedAt >= 0) return;
+      // 先补查 [prev+1, cell.col) 的空隙列：被合并覆盖的格可能不在行索引里
+      for (let c = prev + 1; c < cell.col; c++) {
+        if (l.coveredBy.has(`${row}:${c}`)) {
+          blockedAt = c;
+          return;
+        }
+      }
+      if (cell.value !== null && cell.value !== "") {
+        blockedAt = cell.col;
+        return;
+      }
+      if (l.coveredBy.has(`${row}:${cell.col}`)) {
+        blockedAt = cell.col;
+        return;
+      }
+      prev = cell.col;
+    });
+    // 尾部空隙列（stop 之前再无实格）同样可能是合并覆盖
+    if (blockedAt < 0) {
+      for (let c = prev + 1; c < stop; c++) {
+        if (l.coveredBy.has(`${row}:${c}`)) {
+          blockedAt = c;
+          break;
+        }
       }
     }
-    return l.colLeft[stop] - l.colLeft[col];
+    const blockerCol = blockedAt >= 0 ? blockedAt : stop;
+    return l.colLeft[blockerCol] - l.colLeft[col];
   }
 
   private updateHeaders(range: {

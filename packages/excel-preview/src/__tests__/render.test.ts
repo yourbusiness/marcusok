@@ -11,7 +11,7 @@ import {
   visibleMergeAnchors,
 } from "../render/layout";
 import { compileStylesheet } from "../render/css";
-import type { PreviewStyles } from "../types";
+import type { PreviewCell, PreviewMerge, PreviewStyles } from "../types";
 import { bigWorkbookBytes, sampleWorkbookBytes } from "./fixtures";
 import { buildPreviewWorkbook } from "../parse/model";
 import { readBuffer } from "@marcusok/xlsx-core";
@@ -1015,6 +1015,70 @@ describe("SheetRenderer", () => {
     // 恒匹配所有键，冻结象限每滚动帧被误删后全量重建）
     expect(el.isConnected).toBe(true);
     expect(corner.contains(el)).toBe(true);
+    r.destroy();
+  });
+});
+
+describe("spillLimitPx 溢出扫描语义（顺次迭代实现）", () => {
+  // 受控稀疏行：借 sample 模型的合法 styles，替换 rows/merges/colSpans。
+  // 列宽统一 8.43（64px）——期望值 = (blockerCol - col) * 64
+  type SpillFn = (col: number, row: number, colEnd: number) => number;
+
+  let container: HTMLElement;
+
+  beforeEach(() => {
+    document.body.textContent = "";
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  async function spillModel(cells: PreviewCell[], merges: PreviewMerge[]) {
+    const base = await parse(sampleWorkbookBytes());
+    const sheet = base.sheets[0];
+    sheet.colCount = 64;
+    sheet.rowCount = 1;
+    sheet.rows = [{ index: 1, height: null, hidden: false, cells }];
+    sheet.merges = merges;
+    sheet.colSpans = [
+      { min: 1, max: 64, width: 8.43, hidden: false, customWidth: false },
+    ];
+    return base;
+  }
+
+  it("有内容格阻挡；空值格（带样式）不阻挡；空隙列与覆盖格（含空值 anchor 后续空隙）均阻挡；无阻挡到 stop；末列/窗口右界封顶", async () => {
+    const cells: PreviewCell[] = [
+      { col: 0, type: "string", value: "AAAA", styleIndex: null },
+      // col2：仅有样式的空格——Excel 语义不阻挡溢出
+      { col: 2, type: "string", value: null, styleIndex: 1 },
+      // col5：合并 anchor（有内容）
+      { col: 5, type: "string", value: "M", styleIndex: null },
+      { col: 10, type: "string", value: "B", styleIndex: null },
+      // col20：合并 anchor 且值为空——anchor 自身不进 coveredBy，
+      // 但其后继空隙 col21 被覆盖，仍构成阻挡
+      { col: 20, type: "string", value: null, styleIndex: 1 },
+    ];
+    const model = await spillModel(cells, [
+      { row: 0, col: 5, rowSpan: 1, colSpan: 3 }, // 覆盖 0:6 0:7
+      { row: 0, col: 20, rowSpan: 1, colSpan: 2 }, // 覆盖 0:21
+    ]);
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const spill = (r as unknown as { spillLimitPx: SpillFn }).spillLimitPx.bind(
+      r,
+    );
+
+    // col2 空值不阻挡 → 首个 blocker 是有内容的 col5
+    expect(spill(0, 0, 60)).toBe(5 * 64);
+    // col7 是空隙列但被合并覆盖（行索引里无格）→ 阻挡在 7
+    expect(spill(6, 0, 60)).toBe((7 - 6) * 64);
+    // col20 空值 anchor 不阻挡自身，但后续空隙 col21 被覆盖 → 阻挡在 21
+    expect(spill(11, 0, 60)).toBe((21 - 11) * 64);
+    // col22 起到扫描终点无任何阻挡 → stop = max(60+1, 22+2) = 61
+    expect(spill(22, 0, 60)).toBe((61 - 22) * 64);
+    // 窗口右界封顶：stop = max(3+1, 2+2) = 4（col3 空隙无覆盖）
+    expect(spill(2, 0, 3)).toBe((4 - 2) * 64);
+    // 末列格：stop = min(colCount, col+2) = 64
+    expect(spill(63, 0, 60)).toBe((64 - 63) * 64);
     r.destroy();
   });
 });

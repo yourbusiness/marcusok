@@ -5,7 +5,7 @@ import { buildPreviewWorkbook } from "../parse/model";
 import { SheetRenderer } from "../render/renderer";
 import { buildRowIndex, forEachCellInRange } from "../render/cell-index";
 import type { PreviewCell } from "../types";
-import { bigWorkbookBytes } from "./fixtures";
+import { bigWorkbookBytes, sampleWorkbookBytes } from "./fixtures";
 
 // 与 excel-exporter 同一模式：本地阈值即产品 SLA（PERF_SLACK 缺省为 1）；
 // PR CI 设 RUN_PERF=0 跳过，release 链路（release.yml）以显式宽限因子
@@ -92,6 +92,65 @@ describe.runIf(RUN_PERF)(
       const dt = performance.now() - t0;
       expect(hits).toBe(200 * ROWS * WIN); // 规模断言防空跑
       expect(dt).toBeLessThan(30 * SLACK);
+    });
+
+    it("wide-row spill scan (60 rows x 16384 cols, sparse strings, 50 probes) < 30ms", async () => {
+      // 溢出扫描热路径守卫（updateLayer 对窗口内每个 string/formulaStr 格
+      // 每滚动帧调用一次 spillLimitPx）：行内每 64 列一个字符串格、其余
+      // 全空隙且无合并——扫描必须走到窗口右界 stop 的最坏稀疏形态。旧
+      // 实现（逐列 cellAt 二分）在此形态下每空隙列付一次 log(行内格数)
+      // 二分；顺次迭代实现只付一次二分 + 空隙 Set 查询。
+      const COLS = 16_384;
+      const ROWS = 60;
+      const WIN = 40;
+      // 借 sample 的合法 styles 作基底（spill 扫描只消费 rows/layout，
+      // styles 内容不影响测量路径）；buildPreviewWorkbook 为同步函数
+      const sampleBytes = sampleWorkbookBytes();
+      const base = buildPreviewWorkbook(
+        await readBuffer(sampleBytes),
+        sampleBytes,
+      );
+      const sheet = base.sheets[0];
+      sheet.colCount = COLS;
+      sheet.rowCount = ROWS;
+      sheet.rows = Array.from({ length: ROWS }, (_, r) => ({
+        index: r + 1,
+        height: null,
+        hidden: false,
+        cells: Array.from({ length: COLS / 64 }, (_, j) => ({
+          col: j * 64,
+          type: "string" as const,
+          value: "x".repeat(24),
+          styleIndex: null,
+        })),
+      }));
+      sheet.merges = [];
+      sheet.colSpans = [
+        { min: 1, max: COLS, width: 8.43, hidden: false, customWidth: false },
+      ];
+      const r = new SheetRenderer(container);
+      r.render(base, {});
+      const spill = (
+        r as unknown as {
+          spillLimitPx: (c: number, row: number, colEnd: number) => number;
+        }
+      ).spillLimitPx.bind(r);
+      const t0 = performance.now();
+      let sum = 0;
+      // probe 量取 50（每格 40+ 空隙列的 Set 查询比 window scan 的纯二分
+      // 贵）：本机实测留 >2x 余量，turbo 全量并发的 CPU 争用下不抖
+      for (let k = 0; k < 50; k++) {
+        // 探测起点在 256 个源格上散布；每个源格扫到 colEnd+1（无阻挡最坏形态）
+        const col = (k % (COLS / 64)) * 64;
+        for (let row = 0; row < ROWS; row++) {
+          sum += spill(col, row, col + WIN);
+        }
+      }
+      const dt = performance.now() - t0;
+      // 规模断言防空跑：无阻挡时 limit = (colEnd + 1 - col) * 64 = 41 * 64
+      expect(sum).toBe(50 * ROWS * 41 * 64);
+      expect(dt).toBeLessThan(30 * SLACK);
+      r.destroy();
     });
   },
 );
