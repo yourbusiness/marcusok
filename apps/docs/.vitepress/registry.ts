@@ -2,6 +2,7 @@ import excelExporterPkg from "@marcusok/excel-exporter/package.json" with { type
 import excelPreviewPkg from "@marcusok/excel-preview/package.json" with { type: "json" };
 import wordPreviewPkg from "@marcusok/word-preview/package.json" with { type: "json" };
 import pdfPreviewPkg from "@marcusok/pdf-preview/package.json" with { type: "json" };
+import pptPreviewPkg from "@marcusok/ppt-preview/package.json" with { type: "json" };
 
 export interface LocalizedText {
   zh: string;
@@ -507,5 +508,56 @@ export const packages: PackageEntry[] = [
       },
     ],
     demo: "PdfPreviewDemo",
+  },
+  {
+    dir: "ppt-preview",
+    npmName: "@marcusok/ppt-preview",
+    category: "preview",
+    version: pptPreviewPkg.version,
+    // 首版 0.x：上游引擎年轻（0.89.x、维护者集中），保真与降级边界需要观察期
+    status: "beta",
+    zh: true,
+    tagline: {
+      zh: "pptx 只读预览（Rust/WASM 引擎连续滚动懒渲染 + 0-based 页导航 + 加密解密）",
+      en: "Read-only pptx preview (Rust/WASM engine, continuous lazy rendering, 0-based navigation, password decryption)",
+    },
+    keywords: ["pptx", "powerpoint", "preview", "viewer", "wasm", "slides"],
+    // 单 wasm 随包分发且由 bundler emit（锚点字面量自动资产化），无需
+    // runtimeAssets 的 public/ 拷贝（与 pdf-preview 的目录资产场景不同）
+    highlights: [
+      {
+        icon: "zap",
+        title: { zh: "大幻灯片文档流畅滚动", en: "Smooth on large decks" },
+        details: {
+          zh: "解析在 Web Worker（Rust/WASM 引擎）；连续滚动懒渲染——进入视口的幻灯片才渲染，远离视口的页自动释放 canvas 显存。",
+          en: "Parsing runs in a Web Worker (a Rust/WASM engine); continuous scroll with lazy per-slide rendering — slides render as they enter the viewport and release canvas memory when far away.",
+        },
+      },
+      {
+        icon: "pen",
+        title: { zh: "文本可选中复制", en: "Selectable, copyable text" },
+        details: {
+          zh: "文本 runs 在正式渲染的同一趟收集（无双倍渲染），透明文本层与 canvas 像素对齐——可选中、复制；不需要时一行选项关闭。",
+          en: "Text runs are collected in the same render pass (no double rendering); a transparent layer aligns with the canvas — select and copy like real text; one option turns it off.",
+        },
+      },
+      {
+        icon: "shield",
+        title: { zh: "加密文件可解密", en: "Encrypted files decryptable" },
+        details: {
+          zh: "支持 PowerPoint「打开密码」（MS-OFFCRYPTO Agile，SHA-512 + AES）；缺密码/密码错误给出可区分的错误码；解密在主线程，约 +1s。",
+          en: "PowerPoint open passwords (MS-OFFCRYPTO Agile, SHA-512 + AES) are supported; missing and wrong passwords map to distinguishable error codes; decryption runs on the main thread (~+1s).",
+        },
+      },
+      {
+        icon: "route",
+        title: { zh: "0-based 页导航", en: "0-based navigation" },
+        details: {
+          zh: "goToSlide/nextSlide/prevSlide 基于当前最可见页跟踪；隐藏页全部显示并计入 slideCount，页序与原始 deck 一致。",
+          en: "goToSlide/nextSlide/prevSlide track the most visible slide; hidden slides are all shown and counted, preserving the original deck order.",
+        },
+      },
+    ],
+    demo: "PptPreviewDemo",
   },
 ];

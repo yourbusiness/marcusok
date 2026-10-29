@@ -1,17 +1,18 @@
 # marcusok
 
-A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Four packages are published, organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — read-only xlsx, docx and PDF previews are available today). The capability layers the Excel packages are built on — the modern-xlsx engine ([`xlsx-core`](./packages/xlsx-core)) and the progress overlay UI ([`progress-overlay`](./packages/progress-overlay)) — are private workspace packages bundled into the published packages' dist at build time (the engine layer into the two Excel packages, the overlay into the exporter only; the word preview bundles docx-preview + jszip directly and the PDF preview bundles pdf.js; see the table below).
+A pnpm + Turborepo frontend-infrastructure monorepo providing shared capability packages for multiple admin applications. Five packages are published, organized in two categories: **Export** (turning data into downloadable documents — an Excel export engine built on [modern-xlsx](https://github.com/ABCrimson/modern-xlsx) (Rust + WASM) is available today, other document formats may follow) and **Document preview** (rendering documents in the browser — read-only xlsx, docx, PDF and PPTX previews are available today). The capability layers the Excel packages are built on — the modern-xlsx engine ([`xlsx-core`](./packages/xlsx-core)) and the progress overlay UI ([`progress-overlay`](./packages/progress-overlay)) — are private workspace packages bundled into the published packages' dist at build time (the engine layer into the two Excel packages, the overlay into the exporter only; the word preview bundles docx-preview + jszip directly, the PDF preview bundles pdf.js and the PPTX preview bundles a Rust/WASM OOXML engine; see the table below).
 
 ## Packages
 
-| Package                                                     | Category | Description                                                                                                                                  |
-| ----------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@marcusok/excel-exporter`](./packages/excel-exporter)     | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)                             |
-| [`@marcusok/excel-preview`](./packages/excel-preview)       | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery)                          |
-| [`@marcusok/word-preview`](./packages/word-preview)         | Preview  | Read-only docx preview (docx-preview engine bundled, format sniffing, hardened defaults, multi-instance style isolation)                     |
-| [`@marcusok/pdf-preview`](./packages/pdf-preview)           | Preview  | Read-only PDF preview (pdf.js bundled, lazy continuous scroll, selectable text layer, worker/cmaps/font assets shipped in dist)              |
-| [`xlsx-core`](./packages/xlsx-core) (private)               | —        | The repo's single modern-xlsx engine layer (WASM loading, asset distribution, stable re-export surface); bundled into the two Excel packages |
-| [`progress-overlay`](./packages/progress-overlay) (private) | —        | Framework-agnostic progress overlay (spinner / percentage bar, glass panel, themes); bundled into the exporter's `overlay` option            |
+| Package                                                     | Category | Description                                                                                                                                       |
+| ----------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@marcusok/excel-exporter`](./packages/excel-exporter)     | Export   | Excel export core library (WASM-driven, styled, streaming writes, Worker multithreading, table/ECharts adapters)                                  |
+| [`@marcusok/excel-preview`](./packages/excel-preview)       | Preview  | Read-only xlsx preview (worker parsing, DOM virtual scrolling, Excel-accurate number formats, theme-color recovery)                               |
+| [`@marcusok/word-preview`](./packages/word-preview)         | Preview  | Read-only docx preview (docx-preview engine bundled, format sniffing, hardened defaults, multi-instance style isolation)                          |
+| [`@marcusok/pdf-preview`](./packages/pdf-preview)           | Preview  | Read-only PDF preview (pdf.js bundled, lazy continuous scroll, selectable text layer, worker/cmaps/font assets shipped in dist)                   |
+| [`@marcusok/ppt-preview`](./packages/ppt-preview)           | Preview  | Read-only pptx preview (Rust/WASM engine bundled, lazy continuous scroll, 0-based slide navigation, text layer, MS-OFFCRYPTO password decryption) |
+| [`xlsx-core`](./packages/xlsx-core) (private)               | —        | The repo's single modern-xlsx engine layer (WASM loading, asset distribution, stable re-export surface); bundled into the two Excel packages      |
+| [`progress-overlay`](./packages/progress-overlay) (private) | —        | Framework-agnostic progress overlay (spinner / percentage bar, glass panel, themes); bundled into the exporter's `overlay` option                 |
 
 ## Quick Start
 
@@ -52,6 +53,7 @@ marcusok/
 │   ├── excel-exporter/         # Export: Excel export core (published)
 │   ├── excel-preview/          # Preview: read-only xlsx preview (published)
 │   ├── word-preview/           # Preview: read-only docx preview (published)
+│   ├── ppt-preview/            # Preview: read-only pptx preview (published)
 │   ├── progress-overlay/       # Private: progress overlay UI (bundled into exporter)
 │   └── xlsx-core/              # Private: modern-xlsx engine layer (bundled into the two Excel packages)
 ├── docs/                       # Design documents (Chinese) — intentionally
@@ -116,6 +118,7 @@ pnpm changeset publish         # publish with the next dist-tag
 - [`docs/excel-preview-plan.md`](./docs/excel-preview-plan.md) — Excel preview design & verification notes
 - [`docs/word-preview-plan.md`](./docs/word-preview-plan.md) — Word preview design & verification notes
 - [`docs/pdf-preview-plan.md`](./docs/pdf-preview-plan.md) — PDF preview design & verification notes
+- [`docs/ppt-preview-plan.md`](./docs/ppt-preview-plan.md) — PPTX preview design & verification notes
 - [`docs/release-guide.md`](./docs/release-guide.md) — Release guide
 - [`docs/release-publish-logic.md`](./docs/release-publish-logic.md) — Release logic in depth
 - [`docs/release-workflow-analysis.md`](./docs/release-workflow-analysis.md) — Release workflow analysis

@@ -2,7 +2,8 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { createRequire } from "node:module";
 import {
   isFile,
   matchExportTarget,
@@ -84,17 +85,43 @@ for (const name of declaredDeps) {
  * file on disk if it exists.
  *
  * To support a new third-party subpath, add an entry here; resolver logic
- * doesn't need to change. Currently empty: @marcusok/excel-exporter >= 2.0
- * re-publishes its runtime assets under its own exports map (the explicit
- * `./dist/export.worker.js` and `./dist/modern-xlsx.wasm` entries — there is
- * no `./dist/*` wildcard, so a *new* dist asset must be added to the exports
- * map first), so no third-party override is needed.
+ * doesn't need to change. 现状：唯一条目是 @silurus/ooxml（ppt-preview 的
+ * 引擎；主要价值在 excludeFromOptimizeDeps + fs.allow 放行，详见条目注释，
+ * 子路径改写只是顺带兜底）。@marcusok/excel-exporter >= 2.0 不需要条目：
+ * 它把运行资产显式再发布进自身 exports map（`./dist/export.worker.js`、
+ * `./dist/modern-xlsx.wasm`，无 `./dist/*` 通配），给它新增 dist 资产时应
+ * 先补 exports，而不是加 override。
  */
 const externalOverrides: {
   pkg: string;
   dir: string;
   excludeFromOptimizeDeps?: boolean;
-}[] = [];
+}[] = [
+  {
+    // ppt-preview 的渲染引擎：chunk 内 `new URL("pptx_parser_bg.wasm",
+    // import.meta.url)` 依赖模块真实文件位置定位 wasm。optimizeDeps 预打包
+    // 会把 chunk 搬进 .vite/deps，相对解析随即指向不存在的路径（ppt-preview
+    // S1 spike 的 play dev 冒烟结论）——排除预打包，让 chunk 与 wasm 留在
+    // 上游 dist 内按真实相对路径加载。dir 的 fs.allow 同步放行（见 server
+    // 配置）：排除预打包后 dev 直接 serve node_modules 物理文件，默认 allow
+    // 不含 .pnpm 深层路径。
+    pkg: "@silurus/ooxml",
+    dir: (() => {
+      try {
+        // @silurus/ooxml 是 ppt-preview 的 devDependency，play 自身没有声明
+        // ——经 ppt-preview 的依赖树解析（exports 含 /pptx 子路径）；realpath
+        // 穿透 pnpm 符号链接拿 .pnpm 物理目录
+        const req = createRequire(
+          resolve(packagesDir, "ppt-preview", "package.json"),
+        );
+        return dirname(realpathSync(req.resolve("@silurus/ooxml/pptx")));
+      } catch {
+        return "";
+      }
+    })(),
+    excludeFromOptimizeDeps: true,
+  },
+];
 
 // Fail loud, symmetric with the @marcusok/* check above: an entry whose dir
 // cannot be resolved would otherwise be skipped silently and its subpath
@@ -152,6 +179,15 @@ const srcAssetOverrides: {
     pkg: "@marcusok/pdf-preview",
     dir: resolve(packagesDir, "pdf-preview"),
     files: ["pdf.worker.min.mjs"],
+  },
+  // ppt-preview 的 assets.ts 以 wasm 为唯一静态锚点；兜底分支以 anchor
+  // 变量为 base（源码里无 ../dist/ 静态字面量，不会漏改写——包内注释有
+  // 说明）。上游 @silurus/ooxml chunk 内的 wasm 字面量不经此处：那部分由
+  // externalOverrides 的 excludeFromOptimizeDeps 保真实路径。
+  {
+    pkg: "@marcusok/ppt-preview",
+    dir: resolve(packagesDir, "ppt-preview"),
+    files: ["pptx_parser_bg.wasm"],
   },
 ];
 
@@ -265,7 +301,13 @@ export default defineConfig({
       // Serve the play itself (incl. its node_modules) plus the
       // workspace packages that follow the source convention. New packages
       // are picked up automatically once they add src/index.ts(.tsx).
-      allow: [rootDir, ...sourcePackages.map((pkg) => pkg.dir)],
+      // externalOverrides 条目（如 @silurus/ooxml）排除预打包后按物理路径
+      // serve node_modules 深层文件，需一并放行。
+      allow: [
+        rootDir,
+        ...sourcePackages.map((pkg) => pkg.dir),
+        ...externalOverrides.map((e) => e.dir).filter(Boolean),
+      ],
     },
   },
 });

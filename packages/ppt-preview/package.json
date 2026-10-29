@@ -1,0 +1,69 @@
+{
+  "name": "@marcusok/ppt-preview",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Read-only .pptx preview in the browser: continuous scroll with lazy per-slide Canvas rendering powered by a Rust/WASM parser, selectable text layer collected in a single render pass, password decryption (MS-OFFCRYPTO Agile) and normalized error codes.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourbusiness/marcusok.git",
+    "directory": "packages/ppt-preview"
+  },
+  "bugs": {
+    "url": "https://github.com/yourbusiness/marcusok/issues"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dist/pptx_parser_bg.wasm": {
+      "import": "./dist/pptx_parser_bg.wasm",
+      "default": "./dist/pptx_parser_bg.wasm"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pptx",
+    "powerpoint",
+    "preview",
+    "viewer",
+    "slides",
+    "wasm",
+    "text-layer"
+  ],
+  "devDependencies": {
+    "@silurus/ooxml": "0.89.6",
+    "@types/node": "^22.10.0",
+    "cfb": "^1.2.2",
+    "eslint": "^9.16.0",
+    "fflate": "^0.8.3",
+    "happy-dom": "^20.14.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

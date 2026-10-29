@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "MarcusOK"
   text: "后台业务前端公共库"
-  tagline: 声明式、可组合的 TypeScript 库集合，10 万行 Excel 导出不到 1 秒，xlsx / docx / pdf 浏览器内预览。
+  tagline: 声明式、可组合的 TypeScript 库集合，10 万行 Excel 导出不到 1 秒，xlsx / docx / pdf / pptx 浏览器内预览。
   image:
     src: /logo.svg
     alt: MarcusOK logo

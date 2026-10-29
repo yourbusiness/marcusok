@@ -1,6 +1,6 @@
 # Getting Started
 
-MarcusOK publishes four packages across two categories — how they relate is on the [Ecosystem](/guide/) page. This page starts with the one decision that comes first (which package to install), then walks through a first export with the most common one.
+MarcusOK publishes five packages across two categories — how they relate is on the [Ecosystem](/guide/) page. This page starts with the one decision that comes first (which package to install), then walks through a first export with the most common one.
 
 Requirement: Node `>= 22`. Example commands use pnpm; npm / yarn work the same (`pnpm >= 9` is only a dev requirement of this repository, not of consumers).
 
@@ -12,6 +12,7 @@ Requirement: Node `>= 22`. Example commands use pnpm; npm / yarn work the same (
 | Show an uploaded `.xlsx` / `.xlsm` / `.csv`, read-only | `@marcusok/excel-preview`  | [Preview quick start](/packages/excel-preview/guide/01-quick-start)     |
 | Show an uploaded `.docx` / `.docm`, read-only          | `@marcusok/word-preview`   | [Word preview quick start](/packages/word-preview/guide/01-quick-start) |
 | Show an uploaded `.pdf`, read-only                     | `@marcusok/pdf-preview`    | [PDF preview quick start](/packages/pdf-preview/guide/01-quick-start)   |
+| Show an uploaded `.pptx`, read-only                    | `@marcusok/ppt-preview`    | [PPTX preview quick start](/packages/ppt-preview/guide/01-quick-start)  |
 
 Everything below walks through `@marcusok/excel-exporter`; the previews' quick starts are linked in the table above. For the two tasks that used to be separate packages: the progress overlay is reachable through the exporter's `/overlay` subpath ([Overlay guide](/packages/excel-exporter/guide/11-overlay)), and there is no longer a standalone engine package — the two Excel business packages bundle the engine and re-export its loader (the word preview has no engine layer of that kind; it bundles docx-preview directly). The full comparison — dependency graph, what is bundled at runtime, how versions relate — is in [Package Relationships & Selection](/guide/03-package-relationships).
 
