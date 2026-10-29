@@ -17,7 +17,7 @@ Each package is self-contained at runtime. The two Excel packages are built on t
 Three consequences worth internalizing:
 
 - **The five packages are siblings, not layers.** None depends on another; you can install any of them alone. Nothing about the Excel engine leaks into the preview packages' APIs, and the previews do not exist to serve the exporter.
-- **Each Excel package bundles the whole WASM engine.** The modern-xlsx JS glue and the WASM binary ship inside each Excel package's `dist` (and inside each package's worker — see below). Their published manifests have no modern-xlsx runtime dependency: the pinned entries in the repository are build-time dependencies used for engine/type resolution, and the published `.d.ts` files are self-contained. The word and PDF previews likewise have no runtime dependencies.
+- **Each Excel package bundles the whole WASM engine.** The modern-xlsx JS glue and the WASM binary ship inside each Excel package's `dist` (and inside each package's worker — see below). Their published manifests have no modern-xlsx runtime dependency: the pinned entries in the repository are build-time dependencies used for engine/type resolution, and the published `.d.ts` files are self-contained. The word, PDF and PPTX previews likewise have no runtime dependencies.
 - **Same-page combinations are all fine** — see below.
 
 ### When to use which
@@ -78,7 +78,7 @@ The engine integration — WASM loading (browser fetch / Node sync-init, timeout
 
 ## Versions, releases and compatibility
 
-- **Each package carries its own version, and the numbers are not aligned** — the five packages are released independently by Changesets (`.changeset/config.json` declares no `fixed` or `linked` groups). Do not read compatibility out of the version numbers: exporter 3.x, preview 2.x, word-preview 0.x and pdf-preview 0.x say nothing about each other.
+- **Each package carries its own version, and the numbers are not aligned** — the five packages are released independently by Changesets (`.changeset/config.json` declares no `fixed` or `linked` groups). Do not read compatibility out of the version numbers: exporter 3.x, preview 2.x, and the word/PDF/PPTX previews at 0.x say nothing about each other.
 - **They are all released from this one repository**, by the same CI, on the same `main`. Anything published close together was built from the same workspace state, which is the real compatibility statement.
 - **There are no peer dependencies anywhere in the repo**, so there is no peer range for you to reconcile.
 - **Engine upgrades are package releases.** A modern-xlsx bump lands in the internal engine layer and in the pinned build-time manifests of the two Excel business packages (three manifests move together; the runtime version is decided solely by the engine layer), then ships as a new version of whichever business package consumes it — there is no separate engine release and no cross-package version coupling. A docx-preview bump lands in the word preview alone; a pdfjs-dist bump lands in the PDF preview alone.

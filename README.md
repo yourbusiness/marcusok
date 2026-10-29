@@ -53,6 +53,7 @@ marcusok/
 │   ├── excel-exporter/         # Export: Excel export core (published)
 │   ├── excel-preview/          # Preview: read-only xlsx preview (published)
 │   ├── word-preview/           # Preview: read-only docx preview (published)
+│   ├── pdf-preview/            # Preview: read-only PDF preview (published)
 │   ├── ppt-preview/            # Preview: read-only pptx preview (published)
 │   ├── progress-overlay/       # Private: progress overlay UI (bundled into exporter)
 │   └── xlsx-core/              # Private: modern-xlsx engine layer (bundled into the two Excel packages)
@@ -119,6 +120,7 @@ pnpm changeset publish         # publish with the next dist-tag
 - [`docs/word-preview-plan.md`](./docs/word-preview-plan.md) — Word preview design & verification notes
 - [`docs/pdf-preview-plan.md`](./docs/pdf-preview-plan.md) — PDF preview design & verification notes
 - [`docs/ppt-preview-plan.md`](./docs/ppt-preview-plan.md) — PPTX preview design & verification notes
+- [`docs/ppt-preview-spike-record.md`](./docs/ppt-preview-spike-record.md) — PPTX preview spike & browser acceptance record
 - [`docs/release-guide.md`](./docs/release-guide.md) — Release guide
 - [`docs/release-publish-logic.md`](./docs/release-publish-logic.md) — Release logic in depth
 - [`docs/release-workflow-analysis.md`](./docs/release-workflow-analysis.md) — Release workflow analysis

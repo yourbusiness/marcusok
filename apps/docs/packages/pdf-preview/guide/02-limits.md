@@ -50,7 +50,7 @@ To enable full fidelity, self-host the `wasm/` (and optionally `iccs/`) director
 
 ## SSR
 
-Import-safe (module top level evaluates no DOM globals), call-unsafe: `createPdfPreview` touches `document`/`IntersectionObserver` immediately. Guard it in `onMounted`/`useEffect`, like any DOM library.
+Import-safe (module top level evaluates no DOM globals), call-unsafe: `createPdfPreview` touches `document`/`IntersectionObserver` immediately. Guard it in `onMounted`/`useEffect`, like any DOM library. Importing the package in Node does make pdf.js's modern build log a one-time `Please use the legacy build in Node.js environments` warning — expected, and it does not make server-side rendering work.
 
 ## Multi-instance
 

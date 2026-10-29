@@ -91,6 +91,8 @@ export interface FakePageOptions {
   /** render 返回受控 deferred（串行队列测试用）；缺省立即成功。 */
   deferred?: boolean;
   failRender?: Error;
+  /** deferred 模式下 cancel() 的拒绝错误名（默认 "Error"，真实引擎为 RenderingCancelledException）。 */
+  cancelName?: string;
 }
 
 /** 假 PDFPageProxy：默认 612×792（US Letter），记录 render 调用参数。 */
@@ -129,7 +131,11 @@ function fakePage(num: number, opts: FakePageOptions = {}) {
           renderDeferreds.push(d);
           return {
             promise: d.promise,
-            cancel: vi.fn(() => d.reject(new Error("cancel"))),
+            cancel: vi.fn(() => {
+              const err = new Error("cancel");
+              if (opts.cancelName) err.name = opts.cancelName;
+              d.reject(err);
+            }),
           };
         }
         return { promise: Promise.resolve(), cancel: vi.fn() };
@@ -443,6 +449,98 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     inst.destroy();
   });
 
+  it("re-renders after a cancelled in-flight render when the page re-enters the band", async () => {
+    // 竞态：页面在渲中被滚出（release 取消任务），取消尚未落定前用户又滚回。
+    // renderIO 的回调若无视 rendering 状态，wanted 会停留在 false，取消完成后
+    // 页面回到 empty 却无人重新入队——永远空白，直到再滚出/滚入一次。
+    const page = fakePage(1);
+    const d = deferred<void>();
+    const render = vi
+      .fn()
+      .mockImplementationOnce(() => ({
+        promise: d.promise,
+        cancel: vi.fn(() => {
+          d.reject(
+            Object.assign(new Error("cancelled"), {
+              name: "RenderingCancelledException",
+            }),
+          );
+        }),
+      }))
+      .mockImplementation(() => ({
+        promise: Promise.resolve(),
+        cancel: vi.fn(),
+      }));
+    (page as unknown as { render: unknown }).render = render;
+    const { doc } = fakeDoc([page]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const onError = vi.fn();
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      onError,
+    });
+    await waitForPages(container, 1);
+    const el = pageEls(container)[0];
+
+    ioByMargin("100%")[0].fire(el, true);
+    await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(1));
+
+    // 滚出渲染带 + 滚出保留带 → 取消在途渲染；随后立刻又进入渲染带
+    ioByMargin("100%")[0].fire(el, false);
+    ioByMargin("300%")[0].fire(el, false);
+    ioByMargin("100%")[0].fire(el, true);
+
+    // 取消落定后必须重新入队渲染（第二次调用 resolve）
+    await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(el.querySelector("canvas")).not.toBeNull();
+    });
+    expect(onError).not.toHaveBeenCalled(); // 取消不是错误
+    inst.destroy();
+  });
+
+  it("does not leak pendingRelease across a failed render (no misfire release on retry)", async () => {
+    // 在途渲染期间收到释放请求（pendingRelease=true），随后渲染以非取消错误
+    // 失败。若失败分支不清 pendingRelease，下一次成功渲染会在完成瞬间被
+    // 误判为"过期页"立即释放，留下空白。
+    const page = fakePage(1);
+    const d = deferred<void>();
+    let calls = 0;
+    const render = vi.fn().mockImplementation(() => {
+      calls++;
+      return calls === 1
+        ? { promise: d.promise, cancel: vi.fn() } // cancel 无操作：由 d 决定结局
+        : { promise: Promise.resolve(), cancel: vi.fn() };
+    });
+    (page as unknown as { render: unknown }).render = render;
+    const { doc } = fakeDoc([page]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const onError = vi.fn();
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      onError,
+    });
+    await waitForPages(container, 1);
+    const el = pageEls(container)[0];
+
+    ioByMargin("100%")[0].fire(el, true);
+    await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(1));
+    ioByMargin("300%")[0].fire(el, false); // pendingRelease = true
+    d.reject(new Error("boom")); // 非取消错误
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(el.querySelector("canvas")).toBeNull();
+
+    ioByMargin("100%")[0].fire(el, true); // 重入 → 重试
+    await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(2));
+    // 成功渲染的页必须保留 canvas，而不是被残留的 pendingRelease 立即释放
+    await vi.waitFor(() => {
+      expect(el.querySelector("canvas")).not.toBeNull();
+    });
+    inst.destroy();
+  });
+
   it("drops a queued page that leaves the render band before its turn", async () => {
     const pages = [fakePage(1, { deferred: true }), fakePage(2)];
     const { doc } = fakeDoc(pages);
@@ -520,6 +618,47 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const err = onError.mock.calls[0][0] as PdfPreviewError;
     expect(err.code).toBe("CORRUPT");
     expect(err.cause).toBe(cause);
+    inst.destroy();
+  });
+
+  it("does not fire onRendered from an in-flight render after a document-level failure", async () => {
+    // 首页渲染在途时其余页 getPage 失败 → teardown（onError 已上报、容器已清）。
+    // 首页任务随后完成时不得再走成功路径触发 onRendered（失败后就该静默）。
+    const first = fakePage(1);
+    const d = deferred<void>();
+    (first as unknown as { render: unknown }).render = vi.fn(() => ({
+      promise: d.promise,
+      cancel: vi.fn(),
+    }));
+    const page2 = deferred<FakePage>();
+    const doc = {
+      numPages: 2,
+      getPage: (n: number) =>
+        n === 1 ? Promise.resolve(first) : page2.promise,
+    };
+    getDocumentMock.mockImplementation((() => ({
+      promise: Promise.resolve(doc),
+      destroy: vi.fn(async () => {}),
+    })) as never);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const onRendered = vi.fn();
+    const onError = vi.fn();
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      onRendered,
+      onError,
+    });
+    await waitForPages(container, 1);
+    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    await vi.waitFor(() => expect(first.render).toHaveBeenCalled());
+
+    page2.reject(new Error("page 2 unavailable")); // 文档级失败
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    d.resolve(); // 首页迟到完成
+    await new Promise((r) => setTimeout(r, 20));
+    expect(onRendered).not.toHaveBeenCalled();
+    // 失败终态只报一次：迟到渲染不得再制造第二条错误
+    expect(onError).toHaveBeenCalledTimes(1);
     inst.destroy();
   });
 

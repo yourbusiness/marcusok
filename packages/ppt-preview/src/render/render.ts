@@ -103,16 +103,20 @@ export function createPptPreview(
   wrapper.className = ROOT_CLASS;
   container.appendChild(wrapper);
 
-  /** 引擎销毁（幂等）：destroy() 与失败终态共用；异常静默（销毁路径不报错）。 */
+  /** 引擎销毁（幂等）：destroy() 与失败终态共用；异常静默（销毁路径不报错）。
+   * 即使 engineDestroyed 已置位也要清空 engine 引用：加载中 destroy 时
+   * destroy 的迟到 resolve 回调与 boot 的后续检查会各自拿到同一实例，先到
+   * 者完成销毁，后者仍须释放引用，不能把已销毁的引擎留在闭包里。 */
   function killEngine(): void {
-    if (engineDestroyed || !engine) return;
+    const target = engine;
+    engine = null;
+    if (!target || engineDestroyed) return;
     engineDestroyed = true;
     try {
-      engine.destroy();
+      target.destroy();
     } catch (err) {
       console.warn("[ppt-preview] engine destroy threw; ignoring", err);
     }
-    engine = null;
   }
 
   /** 失败终态：清场 + 作废页数 + 上报（destroy 触发的路径不进入此处）。
@@ -203,8 +207,10 @@ export function createPptPreview(
     };
 
     let pres: PptxPresentation;
-    pendingLoad = PptxPresentation.load(toLoadBuffer(bytes), loadOpts);
     try {
+      // load() 正常返回 Promise，但非法选项等编程期错误可能同步抛出——
+      // 必须在 try 内调用，否则 void boot() 会漏成 unhandled rejection。
+      pendingLoad = PptxPresentation.load(toLoadBuffer(bytes), loadOpts);
       pres = await pendingLoad;
     } catch (err) {
       pendingLoad = null;

@@ -259,6 +259,39 @@ describe("懒渲染队列", () => {
     vi.unstubAllGlobals();
   });
 
+  it("释放请求后、渲染完成前又回到渲染带：完成时保留本次渲染结果", async () => {
+    // 竞态：渲染中滚出保留带（pendingRelease=true），取消落定前用户又滚回
+    // 渲染带。renderIO 若在 rendering 状态忽略进入事件，wanted 会停留在
+    // false，完成时按过期标记释放刚回到视口的页——页面又变空白。
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const d = deferred();
+    engineRenderMock.mockReturnValueOnce(d.promise);
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+    });
+    const rio = renderIOs()[0];
+    const lio = releaseIOs()[0];
+    rio.fire(pageAt(0), true);
+    await vi.waitFor(() => {
+      expect(engineRenderMock).toHaveBeenCalledTimes(1);
+    });
+    lio.fire(pageAt(0), false); // 在途中要求释放
+    rio.fire(pageAt(0), true); // 完成前又回到渲染带
+    d.resolve();
+    await vi.waitFor(() => {
+      expect(pageAt(0).querySelector("canvas")).not.toBeNull();
+    });
+    // 等本轮 pump 的收尾微任务跑完，确认 canvas 没有被误释放
+    await new Promise((r) => setTimeout(r, 20));
+    expect(pageAt(0).querySelector("canvas")).not.toBeNull();
+    expect(engineRenderMock).toHaveBeenCalledTimes(1); // 保留结果，不重复渲染
+    inst.destroy();
+    vi.unstubAllGlobals();
+  });
+
   it("渲染中 destroy：在途 renderSlide 迟到完成后不写回调、DOM 已清场", async () => {
     vi.stubGlobal("IntersectionObserver", FakeIO);
     const d = deferred();

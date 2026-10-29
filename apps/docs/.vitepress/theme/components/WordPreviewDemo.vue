@@ -12,8 +12,11 @@ const error = ref<{ code: string; message: string } | null>(null);
 const busy = ref(false);
 // 实例持有：createWordPreview 返回句柄，卸载/换文件时 destroy
 const instance = shallowRef<{ destroy(): void } | null>(null);
+// 快速连续选文件时，后一次加载必须作废前一次；否则两个实例可能挂到同一容器
+let loadSeq = 0;
 
 onUnmounted(() => {
+  loadSeq++; // 作废仍在等待中的加载
   instance.value?.destroy();
   instance.value = null;
 });
@@ -57,32 +60,37 @@ const errorTexts: Record<string, string> = {
 async function onFile(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
-  if (!file || !containerRef.value) return;
+  if (!file) return;
+  const seq = ++loadSeq;
   busy.value = true;
   info.value = null;
   error.value = null;
-  instance.value?.destroy();
-  instance.value = null;
-  containerRef.value.textContent = "";
   fileName.value = file.name;
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const mod = await import("@marcusok/word-preview");
+    // 等待期间又选了别的文件或组件已卸载：本次结果作废（旧预览保持不动）
+    if (seq !== loadSeq || !containerRef.value) return;
+    instance.value?.destroy();
+    instance.value = null;
+    containerRef.value.textContent = "";
     instance.value = mod.createWordPreview(containerRef.value, {
       source: bytes,
       onRendered: (i) => {
         info.value = { pageCount: i.pageCount, durationMs: i.durationMs };
+        busy.value = false;
       },
       onError: (err) => {
         error.value = { code: err.code, message: err.message };
+        busy.value = false;
       },
     });
   } catch (err) {
+    if (seq !== loadSeq) return;
     error.value = {
       code: "UNKNOWN",
       message: err instanceof Error ? err.message : String(err),
     };
-  } finally {
     busy.value = false;
   }
 }

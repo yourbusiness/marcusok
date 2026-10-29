@@ -93,6 +93,8 @@ export default function WordPreviewDemo() {
   const [info, setInfo] = useState<WordRenderedInfo | null>(null);
   const [error, setError] = useState<WordPreviewError | null>(null);
   const [renderSeq, setRenderSeq] = useState(0);
+  // 快速连续选文件时，只允许最后一次选择生效（异步读取会乱序完成）
+  const loadSeqRef = useRef(0);
 
   // 双实例区（隔离演示）：两个独立容器 + 实例
   const dualARef = useRef<HTMLDivElement>(null);
@@ -115,7 +117,9 @@ export default function WordPreviewDemo() {
   }, []);
 
   const onFile = useCallback(async (file: File) => {
+    const seq = ++loadSeqRef.current;
     const buf = await file.arrayBuffer();
+    if (seq !== loadSeqRef.current) return false; // 期间又选了别的文件
     bytesRef.current = new Uint8Array(buf);
     setHasFile(true);
     setFileName(file.name);
@@ -138,6 +142,7 @@ export default function WordPreviewDemo() {
   }, []);
 
   const loadBigDoc = useCallback(() => {
+    loadSeqRef.current++; // 作废仍在读取中的文件选择
     bytesRef.current = bigDocx();
     setHasFile(true);
     setFileName("synthetic-1000-paras.docx");

@@ -113,6 +113,27 @@ describe("加载生命周期", () => {
     expect(engineDestroyMock).not.toHaveBeenCalled();
   });
 
+  it("load 同步抛错：归一上报，不产生 unhandled rejection", async () => {
+    // 上游 load() 正常返回 Promise，但非法选项等编程期错误可能同步抛出；
+    // 该调用在 try 之外时 void boot() 会变成 unhandled rejection，用户无反馈。
+    loadMock.mockImplementation(() => {
+      throw Object.assign(new Error("unsupported option"), {
+        code: "unsupported-content",
+      });
+    });
+    const onError = vi.fn();
+    const inst = createPptPreview(container, {
+      source: magicSource(),
+      onError,
+    });
+    await vi.waitFor(() => {
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+    expect(onError.mock.calls[0][0].code).toBe("UNSUPPORTED");
+    expect(container.children).toHaveLength(0);
+    inst.destroy();
+  });
+
   it("load 发出前 destroy：boot 在检查点退出，load 永不发出", async () => {
     loadMock.mockResolvedValue(fakeEngine());
     const onError = vi.fn();

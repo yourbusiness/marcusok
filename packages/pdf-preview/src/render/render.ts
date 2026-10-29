@@ -255,6 +255,9 @@ export function createPdfPreview(
   let resolvedScale = 1;
   let firstReported = false;
   let rendering = false;
+  /** 文档级失败终态：teardown 后所有迟到渲染/错误一律静默（destroy 另由
+   * destroyed 表达；失败后仍允许消费方调用 destroy() 幂等收尾）。 */
+  let failed = false;
 
   // 双观察器：renderIO 触发渲染，releaseIO 触发释放（两个 margin 的差值
   // 构成 1-3 屏的渲染保留缓冲）。root 取真正会滚动的祖先（无则回退视口），
@@ -265,16 +268,15 @@ export function createPdfPreview(
       for (const entry of entries) {
         const e = entry.target as HTMLDivElement & { __mop?: PageEntry };
         const page = e.__mop;
-        if (!page || page.state === "rendering") continue;
-        if (entry.isIntersecting) {
-          page.wanted = true;
-          if (page.state === "empty") {
-            page.state = "queued";
-            queue.push(page);
-            pump();
-          }
-        } else {
-          page.wanted = false;
+        if (!page) continue;
+        // wanted 必须无条件更新（含 rendering 状态）：渲染被 release 取消后
+        // 用户可能在取消落定前又滚回渲染带——此时忽略进入事件会让取消完成
+        // 的页面停在 empty 且无人重新入队（滚动位置不再变化，IO 不会再回调）。
+        page.wanted = entry.isIntersecting;
+        if (entry.isIntersecting && page.state === "empty") {
+          page.state = "queued";
+          queue.push(page);
+          pump();
         }
       }
     },
@@ -359,6 +361,7 @@ export function createPdfPreview(
     cancelEntryTextLayer(e);
     removeEntryDom(e);
     e.state = "empty";
+    e.pendingRelease = false;
     cleanupPage(e);
   }
 
@@ -367,7 +370,7 @@ export function createPdfPreview(
     const tStart = performance.now();
     try {
       const page = e.page ?? (e.page = await pdf!.getPage(e.num));
-      if (destroyed) return;
+      if (destroyed || failed) return;
       const viewport = page.getViewport({ scale: resolvedScale });
       const cssW = Math.max(1, Math.floor(viewport.width));
       const cssH = Math.max(1, Math.floor(viewport.height));
@@ -397,7 +400,7 @@ export function createPdfPreview(
       e.task = task;
       await task.promise;
       e.task = null;
-      if (destroyed) return;
+      if (destroyed || failed) return;
 
       if (options.textLayer !== false) {
         const div = document.createElement("div");
@@ -413,7 +416,7 @@ export function createPdfPreview(
         e.textLayer = tl;
         await tl.render();
         e.textLayer = null;
-        if (destroyed) return;
+        if (destroyed || failed) return;
       }
 
       e.state = "rendered";
@@ -426,21 +429,34 @@ export function createPdfPreview(
           durationMs: Math.round(now - t0),
         });
       }
-      if (e.pendingRelease) releaseEntry(e);
+      // 释放请求到达后用户又滚回了渲染带（wanted=true）：保留本次渲染结果，
+      // 不能按过期标记立即释放——否则刚回到视口的页面会瞬间变空白。
+      if (e.pendingRelease && !e.wanted) releaseEntry(e);
+      else e.pendingRelease = false;
     } catch (err) {
       e.task = null;
       cancelEntryTextLayer(e);
-      if (destroyed) return;
+      if (destroyed || failed) return;
       if (isCancelError(err)) {
         // release/destroy 触发的取消：清场回 empty（重入视口可重渲），静默
         removeEntryDom(e);
         e.state = "empty";
         e.pendingRelease = false;
         cleanupPage(e);
+        // 取消落定前页面已重新进入渲染带：立即重新入队（此时 pump 可能仍被
+        // 本次 renderEntry 占据，finally 收尾后会再次 pump 取到该条目）。
+        if (e.wanted) {
+          e.state = "queued";
+          queue.push(e);
+          pump();
+        }
         return;
       }
       removeEntryDom(e);
       e.state = "empty";
+      // 失败分支同样要清 pendingRelease：残留标记会让下一次成功渲染在完成
+      // 瞬间被误判为过期页立即释放。
+      e.pendingRelease = false;
       cleanupPage(e);
       onError?.(normalizeError(err));
     }
@@ -485,6 +501,7 @@ export function createPdfPreview(
    * 注意 wrapper 被 destroy 闭包持有：只 remove() 会把已渲染的 canvas
    * 节点（及其位图）一起留在闭包里——必须先把子节点/位图显式释放。 */
   function teardown(): void {
+    failed = true;
     renderIO.disconnect();
     releaseIO.disconnect();
     for (const e of pages) {

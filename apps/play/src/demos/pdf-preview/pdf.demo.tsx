@@ -97,6 +97,8 @@ export default function PdfPreviewDemo() {
   const [scaleMode, setScaleMode] = useState<ScaleMode>("fit-width");
   const [textLayer, setTextLayer] = useState(true);
   const [renderSeq, setRenderSeq] = useState(0);
+  // 快速连续选文件/点合成按钮时，只允许最后一次选择生效（异步读取会乱序完成）
+  const loadSeqRef = useRef(0);
 
   // 双实例区（懒渲染管线互相独立）
   const dualARef = useRef<HTMLDivElement>(null);
@@ -122,7 +124,9 @@ export default function PdfPreviewDemo() {
   }, [scaleMode, textLayer, renderSeq]);
 
   const onFile = useCallback(async (file: File) => {
+    const seq = ++loadSeqRef.current;
     const buf = await file.arrayBuffer();
+    if (seq !== loadSeqRef.current) return false; // 期间又选了别的文件
     bytesRef.current = new Uint8Array(buf);
     setHasFile(true);
     setFileName(file.name);
@@ -132,6 +136,7 @@ export default function PdfPreviewDemo() {
 
   useEffect(() => {
     return () => {
+      // 卸载后仍在读取中的选择无需作废：其结果只会写 ref/state，不会再建实例
       instanceRef.current?.destroy();
       dualInstA.current?.destroy();
       dualInstB.current?.destroy();
@@ -139,7 +144,10 @@ export default function PdfPreviewDemo() {
   }, []);
 
   const loadBigDoc = useCallback(async () => {
-    bytesRef.current = await bigPdf();
+    const seq = ++loadSeqRef.current;
+    const bytes = await bigPdf();
+    if (seq !== loadSeqRef.current) return; // 期间选了真实文件
+    bytesRef.current = bytes;
     setHasFile(true);
     setFileName("synthetic-200-pages.pdf");
     setRenderSeq((n) => n + 1);

@@ -502,7 +502,7 @@ export const packages: PackageEntry[] = [
         icon: "route",
         title: { zh: "资产接入简单", en: "Simple asset wiring" },
         details: {
-          zh: "worker/cmaps/standard_fonts 全部随包分发（dist 约 7.5MB 含 sourcemap）；bundler 场景 worker 零配置，cmaps/字体目录可自托管或配 copy 插件（文档给出配方）。",
+          zh: "worker/cmaps/standard_fonts 全部随包分发（dist 约 6.4MB 含 sourcemap）；bundler 场景 worker 零配置，cmaps/字体目录可自托管或配 copy 插件（文档给出配方）。",
           en: "The worker, cmaps and standard fonts all ship with the package; workers need zero config under bundlers, while the cmaps/font directories can be self-hosted or wired with a copy plugin (recipes in the docs).",
         },
       },

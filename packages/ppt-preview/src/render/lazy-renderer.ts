@@ -104,16 +104,15 @@ export class LazySlideRenderer {
         for (const entry of entries) {
           const e = (entry.target as HTMLDivElement & { __slide?: SlideEntry })
             .__slide;
-          if (!e || e.state === "rendering") continue;
-          if (entry.isIntersecting) {
-            e.wanted = true;
-            if (e.state === "empty") {
-              e.state = "queued";
-              this.queue.push(e);
-              this.pump();
-            }
-          } else {
-            e.wanted = false;
+          if (!e) continue;
+          // wanted 必须无条件更新（含 rendering 状态）：渲染中被 releaseIO
+          // 标记过期后，用户可能在渲染完成前又滚回渲染带——忽略进入事件会
+          // 让完成收尾按过期的 pendingRelease 释放刚回到视口的页。
+          e.wanted = entry.isIntersecting;
+          if (entry.isIntersecting && e.state === "empty") {
+            e.state = "queued";
+            this.queue.push(e);
+            this.pump();
           }
         }
       },
@@ -224,7 +223,10 @@ export class LazySlideRenderer {
         this.firstReported = true;
         this.callbacks.onFirstRendered(Math.round(performance.now() - tStart));
       }
-      if (e.pendingRelease) this.releaseEntry(e);
+      // 过期标记只在页面确实不在渲染带时生效；完成后已重新滚回（wanted）
+      // 的页面必须保留本次渲染结果。
+      if (e.pendingRelease && !e.wanted) this.releaseEntry(e);
+      else e.pendingRelease = false;
     } catch (err) {
       if (this.destroyed) return;
       this.removeEntryDom(e);

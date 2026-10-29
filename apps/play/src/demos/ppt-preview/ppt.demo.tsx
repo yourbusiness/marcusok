@@ -96,6 +96,8 @@ export default function PptPreviewDemo() {
   const [textSel, setTextSel] = useState(true);
   const [renderSeq, setRenderSeq] = useState(0);
   const [navIndex, setNavIndex] = useState<number | null>(null);
+  // 快速连续选文件/点合成按钮时，只允许最后一次选择生效（异步读取会乱序完成）
+  const loadSeqRef = useRef(0);
 
   // 双实例区（懒渲染管线与引擎 Worker 互相独立）
   const dualARef = useRef<HTMLDivElement>(null);
@@ -177,7 +179,9 @@ export default function PptPreviewDemo() {
             accept=".pptx"
             showUploadList={false}
             beforeUpload={(file) => {
+              const seq = ++loadSeqRef.current;
               void file.arrayBuffer().then((buf) => {
+                if (seq !== loadSeqRef.current) return; // 期间又选了别的来源
                 loadBytes(new Uint8Array(buf), file.name);
               });
               return false;
@@ -187,16 +191,18 @@ export default function PptPreviewDemo() {
           </Upload>
           <Button
             icon={<FileImageOutlined />}
-            onClick={() =>
-              loadBytes(synthPptx(30, "合成样本"), "合成 30 页样本.pptx")
-            }
+            onClick={() => {
+              loadSeqRef.current++;
+              loadBytes(synthPptx(30, "合成样本"), "合成 30 页样本.pptx");
+            }}
           >
             合成 30 页样本
           </Button>
           <Button
-            onClick={() =>
-              loadBytes(synthPptx(120, "滚动压力"), "合成 120 页样本.pptx")
-            }
+            onClick={() => {
+              loadSeqRef.current++;
+              loadBytes(synthPptx(120, "滚动压力"), "合成 120 页样本.pptx");
+            }}
           >
             合成 120 页样本（滚动压力）
           </Button>

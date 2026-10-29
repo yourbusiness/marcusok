@@ -12,12 +12,12 @@
 | [`@marcusok/pdf-preview`](/zh/packages/pdf-preview/)       | 预览 | 只读渲染 `.pdf`（pdf.js 引擎）：懒加载连续滚动、文本层可选中复制             | 无（pdf.js 已打包；worker/cmaps 随 `dist` 分发） |
 | [`@marcusok/ppt-preview`](/zh/packages/ppt-preview/)       | 预览 | 只读渲染 `.pptx`（Rust/WASM 引擎）：懒加载连续滚动、0-based 页导航、加密解密 | 无（引擎与 wasm 已打包）                         |
 
-每个包在运行期自包含。两个 Excel 包脚下有两个能力层——modern-xlsx 引擎层（仓库内部名 `xlsx-core`：WASM 加载器 + 稳定再导出面）与进度遮罩 UI（内部名 `progress-overlay`）——它们是**仓库私有包**：构建期打进 Excel 业务包的 `dist`（引擎层打进两个 Excel 包，遮罩只打进导出包，见下表），不发布到 npm。word 与 PDF 预览以同样方式内置自己的引擎（docx-preview + jszip；pdf.js），运行时依赖为**零**。你只需要安装要用的那个包，也没有共享包的版本要对齐。
+每个包在运行期自包含。两个 Excel 包脚下有两个能力层——modern-xlsx 引擎层（仓库内部名 `xlsx-core`：WASM 加载器 + 稳定再导出面）与进度遮罩 UI（内部名 `progress-overlay`）——它们是**仓库私有包**：构建期打进 Excel 业务包的 `dist`（引擎层打进两个 Excel 包，遮罩只打进导出包，见下表），不发布到 npm。word、PDF 与 PPTX 预览以同样方式内置自己的引擎（docx-preview + jszip；pdf.js；Rust/WASM OOXML 引擎），运行时依赖为**零**。你只需要安装要用的那个包，也没有共享包的版本要对齐。
 
 三点值得记住：
 
 - **五个包是兄弟，不是上下层。** 互不依赖，可单独安装任意一个。Excel 引擎的任何概念都不会泄漏进预览包的 API，预览也不是为导出服务的。
-- **每个 Excel 包各自内置整份 WASM 引擎。** modern-xlsx 的 JS 胶水与 WASM 二进制随各 Excel 包 `dist` 分发（也随各包的 worker 分发，见下文）。发布后的 manifest 没有 modern-xlsx 运行时依赖：仓库中保留的钉版声明只用于构建期的引擎/类型解析，发布出的 `.d.ts` 已自包含。word 与 PDF 预览同样没有运行时依赖。
+- **每个 Excel 包各自内置整份 WASM 引擎。** modern-xlsx 的 JS 胶水与 WASM 二进制随各 Excel 包 `dist` 分发（也随各包的 worker 分发，见下文）。发布后的 manifest 没有 modern-xlsx 运行时依赖：仓库中保留的钉版声明只用于构建期的引擎/类型解析，发布出的 `.d.ts` 已自包含。word、PDF 与 PPTX 预览同样没有运行时依赖。
 - **同页任意组合都可行**——见下文。
 
 ### 各自什么时候用
@@ -78,7 +78,7 @@ configurePreviewWasm({ wasmUrl, parseWorkerUrl }); // 预览包的 loader + pars
 
 ## 版本、发布与兼容性
 
-- **各包独立版本号，数字互不对应**——五个包由 Changesets 独立发版（`.changeset/config.json` 无 `fixed` / `linked` 分组）。不要从版本号读兼容性：exporter 3.x、preview 2.x、word-preview 0.x 与 pdf-preview 0.x 互相之间什么也不说明。
+- **各包独立版本号，数字互不对应**——五个包由 Changesets 独立发版（`.changeset/config.json` 无 `fixed` / `linked` 分组）。不要从版本号读兼容性：exporter 3.x、preview 2.x，以及 word/PDF/PPTX 三个预览包的 0.x，互相之间什么也不说明。
 - **它们出自同一个仓库**，同一套 CI、同一个 `main`。时间相近的发布构建自同一工作区状态，这才是真正的兼容性陈述。
 - **全仓没有任何 `peerDependencies`**，没有 peer 版本区间需要你对齐。
 - **引擎升级即业务包发版。** modern-xlsx 的升级落在内部引擎层，同时落在两个 Excel 业务包的构建期钉版 manifest 中（三处 manifest 一起动；运行时版本由引擎层唯一决定），随后以消费它的业务包的新版本发出——没有独立的引擎发布，也没有跨包版本联动。docx-preview 的升级只落在 word 预览包；pdfjs-dist 的升级只落在 PDF 预览包。

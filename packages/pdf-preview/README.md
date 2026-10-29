@@ -31,7 +31,7 @@ preview.destroy(); // cancel in-flight work + terminate the worker
 
 ## Limits (stated honestly)
 
-- **Node/server-side calls are not supported** — the modern pdf.js build bundled here crashes in `getDocument` under Node (verified). Importing the package is SSR-safe; calling `createPdfPreview` requires a browser.
+- **Node/server-side calls are not supported** — the modern pdf.js build bundled here crashes in `getDocument` under Node (verified). Importing the package is SSR-safe, though pdf.js itself logs a one-time `Please use the legacy build in Node.js environments` warning at import time (expected; it does not make server-side rendering work). Calling `createPdfPreview` requires a browser.
 - **No decryption** — encrypted PDFs are detected and reported, never decrypted.
 - **No annotation layer in v1** — hyperlinks, form widgets and comments do not render.
 - **Scale is resolved once** at creation (`fit-*` measures the container then); container resizes don't re-fit — re-create the instance.

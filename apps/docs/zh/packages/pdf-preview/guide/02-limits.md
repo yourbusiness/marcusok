@@ -50,7 +50,7 @@ pdf.js 的 wasm 资产（`jbig2.wasm`、`openjpeg.wasm`、`qcms_bg.wasm`）与 I
 
 ## SSR
 
-import 安全（模块顶层不求值 DOM 全局），调用不安全：`createPdfPreview` 立即触碰 `document`/`IntersectionObserver`。与其他 DOM 库一样放进 `onMounted`/`useEffect` 守卫。
+import 安全（模块顶层不求值 DOM 全局），调用不安全：`createPdfPreview` 立即触碰 `document`/`IntersectionObserver`。与其他 DOM 库一样放进 `onMounted`/`useEffect` 守卫。在 Node 下 import 本包会让 pdf.js 现代构建打印一条 `Please use the legacy build in Node.js environments` 警告——属预期行为，并不代表服务端可以渲染。
 
 ## 多实例
 
