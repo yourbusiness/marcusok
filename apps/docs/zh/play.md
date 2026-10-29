@@ -47,6 +47,16 @@
 
 完整用法见 [pdf-preview 文档](/zh/packages/pdf-preview/)。
 
+## PPT 预览 —— `@marcusok/ppt-preview`
+
+把 `.pptx` 文件拖入面板：解析在 Web Worker（Rust/WASM 引擎）内完成，幻灯片接近视口才懒渲染（远离视口的页自动释放 canvas 显存），首页出图与端到端耗时经 `onRendered` 上报。透明文本层让幻灯片可选中、可复制；页导航为 0-based（`goToSlide` / `nextSlide` / `prevSlide`），加密文件（MS-OFFCRYPTO Agile）在提供密码后自动解密。
+
+<ClientOnly>
+  <PackageDemo dir="ppt-preview" />
+</ClientOnly>
+
+完整用法见 [ppt-preview 文档](/zh/packages/ppt-preview/)。
+
 ## 进度遮罩 —— 内置于 `@marcusok/excel-exporter`
 
 导出过程中看到的那个遮罩，这里经 `/overlay` 子路径直接驱动，任务与 Excel 无关。模拟任务前 1.5 秒不上报进度——那就是不确定态的旋转圆环；随后流式推进并切换为百分比条。两态渲染的是同一个实现、同一个毛玻璃面板，与 `overlay` 选项同源。

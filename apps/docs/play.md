@@ -47,6 +47,16 @@ Drop a `.pdf` file on the panel: parsing runs in a pdf.js Web Worker and pages r
 
 Full usage docs: [pdf-preview](/packages/pdf-preview/).
 
+## PPT preview — `@marcusok/ppt-preview`
+
+Drop a `.pptx` file on the panel: parsing runs in a Web Worker (Rust/WASM engine) and slides render lazily as they approach the viewport (far-away slides release their canvas memory), with first-slide and end-to-end timings reported via `onRendered`. The transparent text layer makes slides selectable and copyable; navigation is 0-based (`goToSlide` / `nextSlide` / `prevSlide`), and encrypted files (MS-OFFCRYPTO Agile) decrypt when a password is provided.
+
+<ClientOnly>
+  <PackageDemo dir="ppt-preview" />
+</ClientOnly>
+
+Full usage docs: [ppt-preview](/packages/ppt-preview/).
+
 ## Progress overlay — built into `@marcusok/excel-exporter`
 
 The overlay the exporter shows during an export, driven here directly (through the `/overlay` subpath) for a task that has nothing to do with Excel. The simulated task reports no progress for its first 1.5 seconds — that is the indeterminate spinner — then streams progress and switches to the percentage bar. It is the same two-state panel, on the same implementation the `overlay` option uses.

@@ -4,7 +4,7 @@
 
 ```bash
 pnpm add @marcusok/ppt-preview
-# npm i @marcusok/ppt-preview / yarn add @marcusok/ppt-preview 均可
+# npm i @marcusok/ppt-preview / yarn add @marcusok/ppt-preview both work
 ```
 
 The package is ESM-only and bundles its rendering engine (Rust/WASM, `@silurus/ooxml` 0.89.6) at build time — consumers get **zero transitive dependencies**. Node ≥ 22.
