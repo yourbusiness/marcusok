@@ -218,6 +218,27 @@ describe("加载生命周期", () => {
     expect(onRendered).not.toHaveBeenCalled();
   });
 
+  it("boot 后半段同步初始化抛异常（IO 缺失环境）→ UNKNOWN 上报 + 清场，不产生 unhandled rejection", async () => {
+    // 模拟无 IntersectionObserver 的环境（极旧 WebView / SSR 误用）：
+    // load 成功后 LazySlideRenderer 构造会同步抛——boot 后半段必须有
+    // 兜底（否则 void boot() 变 unhandled rejection，用户无任何反馈）
+    vi.stubGlobal("IntersectionObserver", undefined);
+    try {
+      loadMock.mockResolvedValue(fakeEngine(2));
+      const onError = vi.fn();
+      createPptPreview(container, { source: magicSource(), onError });
+      await vi.waitFor(() => {
+        expect(onError).toHaveBeenCalledTimes(1);
+      });
+      expect(onError.mock.calls[0][0].code).toBe("UNKNOWN");
+      // fail 清场：引擎已到手则销毁、容器清空（失败终态可再 destroy）
+      expect(engineDestroyMock).toHaveBeenCalledTimes(1);
+      expect(container.children).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("参数校验同步抛 TypeError（不进异步回调）", () => {
     loadMock.mockResolvedValue(fakeEngine());
     expect(() =>

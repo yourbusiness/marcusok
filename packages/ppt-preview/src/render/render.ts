@@ -213,58 +213,68 @@ export function createPptPreview(
       return;
     }
     pendingLoad = null;
-    engine = pres;
-    if (destroyed) {
-      // 加载期间被 destroy：迟到结果立即销毁引擎，静默（取消不是错误）
-      killEngine();
-      return;
-    }
+    // 后半段（引擎 getter 读取 / LazySlideRenderer 构造含双 IO / 建占位）
+    // 属同步初始化，同样可能抛（IO 缺失的极旧环境、SSR 误用）：整体兜底
+    // 经 fail 清场并归一上报，避免 void boot() 沦为 unhandled rejection、
+    // 用户无任何反馈（pdf-preview 的 boot 为同款整体收尾）
+    try {
+      engine = pres;
+      if (destroyed) {
+        // 加载期间被 destroy：迟到结果立即销毁引擎，静默（取消不是错误）
+        killEngine();
+        return;
+      }
 
-    // 空 deck：上游接受（spike S3 实测）——slideCount=0、不触发 onRendered、
-    // 不报错；wrapper 留空，destroy 摘除
-    const count = pres.slideCount;
-    if (count === 0) return;
+      // 空 deck：上游接受（spike S3 实测）——slideCount=0、不触发 onRendered、
+      // 不报错；wrapper 留空，destroy 摘除
+      const count = pres.slideCount;
+      if (count === 0) return;
 
-    // deck 比例（EMU 原始值）：无效时按内容错误上报，不生成 NaN 占位
-    const sw = pres.slideWidth;
-    const sh = pres.slideHeight;
-    const ratio = sh / sw;
-    if (
-      !Number.isFinite(sw) ||
-      !Number.isFinite(sh) ||
-      sw <= 0 ||
-      sh <= 0 ||
-      !Number.isFinite(ratio) ||
-      ratio <= 0
-    ) {
-      fail({
-        code: "CORRUPT",
-        message: `The presentation reports an invalid slide size (${sw}x${sh}).`,
-      });
-      return;
-    }
-    cssWidth = Math.max(1, Math.floor(slideWidthOpt));
-    cssHeight = Math.max(1, Math.round(cssWidth * ratio));
-    loadedCount = count;
-
-    renderer = new LazySlideRenderer(wrapper, {
-      renderSlide: renderOneSlide,
-      onSlideError: (_entry, error) => {
-        // 归一集中点：renderOneSlide 抛的是引擎原始异常
-        onError?.(normalizeError(error));
-      },
-      onFirstRendered: (firstSlideMs) => {
-        const now = performance.now();
-        onRendered?.({
-          slideCount: loadedCount,
-          firstSlideMs,
-          durationMs: Math.round(now - t0),
+      // deck 比例（EMU 原始值）：无效时按内容错误上报，不生成 NaN 占位
+      const sw = pres.slideWidth;
+      const sh = pres.slideHeight;
+      const ratio = sh / sw;
+      if (
+        !Number.isFinite(sw) ||
+        !Number.isFinite(sh) ||
+        sw <= 0 ||
+        sh <= 0 ||
+        !Number.isFinite(ratio) ||
+        ratio <= 0
+      ) {
+        fail({
+          code: "CORRUPT",
+          message: `The presentation reports an invalid slide size (${sw}x${sh}).`,
         });
-      },
-    });
-    // 建占位即进入懒渲染管线（IO 初始回调触发首页渲染）。占位包含隐藏页、
-    // 保持原始页序（首版策略：全部显示，见 types.ts slideCount 注释）
-    renderer.createEntries(count, cssWidth, cssHeight);
+        return;
+      }
+      cssWidth = Math.max(1, Math.floor(slideWidthOpt));
+      cssHeight = Math.max(1, Math.round(cssWidth * ratio));
+      loadedCount = count;
+
+      renderer = new LazySlideRenderer(wrapper, {
+        renderSlide: renderOneSlide,
+        onSlideError: (_entry, error) => {
+          // 归一集中点：renderOneSlide 抛的是引擎原始异常
+          onError?.(normalizeError(error));
+        },
+        onFirstRendered: (firstSlideMs) => {
+          const now = performance.now();
+          onRendered?.({
+            slideCount: loadedCount,
+            firstSlideMs,
+            durationMs: Math.round(now - t0),
+          });
+        },
+      });
+      // 建占位即进入懒渲染管线（IO 初始回调触发首页渲染）。占位包含隐藏页、
+      // 保持原始页序（首版策略：全部显示，见 types.ts slideCount 注释）
+      renderer.createEntries(count, cssWidth, cssHeight);
+    } catch (err) {
+      // destroy 已接管清理：迟到异常不再上报（取消不是错误）
+      if (destroyed) return;
+      fail(normalizeError(err));
+    }
   };
   void boot();
 

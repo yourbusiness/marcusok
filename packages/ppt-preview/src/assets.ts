@@ -17,6 +17,11 @@
 /** 解析 wasm 资产 URL：显式选项 → 包内锚点（bundler emit）→ ../dist 兜底。 */
 export function resolveWasmUrl(
   explicit: string | URL | undefined,
+  /**
+   * 锚点基址（默认本模块 URL）。仅测试注入非 src 锚点以覆盖 bundler
+   * emit 分支使用；生产调用方不传。
+   */
+  anchorBase: string | URL = import.meta.url,
 ): string | URL | undefined {
   if (explicit !== undefined) {
     // URL 实例直接透传（上游 LoadOptions 接受 string | URL）
@@ -26,7 +31,7 @@ export function resolveWasmUrl(
   }
   // 不传时不干预上游默认（new URL 锚点）；仅当锚点路径明显落在源码目录
   // （非 bundler emit 场景）时补 ../dist/ 兜底
-  const anchor = new URL("./pptx_parser_bg.wasm", import.meta.url);
+  const anchor = new URL("./pptx_parser_bg.wasm", anchorBase);
   if (/\/src\//.test(anchor.pathname)) {
     return new URL("../dist/pptx_parser_bg.wasm", anchor);
   }

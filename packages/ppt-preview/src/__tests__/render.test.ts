@@ -443,6 +443,60 @@ describe("0-based 导航（含隐藏页的原始页序）", () => {
     vi.unstubAllGlobals();
   });
 
+  it("滚动容器路径：定高 overflow:auto 面板成为 IO root，导航滚动容器而非窗口", async () => {
+    // quick-start 宣称的主用法：定高 overflow:auto 面板。inline 样式即可
+    // 驱动 happy-dom 的 computed style 与 hasDefiniteHeight 判定
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const panel = document.createElement("div");
+    panel.style.overflowY = "auto";
+    panel.style.height = "400px";
+    panel.appendChild(container); // beforeEach 已把 container 挂 body，此处移入面板
+    document.body.appendChild(panel);
+
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+    });
+    // findScrollRoot 识别：双 IO 的 root 绑定到面板（而非视口 null）
+    expect(renderIOs()[0].options?.root).toBe(panel);
+    expect(releaseIOs()[0].options?.root).toBe(panel);
+
+    // 注入 rect：面板视口 y 0-400；页 0 在 0-100、页 1 在 100-300（交叠
+    // 最大 → 最可见）、页 2 在 700-800
+    const rects = new Map<Element, DOMRect>();
+    rects.set(panel, new DOMRect(0, 0, 960, 400));
+    rects.set(pageAt(0), new DOMRect(0, 0, 960, 100));
+    rects.set(pageAt(1), new DOMRect(0, 100, 960, 200));
+    rects.set(pageAt(2), new DOMRect(0, 700, 960, 100));
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: Element) {
+        return rects.get(this) ?? new DOMRect();
+      });
+    const scrollBySpy = vi
+      .spyOn(window, "scrollBy")
+      .mockImplementation(() => {});
+
+    // 最可见页按面板视口计算：页 1 → next 滚到页 2（top 700 - 面板顶 0）
+    panel.scrollTop = 0;
+    inst.nextSlide();
+    expect(panel.scrollTop).toBe(700);
+    expect(scrollBySpy).not.toHaveBeenCalled(); // 不连带滚动窗口
+
+    // goToSlide 相对修正：从 scrollTop=10 出发滚到页 1 → 10 + (100-0)
+    panel.scrollTop = 10;
+    inst.goToSlide(1);
+    expect(panel.scrollTop).toBe(110);
+
+    scrollBySpy.mockRestore();
+    rectSpy.mockRestore();
+    inst.destroy();
+    panel.remove();
+    vi.unstubAllGlobals();
+  });
+
   it("destroy 后导航全部 no-op", async () => {
     vi.stubGlobal("IntersectionObserver", FakeIO);
     const inst = createPptPreview(container, {
