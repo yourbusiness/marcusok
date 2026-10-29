@@ -1,6 +1,6 @@
 {
   "name": "@marcusok/ppt-preview",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Read-only .pptx preview in the browser: continuous scroll with lazy per-slide Canvas rendering powered by a Rust/WASM parser, selectable text layer collected in a single render pass, password decryption (MS-OFFCRYPTO Agile) and normalized error codes.",
   "license": "MIT",
