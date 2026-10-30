@@ -1,6 +1,6 @@
 {
   "name": "@marcusok/pdf-preview",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Read-only PDF preview in the browser: continuous scroll with lazy per-page rendering powered by pdf.js, selectable/copyable text layer, format sniffing and normalized error codes.",
   "license": "MIT",

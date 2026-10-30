@@ -1,5 +1,11 @@
 # @marcusok/word-preview
 
+## 0.1.1
+
+### Patch Changes
+
+- 71229de: Clean up comment highlight registrations on destroy and failed renders, and isolate rejected promises from user callbacks.
+
 ## 0.1.0
 
 ### Minor Changes
