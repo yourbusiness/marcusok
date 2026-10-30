@@ -33,7 +33,7 @@ function createPptPreview(
 | ----------------- | ------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `cjkFallback`     | `"auto" \| "kr" \| "sc" \| "tc" \| "hk" \| "jp"` | `"auto"` | 缺失 CJK 字体的替代字形目标。                                                                                                                                      |
 | `resourceLimits`  | `PptResourceLimits`                              | 引擎默认 | 压缩包预算：`maxArchiveEntryBytes`、`maxTotalInflatedBytes`、`maxArchiveEntries`（`number \| null`；`null` 关闭某项上限）。超预算报 `UNSUPPORTED` 而非 `CORRUPT`。 |
-| `workerTimeoutMs` | `number`                                         | 引擎默认 | 解析 worker 单次响应超时；影响加载期间 destroy 的最坏等待时间。                                                                                                    |
+| `workerTimeoutMs` | `number`                                         | 引擎默认 | 解析 worker 单次响应超时；同时约束正常加载与加载期间 destroy 的最坏等待时间。                                                                                      |
 
 引擎支持但本包有意**不**暴露的参数：`mode`（固定 `"main"`）、`progressiveLayout`（关闭 —— 页数与占位稳定）、`math`/`threeD`/`regionMap`/`chartEx`/`tiff`（可选渲染器，首版不注入）与已废弃的 `maxZipEntryBytes`（用 `resourceLimits.maxArchiveEntryBytes`）。
 

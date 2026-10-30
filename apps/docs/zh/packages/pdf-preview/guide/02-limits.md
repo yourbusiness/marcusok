@@ -7,6 +7,8 @@
 - **占位精度**——每页占位按该页自身 viewport 计算，混合尺寸文档（如 US Letter + A4 横向）不会出现滚动条跳动。全部页代理在挂载后立即预取，滚动总高一次成型。
 - **清晰度**——canvas 按 `devicePixelRatio` 分辨率绘制、CSS 尺寸占位，与官方 viewer 同款。
 - **缩放只解析一次**——`fit-*` 在 create 时量测容器。`fit-page` 需要可量测且高度受约束的容器（定高、`max-height` 或 flex 解析出的高度）；高度随内容增长的容器里量到的不是视口高度，请给定高或改用 `fit-width`。容器尺寸变化不会自动重排。
+- **滚动条时机**——`fit-width` 的量测发生在页占位存在**之前**，即滚动容器出现竖向滚动条之前。在经典（非 overlay）滚动条平台上，内容盒随后收窄一个滚动条宽（约 15–17px），居中的页面可能横向溢出这一宽度。重新 create 无济于事（空态下重新量测复现同样问题）。在意的话给容器加 `scrollbar-gutter: stable` 或在布局中预留 gutter。
+- **`devicePixelRatio` 按渲染时刻取值**——跨屏拖动窗口到不同 DPR 屏幕（或缩放）不会重渲已渲染的页；已渲染页面保持旧位图清晰度，直到被释放后重渲。
 
 ## 格式
 
@@ -14,6 +16,13 @@
 - **加密 PDF** 被识别并上报 `PASSWORD_PROTECTED`（message 区分上游"需要密码"与"密码被拒"两种 code）。首版不解密。
 - **XFA 表单**不渲染（`enableXfa` 固定 `false`）；纯 XFA 文档显示空白页。
 - **不支持 Node 服务端调用**：本包打包的 pdf.js 现代构建在 Node 下 `getDocument` 崩溃。import 安全；调用 `createPdfPreview` 需要浏览器。服务端文本提取不在范围内。
+
+## Worker 回退（静默降级）
+
+解析通常在 pdf.js Web Worker 内进行，但当 worker 无法构造时（CSP `worker-src` 拦截、MIME 类型错误、宿主对 module worker 的限制），pdf.js 自身会**静默回退到主线程 fake worker**。该模式下解析照常工作（最多在控制台留一条 `Setting up fake worker.` 警告），但全部发生在主线程：长文档会造成 UI 卡顿。两点须知：
+
+- pdf.js 的"worker 已禁用"标志对**页面会话是粘性的**——任何一次构造失败后，页面上的后续实例（来自本包或任何其他 pdf.js 副本）都走 fake worker，直到刷新页面。
+- 只有连主线程 import worker 模块都失败时，本包才会以提及 `workerSrc` 的 `UNKNOWN` 错误上抛。需要 worker 隔离时，请在 DevTools 确认存在 `pdf.worker` 线程，而不是默认渲染成功即 worker 生效。
 
 ## 安全加固（本包做了什么）
 

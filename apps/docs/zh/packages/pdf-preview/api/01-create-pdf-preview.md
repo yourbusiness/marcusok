@@ -23,7 +23,7 @@ const preview = createPdfPreview(container, options);
 | `iccUrl`              | `string`                                    | —             | ICC 配置目录（不随包分发；缺它色彩管理降级）                                                                                                                                                                              |
 | `renderOptions`       | `PdfRenderOptions`                          | —             | `getDocument` 参数白名单透传（见下）                                                                                                                                                                                      |
 | `styleNonce`          | `string`                                    | —             | 本包注入 `<style>` 的 nonce。**不覆盖** pdf.js 自身的运行时字体样式——见[限制](../guide/02-limits)                                                                                                                         |
-| `onRendered`          | `(info: PdfRenderedInfo) => void`           | —             | 首页绘制完成时触发一次（懒渲染管线没有"全部页完成"事件）                                                                                                                                                                  |
+| `onRendered`          | `(info: PdfRenderedInfo) => void`           | —             | 首个成功渲染页绘制完成时触发一次（懒渲染管线没有"全部页完成"事件；若第一页渲染失败，由后续第一张成功页触发）                                                                                                              |
 | `onError`             | `(error: PdfPreviewError) => void`          | —             | 全部失败路径。`destroy()` 触发的取消静默（不是错误）                                                                                                                                                                      |
 
 ## PdfRenderOptions

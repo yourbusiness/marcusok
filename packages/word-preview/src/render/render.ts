@@ -34,17 +34,25 @@ async function toBytes(source: WordSource): Promise<Uint8Array> {
  * 用户回调异常隔离：回调是调用方代码（常见如 React 组件已卸载），其抛错
  * 不得被 boot 的 catch 误报成渲染错误，也不得产生未处理拒绝。与
  * excel-preview 的 guardCallback 同口径：仅 warn。
+ *
+ * 异步回调是第二形态：TS 允许把 `async () => …` 赋给返回 void 的回调类型，
+ * 其 rejected promise 不会被同步 catch 捕到——必须显式 .catch，否则就是
+ * unhandled rejection。
  */
 function guardCallback<A extends unknown[]>(
   cb: ((...args: A) => void) | undefined,
   name: string,
 ): ((...args: A) => void) | undefined {
   if (!cb) return cb;
+  const warn = (e: unknown): void => {
+    console.warn(`[word-preview] user ${name} callback threw; ignoring`, e);
+  };
   return (...args: A) => {
     try {
-      cb(...args);
+      const result = cb(...args) as unknown;
+      if (result instanceof Promise) result.catch(warn);
     } catch (e) {
-      console.warn(`[word-preview] user ${name} callback threw; ignoring`, e);
+      warn(e);
     }
   };
 }
@@ -112,6 +120,25 @@ function rebuildStylesWithNonce(
     el.setAttribute("nonce", nonce);
     el.textContent = style.textContent;
     wrapper.appendChild(el);
+  }
+}
+
+/**
+ * 清理上游向全局注册表写入的本实例条目：renderComments 路径会向
+ * `CSS.highlights` 注册 `<className>-comments`（Highlight 持有 Range，
+ * 随注册表常驻；上游全库 0 处 delete）——不清理的话 React 反复
+ * create/destroy 会无界累积。CSS.highlights 是较新 API（happy-dom 等
+ * 环境无实现），特性检测兜底；delete 失败不阻断卸载主流程。
+ */
+function cleanupGlobalRegistrations(className: string): void {
+  if (typeof CSS === "undefined" || !CSS.highlights) return;
+  try {
+    CSS.highlights.delete(`${className}-comments`);
+  } catch (e) {
+    console.warn(
+      "[word-preview] comment highlight cleanup failed; ignoring",
+      e,
+    );
   }
 }
 
@@ -209,8 +236,11 @@ export function createWordPreview(
     } catch (err) {
       if (destroyed) return;
       // 同 sniff 失败路径：失败即无副作用，摘除 wrapper 再报错
-      // （destroy 分支已自行 remove，此处必是未 destroy 的失败）
+      // （destroy 分支已自行 remove，此处必是未 destroy 的失败）。
+      // renderAsync 抛错前可能已注册注释高亮（renderComments 半途失败），
+      // 全局注册表一并清理
       wrapper.remove();
+      cleanupGlobalRegistrations(className);
       const message = err instanceof Error ? err.message : String(err);
       onError?.({
         code: "CORRUPT",
@@ -227,8 +257,10 @@ export function createWordPreview(
       destroyed = true;
       // 同步摘除私有 wrapper：用户容器立即干净；在途的 renderAsync 完成
       // 后只会往已脱离文档的 wrapper 写入，boot 的 destroyed 检查丢弃结果。
-      // destroy 后所有回调静默（取消不是错误）。
+      // destroy 后所有回调静默（取消不是错误）。上游注册进全局
+      // CSS.highlights 的注释高亮一并删除（见 cleanupGlobalRegistrations）。
       wrapper.remove();
+      cleanupGlobalRegistrations(className);
     },
   };
 }

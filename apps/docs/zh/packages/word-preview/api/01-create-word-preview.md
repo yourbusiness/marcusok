@@ -44,15 +44,14 @@ function createWordPreview(
 
 全部为可选布尔值；未设置的键用引擎默认。`onRendered` 的 `pageCount` 仅在默认分页选项（`breakPages: true`、`inWrapper: true`）下有意义。
 
-**接管项（不在类型里）：**
+**接管项（不在类型里，共 7 项）：**
 
-| 键                                                    | 值                     | 原因                                                            |
-| ----------------------------------------------------- | ---------------------- | --------------------------------------------------------------- |
-| `className`                                           | `docx-<instanceSeq>`   | 每实例唯一——隔离引擎按文档注入的全局 CSS。                      |
-| `useBase64URL`                                        | `true`                 | 引擎从不 revoke blob URL；base64 规避泄漏（内存代价见限制页）。 |
-| `ignoreLastRenderedPageBreak`                         | 默认 `false`（可覆盖） | 遵循 Word 存盘分页。                                            |
-| `renderAltChunks`                                     | 来自 `allowAltChunks`  | 安全默认值；见上。                                              |
-| `h` / `experimental` / `debug` / `trimXmlDeclaration` | —                      | 实验 hook 与内部细节——不进公开面。                              |
+| 键                                                    | 值                    | 原因                                                            |
+| ----------------------------------------------------- | --------------------- | --------------------------------------------------------------- |
+| `className`                                           | `docx-<instanceSeq>`  | 每实例唯一——隔离引擎按文档注入的全局 CSS。                      |
+| `useBase64URL`                                        | `true`                | 引擎从不 revoke blob URL；base64 规避泄漏（内存代价见限制页）。 |
+| `renderAltChunks`                                     | 来自 `allowAltChunks` | 安全默认值；见上。                                              |
+| `h` / `experimental` / `debug` / `trimXmlDeclaration` | —                     | 实验 hook 与内部细节——不进公开面。                              |
 
 ## WordPreviewInstance
 

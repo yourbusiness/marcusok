@@ -58,10 +58,12 @@ Valid files that exceed the engine's archive budgets (entry size, total inflated
 ## Layout & sizing
 
 - `slideWidth` is fixed at creation; there is **no resize re-layout** — destroy and re-create.
-- Empty decks (`slideCount = 0`) load without error and never fire `onRendered`.
+- `dpr` has no upper clamp: a large value multiplies the canvas bitmap quadratically (e.g. `dpr: 10` at the default 960-px width allocates ~9600×5400 bitmaps, ≈200 MB RGBA per slide). Only override it when you know the target displays.
+- Empty decks (`slideCount = 0`) load without error and never fire `onRendered` — but the engine instance (parser Worker + WASM) stays alive until `destroy()`. Destroy empty-deck previews you are done with instead of leaving them mounted.
 - SSR: the module can be imported on the server; `createPptPreview` must only run where `Worker` and WebCrypto exist.
 
 ## Error-normalization boundaries
 
 - `not-ooxml` from the engine (non-pptx ZIPs, unreadable containers, some damaged encrypted containers) maps to `UNSUPPORTED` — the message is kept but damage causes are **not** further classified (the upstream error has no `stage` field to key on).
 - Unknown parser traps, Worker/WASM/CSP and asset-URL failures map to `UNKNOWN` — never reported as file corruption.
+- **A slide that fails to render reports an error but stays blank** — the slide-level failure path releases that slide's canvas and returns it to the empty state; it re-renders only when it leaves and re-enters the render band (IntersectionObserver only fires on crossing changes). The error message is the engine's and does not carry the slide index, so a per-slide failure is not distinguishable from a deck-level one by the error payload alone.

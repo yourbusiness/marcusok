@@ -44,15 +44,14 @@ The engine's 20 options split into **13 passable** + 7 taken over by this packag
 
 All are optional booleans; unset keys use the engine defaults. `pageCount` in `onRendered` is meaningful only under the default pagination options (`breakPages: true`, `inWrapper: true`).
 
-**Taken over (not in the type):**
+**Taken over (not in the type — 7 keys):**
 
-| Key                                                   | Value                         | Why                                                                                            |
-| ----------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------- |
-| `className`                                           | `docx-<instanceSeq>`          | Unique per instance — isolates the engine's global document CSS between instances.             |
-| `useBase64URL`                                        | `true`                        | The engine never revokes blob URLs; base64 avoids the leak (memory cost documented in Limits). |
-| `ignoreLastRenderedPageBreak`                         | `false` default (overridable) | Follows Word's saved pagination.                                                               |
-| `renderAltChunks`                                     | from `allowAltChunks`         | Security default; see above.                                                                   |
-| `h` / `experimental` / `debug` / `trimXmlDeclaration` | —                             | Experimental hooks and internals — not part of the public surface.                             |
+| Key                                                   | Value                 | Why                                                                                            |
+| ----------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------- |
+| `className`                                           | `docx-<instanceSeq>`  | Unique per instance — isolates the engine's global document CSS between instances.             |
+| `useBase64URL`                                        | `true`                | The engine never revokes blob URLs; base64 avoids the leak (memory cost documented in Limits). |
+| `renderAltChunks`                                     | from `allowAltChunks` | Security default; see above.                                                                   |
+| `h` / `experimental` / `debug` / `trimXmlDeclaration` | —                     | Experimental hooks and internals — not part of the public surface.                             |
 
 ## WordPreviewInstance
 

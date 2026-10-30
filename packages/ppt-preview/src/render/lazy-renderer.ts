@@ -66,7 +66,13 @@ function hasDefiniteHeight(
   );
 }
 
-/** 探测容器最近的、真正会裁剪内容的滚动祖先（无则 null → 视口）。 */
+/** 探测容器最近的、真正会裁剪内容的滚动祖先（无则 null → 视口）。
+ *
+ * 调用时机在首个 createEntries **之后**（ensureObservers 惰性创建）：
+ * "当前已溢出"这条启发式在容器为空时恒为 false，类定义/flex 解析高度
+ * 的面板只有占位内容撑出溢出后才可被检出（pdf-preview 同款机制）。
+ * 不能用 computed height 补检：真实浏览器对 auto 高度也返回 used px，
+ * 会把内容驱动的包装层误判为定高。 */
 export function findScrollRoot(start: HTMLElement): HTMLElement | null {
   let node: HTMLElement | null = start;
   while (node && node !== document.documentElement) {
@@ -85,9 +91,9 @@ export function findScrollRoot(start: HTMLElement): HTMLElement | null {
 export class LazySlideRenderer {
   private readonly entries: SlideEntry[] = [];
   private readonly queue: SlideEntry[] = [];
-  private readonly renderIO: IntersectionObserver;
-  private readonly releaseIO: IntersectionObserver;
-  private readonly scrollRoot: HTMLElement | null;
+  private renderIO: IntersectionObserver | null = null;
+  private releaseIO: IntersectionObserver | null = null;
+  private scrollRoot: HTMLElement | null = null;
   private rendering = false;
   private destroyed = false;
   private firstReported = false;
@@ -95,10 +101,19 @@ export class LazySlideRenderer {
   constructor(
     private readonly container: HTMLElement,
     private readonly callbacks: LazyRendererCallbacks,
-  ) {
-    // root 取真正会滚动的祖先（无则回退视口），rootMargin 按容器高度展开
-    // 预载带——固定高度 overflow:auto 面板里 root:null 等于零预载。
-    this.scrollRoot = findScrollRoot(container);
+  ) {}
+
+  /**
+   * 双观察器惰性创建（首个 createEntries 之后）：构造时容器是空的，
+   * findScrollRoot 的"已溢出"启发式必然落空——类定义固定高度 / flex
+   * 解析高度的滚动面板（无内联样式、无 max-height）只有等占位内容撑出
+   * 实际溢出才暴露。created 后不再重建（root 不随滚动漂移）；destroy
+   * 幂等收口（null 安全）。IO 缺失的极旧环境/SSR 误用会在首次
+   * createEntries 抛出，由 createPptPreview 的 boot 兜底归一上报。
+   */
+  private ensureObservers(): void {
+    if (this.renderIO) return;
+    this.scrollRoot = findScrollRoot(this.container);
     this.renderIO = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -154,8 +169,13 @@ export class LazySlideRenderer {
       (el as HTMLDivElement & { __slide?: SlideEntry }).__slide = entry;
       this.entries.push(entry);
       this.container.appendChild(el);
-      this.renderIO.observe(el);
-      this.releaseIO.observe(el);
+    }
+    // 占位全部插入后再建观察器并 observe：内容已就位，"已溢出"启发式
+    // 对类定义/flex 高度的滚动面板生效（见 ensureObservers 注释）
+    this.ensureObservers();
+    for (const e of this.entries) {
+      this.renderIO!.observe(e.el);
+      this.releaseIO!.observe(e.el);
     }
   }
 
@@ -287,8 +307,10 @@ export class LazySlideRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.renderIO.disconnect();
-    this.releaseIO.disconnect();
+    this.renderIO?.disconnect();
+    this.releaseIO?.disconnect();
+    this.renderIO = null;
+    this.releaseIO = null;
     for (const e of this.entries) this.removeEntryDom(e);
     this.queue.length = 0;
     this.entries.length = 0;

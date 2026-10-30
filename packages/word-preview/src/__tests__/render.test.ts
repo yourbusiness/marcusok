@@ -159,4 +159,45 @@ describe("createWordPreview 渲染闭环", () => {
     inst.destroy();
     inst.destroy();
   });
+
+  it("destroy 清理上游注册进 CSS.highlights 的注释高亮（防反复 create/destroy 累积）", async () => {
+    // 上游 renderComments 路径向全局 CSS.highlights 注册 <className>-comments
+    // 且全库无 delete——Highlight/Range 随注册表常驻，不清理则 React 反复
+    // create/destroy 无界累积。happy-dom 无该 API，用 Map 桩验证包装层的
+    // 清理契约（上游真实注册行为在浏览器复核）
+    const highlights = new Map<string, unknown>();
+    vi.stubGlobal("CSS", { highlights });
+    const container = makeContainer();
+    const inst = createWordPreview(container, { source: simpleDocx("hl") });
+    await waitFor(() => container.querySelector("style") !== null);
+    const className = (container.firstElementChild as HTMLElement).className;
+    highlights.set(`${className}-comments`, { fake: "Highlight" });
+    inst.destroy();
+    expect(highlights.has(`${className}-comments`)).toBe(false);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("用户回调异常隔离", () => {
+  it("异步回调抛错被兜住（仅 warn，不产生 unhandled rejection）", async () => {
+    // TS 允许把 async 函数赋给返回 void 的回调类型：其 rejected promise
+    // 不会被同步 catch 捕到——guardCallback 必须显式 .catch
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const container = makeContainer();
+    const inst = createWordPreview(container, {
+      source: simpleDocx("cb"),
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises -- 有意模拟 async void 回调的 rejected promise
+      onRendered: async () => {
+        await Promise.resolve();
+        throw new Error("async cb boom");
+      },
+    });
+    await vi.waitFor(() => {
+      expect(
+        warn.mock.calls.some((c) => String(c[0]).includes("onRendered")),
+      ).toBe(true);
+    });
+    inst.destroy();
+    warn.mockRestore();
+  });
 });

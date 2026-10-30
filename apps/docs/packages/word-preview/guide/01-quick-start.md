@@ -35,7 +35,7 @@ The container is only a mount point — the preview renders into an internal wra
 preview.destroy();
 ```
 
-`destroy()` takes effect immediately: the rendered DOM is detached, a render that resolves afterwards is dropped, and all callbacks go silent. Calling it twice is safe. The same container can be reused by a new instance right away.
+`destroy()` takes effect immediately: the rendered DOM is detached, a render that resolves afterwards is dropped, and all callbacks go silent. Calling it twice is safe. After `destroy()`, the same container can be reused by a new instance right away — each instance appends its own internal wrapper, so destroying the previous instance first is what keeps the container clean (creating a second instance without destroying the first leaves both renders stacked).
 
 ## Where the defaults differ from the engine
 

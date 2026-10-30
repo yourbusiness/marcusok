@@ -35,7 +35,8 @@ describe.runIf(RUN_PERF)(
       const bytes = bigDocxBytes(1000, 100, 5);
       const t0 = performance.now();
       await renderAsync(bytes, container, undefined, {
-        // 与 createWordPreview 的默认接管一致（本包真实运行形态）
+        // 与 createWordPreview 交给上游引擎的默认渲染参数一致；本基线直接
+        // 调用引擎，不包含本包的格式嗅探与第二次 JSZip 目录解析开销
         className: "docx-perf",
         useBase64URL: true,
         ignoreLastRenderedPageBreak: false,

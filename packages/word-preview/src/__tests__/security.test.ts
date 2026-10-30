@@ -286,6 +286,27 @@ describe("destroy 静默与错误归一", () => {
     expect(container.children.length).toBe(0);
   });
 
+  it("渲染失败路径同样清理 CSS.highlights 注册（renderComments 半途失败不留残留）", async () => {
+    const highlights = new Map<string, unknown>();
+    vi.stubGlobal("CSS", { highlights });
+    renderAsyncMock.mockImplementation(() =>
+      Promise.reject(new Error("boom after highlight registered")),
+    );
+    const container = makeContainer();
+    const onError = vi.fn();
+    const inst = createWordPreview(container, {
+      source: simpleDocx("x"),
+      onError,
+    });
+    // className 在 create 时同步生成（wrapper 立即挂载），失败移除前先取
+    const className = (container.firstElementChild as HTMLElement).className;
+    highlights.set(`${className}-comments`, { fake: "Highlight" });
+    await waitFor(() => onError.mock.calls.length > 0);
+    expect(highlights.has(`${className}-comments`)).toBe(false);
+    inst.destroy();
+    vi.unstubAllGlobals();
+  });
+
   it("输入源读取失败（Blob.arrayBuffer 抛错）：归 UNKNOWN 而非 CORRUPT", async () => {
     // toBytes 走真实路径（不经 docx-preview mock）；构造 arrayBuffer 拒绝的
     // 假 Blob 模拟"源读取失败"——与文档内容无关，按 api 文档口径归 UNKNOWN

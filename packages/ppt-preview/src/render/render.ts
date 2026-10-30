@@ -35,17 +35,24 @@ import { LazySlideRenderer, type SlideEntry } from "./lazy-renderer";
 import { ROOT_CLASS, ensurePptStyles } from "./text-layer-css";
 import { attachTextLayer } from "./text-layer";
 
-/** 用户回调异常隔离：调用方回调抛错不得被误报成渲染错误（word/pdf 同口径）。 */
+/** 用户回调异常隔离：调用方回调抛错不得被误报成渲染错误（word/pdf 同
+ * 口径）。异步回调的 rejected promise 同步 catch 兜不住——必须显式
+ * .catch，否则就是 unhandled rejection（TS 允许 async 函数赋给返回
+ * void 的回调类型）。 */
 function guardCallback<A extends unknown[]>(
   cb: ((...args: A) => void) | undefined,
   name: string,
 ): ((...args: A) => void) | undefined {
   if (!cb) return cb;
+  const warn = (e: unknown): void => {
+    console.warn(`[ppt-preview] user ${name} callback threw; ignoring`, e);
+  };
   return (...args: A) => {
     try {
-      cb(...args);
+      const result = cb(...args) as unknown;
+      if (result instanceof Promise) result.catch(warn);
     } catch (e) {
-      console.warn(`[ppt-preview] user ${name} callback threw; ignoring`, e);
+      warn(e);
     }
   };
 }

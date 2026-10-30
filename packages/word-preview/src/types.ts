@@ -12,13 +12,12 @@ export type WordSource = File | Blob | Uint8Array | ArrayBuffer;
 
 /**
  * `renderOptions` 白名单：docx-preview 上游 `Options`（20 项）中可透传的
- * 13 项子集。其余 7 项由本包接管，不可透传：
+ * 13 项子集（含 `ignoreLastRenderedPageBreak`——本包改了它的默认值，但
+ * 允许调用方改回）。其余 7 项由本包硬接管，不可透传：
  * - `className` —— 本包为每个实例生成唯一类名（同页多实例的全局 CSS 串扰
  *   隔离，见 createWordPreview）；
  * - `useBase64URL` —— 固定 `true`（上游 0 处 revokeObjectURL，blob URL 会
  *   泄漏；base64 的内存代价约 +33% 见 limits 文档）；
- * - `ignoreLastRenderedPageBreak` —— 本包默认 `false`（贴近 Word 原版
- *   分页；可在 renderOptions 改回 `true`）；
  * - `renderAltChunks` —— 由 `allowAltChunks` 选项接管（默认关闭，XSS 加固）；
  * - `h` / `experimental` / `debug` / `trimXmlDeclaration` —— experimental
  *   hook、实验特性、日志开关与内部细节，不进公开面。

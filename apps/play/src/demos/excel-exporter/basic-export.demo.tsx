@@ -592,7 +592,7 @@ export default function BasicExportDemo() {
               style={{ marginTop: 12 }}
               type={run.status === "degraded" ? "warning" : "error"}
               showIcon
-              message={
+              title={
                 run.status === "degraded"
                   ? `已降级：${run.error}`
                   : `导出失败：${run.error}`

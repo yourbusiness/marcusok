@@ -85,6 +85,13 @@ function hasDefiniteHeight(
  *
  * 只接受 hasDefiniteHeight 的祖先（见其注释）——否则内容驱动的
  * overflow:auto 包装层会让懒渲染退化为全量渲染。
+ *
+ * 调用时机：首个页占位插入**之后**（ensureObservers 惰性创建）——
+ * "当前已溢出"这条启发式在容器为空时恒为 false，类定义/flex 解析高度
+ * 的面板只有占位内容撑出溢出后才可被检出。注意不能用 computed height
+ * 补检：真实浏览器对 auto 高度元素也返回 used px 值，会把内容驱动的
+ * 包装层误判为定高（happy-dom 恰好只回显内联声明，两者行为相反，
+ * 不能拿测试环境的行为推断浏览器）。
  */
 function findScrollRoot(start: HTMLElement): HTMLElement | null {
   let node: HTMLElement | null = start;
@@ -131,17 +138,24 @@ async function toBytes(source: PdfSource): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
-/** 用户回调异常隔离：调用方回调抛错不得被误报成渲染错误（word-preview 同口径）。 */
+/** 用户回调异常隔离：调用方回调抛错不得被误报成渲染错误（word-preview 同
+ * 口径）。异步回调的 rejected promise 同步 catch 兜不住——必须显式
+ * .catch，否则就是 unhandled rejection（TS 允许 async 函数赋给返回
+ * void 的回调类型）。 */
 function guardCallback<A extends unknown[]>(
   cb: ((...args: A) => void) | undefined,
   name: string,
 ): ((...args: A) => void) | undefined {
   if (!cb) return cb;
+  const warn = (e: unknown): void => {
+    console.warn(`[pdf-preview] user ${name} callback threw; ignoring`, e);
+  };
   return (...args: A) => {
     try {
-      cb(...args);
+      const result = cb(...args) as unknown;
+      if (result instanceof Promise) result.catch(warn);
     } catch (e) {
-      console.warn(`[pdf-preview] user ${name} callback threw; ignoring`, e);
+      warn(e);
     }
   };
 }
@@ -262,42 +276,62 @@ export function createPdfPreview(
   // 双观察器：renderIO 触发渲染，releaseIO 触发释放（两个 margin 的差值
   // 构成 1-3 屏的渲染保留缓冲）。root 取真正会滚动的祖先（无则回退视口），
   // rootMargin 才能按滚动容器高度展开预载带（见 findScrollRoot 注释）。
-  const scrollRoot = findScrollRoot(container);
-  const renderIO = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        const e = entry.target as HTMLDivElement & { __mop?: PageEntry };
-        const page = e.__mop;
-        if (!page) continue;
-        // wanted 必须无条件更新（含 rendering 状态）：渲染被 release 取消后
-        // 用户可能在取消落定前又滚回渲染带——此时忽略进入事件会让取消完成
-        // 的页面停在 empty 且无人重新入队（滚动位置不再变化，IO 不会再回调）。
-        page.wanted = entry.isIntersecting;
-        if (entry.isIntersecting && page.state === "empty") {
-          page.state = "queued";
-          queue.push(page);
-          pump();
-        }
-      }
-    },
-    { root: scrollRoot, rootMargin: RENDER_MARGIN },
-  );
+  //
+  // **惰性创建**（首个页占位插入后再建）：create 时容器是空的，任何祖先都
+  // 未溢出，findScrollRoot 的"已溢出"启发式必然落空——类定义固定高度/
+  // flex 解析高度的滚动面板（Tailwind h-[600px] 等，无内联样式、无
+  // max-height）只有等占位内容撑出实际溢出才暴露出来。占位带显式 px 尺寸，
+  // 首个占位挂上即足以让真实滚动容器溢出；内容驱动的 auto 包装层
+  // （scrollHeight === clientHeight）依旧被正确跳过。created 标志保证
+  // 全实例只建一次、root 不随滚动漂移。
+  let observers: {
+    render: IntersectionObserver;
+    release: IntersectionObserver;
+  } | null = null;
 
-  const releaseIO = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        const e = entry.target as HTMLDivElement & { __mop?: PageEntry };
-        const page = e.__mop;
-        if (!page) continue;
-        if (entry.isIntersecting) {
-          page.pendingRelease = false;
-        } else if (page.state === "rendered" || page.state === "rendering") {
-          releaseEntry(page);
-        }
-      }
-    },
-    { root: scrollRoot, rootMargin: RELEASE_MARGIN },
-  );
+  function ensureObservers(): void {
+    if (observers) return;
+    const scrollRoot = findScrollRoot(container);
+    observers = {
+      render: new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const e = entry.target as HTMLDivElement & { __mop?: PageEntry };
+            const page = e.__mop;
+            if (!page) continue;
+            // wanted 必须无条件更新（含 rendering 状态）：渲染被 release 取消后
+            // 用户可能在取消落定前又滚回渲染带——此时忽略进入事件会让取消完成
+            // 的页面停在 empty 且无人重新入队（滚动位置不再变化，IO 不会再回调）。
+            page.wanted = entry.isIntersecting;
+            if (entry.isIntersecting && page.state === "empty") {
+              page.state = "queued";
+              queue.push(page);
+              pump();
+            }
+          }
+        },
+        { root: scrollRoot, rootMargin: RENDER_MARGIN },
+      ),
+      release: new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const e = entry.target as HTMLDivElement & { __mop?: PageEntry };
+            const page = e.__mop;
+            if (!page) continue;
+            if (entry.isIntersecting) {
+              page.pendingRelease = false;
+            } else if (
+              page.state === "rendered" ||
+              page.state === "rendering"
+            ) {
+              releaseEntry(page);
+            }
+          }
+        },
+        { root: scrollRoot, rootMargin: RELEASE_MARGIN },
+      ),
+    };
+  }
 
   /** 串行队列：同一时刻最多 1 页在渲（scroll 洪峰限流）；离带/过期条目直接丢弃。 */
   function pump(): void {
@@ -488,8 +522,10 @@ export function createPdfPreview(
     (el as HTMLDivElement & { __mop?: PageEntry }).__mop = entry;
     pages.push(entry);
     wrapper.appendChild(el);
-    renderIO.observe(el);
-    releaseIO.observe(el);
+    // 先插入占位再建观察器（见 ensureObservers 的惰性创建说明）
+    ensureObservers();
+    observers!.render.observe(el);
+    observers!.release.observe(el);
     return entry;
   }
 
@@ -502,8 +538,9 @@ export function createPdfPreview(
    * 节点（及其位图）一起留在闭包里——必须先把子节点/位图显式释放。 */
   function teardown(): void {
     failed = true;
-    renderIO.disconnect();
-    releaseIO.disconnect();
+    observers?.render.disconnect();
+    observers?.release.disconnect();
+    observers = null;
     for (const e of pages) {
       e.task?.cancel();
       cancelEntryTextLayer(e);

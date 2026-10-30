@@ -230,7 +230,7 @@ export default function PdfPreviewDemo() {
         <Alert
           type="error"
           showIcon
-          message={ERROR_CODE_TEXT[error.code] ?? error.code}
+          title={ERROR_CODE_TEXT[error.code] ?? error.code}
           description={error.message}
         />
       )}

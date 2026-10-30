@@ -35,7 +35,7 @@ export interface PptRenderOptions {
    * 关闭某项上限。
    */
   resourceLimits?: PptResourceLimits;
-  /** 解析 Worker 单次响应超时（毫秒），影响 destroy 后的最坏等待时间。 */
+  /** 解析 Worker 单次响应超时（毫秒），同时约束正常加载与加载期间 destroy 的最坏等待时间。 */
   workerTimeoutMs?: number;
 }
 

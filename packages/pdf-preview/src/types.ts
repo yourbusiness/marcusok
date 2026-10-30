@@ -96,12 +96,14 @@ export interface PdfPreviewOptions {
    */
   styleNonce?: string;
   /**
-   * 首页渲染完成回调（懒渲染形态下没有"全部页完成"事件——视口外的页
-   * 尚未渲染，这是有意设计）。
+   * 首个成功渲染页完成回调（懒渲染形态下没有"全部页完成"事件——视口外
+   * 的页尚未渲染，这是有意设计）。注意是"首个**成功**页"：若第一页渲染
+   * 失败（已报 onError、实例仍可继续），后续滚到的第一张成功页会触发本
+   * 回调，其 `firstPageMs` 计的是那张页的渲染耗时。
    * - `pageCount` = 文档总页数（`numPages` 直出）；
-   * - `firstPageMs` = 首页 canvas + 文本层渲染耗时（用户感知的出图时间）；
-   * - `durationMs` = 从 createPdfPreview 调用到首页完成的端到端耗时
-   *   （含源读取、嗅探、getDocument、首页渲染）。
+   * - `firstPageMs` = 该页 canvas + 文本层渲染耗时（用户感知的出图时间）；
+   * - `durationMs` = 从 createPdfPreview 调用到该页完成的端到端耗时
+   *   （含源读取、嗅探、getDocument、渲染）。
    */
   onRendered?: (info: PdfRenderedInfo) => void;
   /** 错误回调。destroy 触发的取消静默，不报错。 */
@@ -111,9 +113,9 @@ export interface PdfPreviewOptions {
 export interface PdfRenderedInfo {
   /** 文档总页数。 */
   pageCount: number;
-  /** 首页 canvas + 文本层渲染耗时（毫秒）。 */
+  /** 触发回调的那页 canvas + 文本层渲染耗时（毫秒）。 */
   firstPageMs: number;
-  /** 从 createPdfPreview 调用到首页渲染完成的端到端耗时（毫秒）。 */
+  /** 从 createPdfPreview 调用到该页渲染完成的端到端耗时（毫秒）。 */
   durationMs: number;
 }
 

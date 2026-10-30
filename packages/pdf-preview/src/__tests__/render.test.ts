@@ -839,6 +839,32 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     inst.destroy();
   });
 
+  it("detects an overflow-only scroll ancestor once the first placeholder exists", async () => {
+    // 类定义固定高度 / flex 解析高度的面板（无内联 height、无 max-height）
+    // 在 create 时无从检出——唯一线索是占位内容撑出的真实溢出。观察器
+    // 惰性创建后此形态可被选中为 root（happy-dom 无布局，用 getter 桩
+    // 模拟"占位前不溢出、占位后溢出"；旧实现在 create 时刻探测，恒漏检）。
+    const outer = document.createElement("div");
+    outer.style.overflow = "auto"; // 无 height/max-height：溢出是唯一线索
+    const host = document.createElement("div");
+    outer.appendChild(host);
+    document.body.appendChild(outer);
+    Object.defineProperty(outer, "clientHeight", { get: () => 300 });
+    Object.defineProperty(outer, "scrollHeight", {
+      get: () => (outer.querySelector(".mop-pdf-page") ? 1000 : 0),
+    });
+
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const inst = createPdfPreview(host, { source: magicSource() });
+    await waitForPages(host, 1);
+
+    expect(ioByMargin("100%")[0].options?.root).toBe(outer);
+    expect(ioByMargin("300%")[0].options?.root).toBe(outer);
+    inst.destroy();
+  });
+
   /* ---------------------- worker/asset failure mapping ---------------------- */
 
   it("maps worker setup failures to UNKNOWN instead of CORRUPT", async () => {
@@ -950,5 +976,33 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       }),
     ).toThrow(/Invalid scale/);
     expect(getDocument).not.toHaveBeenCalled();
+  });
+});
+
+describe("用户回调异常隔离", () => {
+  it("异步回调抛错被兜住（仅 warn，不产生 unhandled rejection）", async () => {
+    // TS 允许把 async 函数赋给返回 void 的回调类型：其 rejected promise
+    // 不会被同步 catch 捕到——guardCallback 必须显式 .catch
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises -- 有意模拟 async void 回调的 rejected promise
+      onRendered: async () => {
+        await Promise.resolve();
+        throw new Error("async cb boom");
+      },
+    });
+    await waitForPages(container, 1);
+    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    await vi.waitFor(() => {
+      expect(
+        warn.mock.calls.some((c) => String(c[0]).includes("onRendered")),
+      ).toBe(true);
+    });
+    inst.destroy();
+    warn.mockRestore();
   });
 });

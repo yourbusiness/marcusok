@@ -545,3 +545,83 @@ describe("0-based 导航（含隐藏页的原始页序）", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("滚动祖先探测", () => {
+  it("占位插入后可检出仅凭实际溢出暴露的滚动面板（类定义/flex 高度形态）", async () => {
+    // 无内联 height、无 max-height 的 overflow:auto 面板（Tailwind
+    // h-[600px] 一类），唯一线索是占位内容撑出的真实溢出——观察器惰性
+    // 创建（首个 createEntries 后）才能检出。happy-dom 无布局，用
+    // getter 桩模拟"占位前不溢出、占位后溢出"；旧实现构造期探测恒漏检，
+    // goToSlide 会因此滚错对象（滚窗口而非面板）。
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const outer = document.createElement("div");
+    outer.style.overflow = "auto";
+    document.body.appendChild(outer);
+    outer.appendChild(container); // beforeEach 已把 container 挂 body，重挂到面板下
+    Object.defineProperty(outer, "clientHeight", { get: () => 300 });
+    Object.defineProperty(outer, "scrollHeight", {
+      get: () => (outer.querySelector(".mop-ppt-page") ? 1000 : 0),
+    });
+
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+    });
+
+    expect(renderIOs()[0].options?.root).toBe(outer);
+    expect(releaseIOs()[0].options?.root).toBe(outer);
+    inst.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("无任何可判定祖先时回退视口（root:null）", async () => {
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const outer = document.createElement("div");
+    outer.style.overflow = "auto"; // 无高度约束、占位前后也恒不溢出
+    document.body.appendChild(outer);
+    outer.appendChild(container);
+    Object.defineProperty(outer, "clientHeight", { get: () => 300 });
+    Object.defineProperty(outer, "scrollHeight", { get: () => 100 });
+
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+    });
+    expect(renderIOs()[0].options?.root).toBeNull();
+    inst.destroy();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("用户回调异常隔离", () => {
+  it("异步回调抛错被兜住（仅 warn，不产生 unhandled rejection）", async () => {
+    // TS 允许把 async 函数赋给返回 void 的回调类型：其 rejected promise
+    // 不会被同步 catch 捕到——guardCallback 必须显式 .catch
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises -- 有意模拟 async void 回调的 rejected promise
+      onRendered: async () => {
+        await Promise.resolve();
+        throw new Error("async cb boom");
+      },
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+    });
+    renderIOs()[0].fire(pageAt(0), true);
+    await vi.waitFor(() => {
+      expect(
+        warn.mock.calls.some((c) => String(c[0]).includes("onRendered")),
+      ).toBe(true);
+    });
+    inst.destroy();
+    warn.mockRestore();
+    vi.unstubAllGlobals();
+  });
+});

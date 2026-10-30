@@ -26,10 +26,10 @@ describe("resolveWasmUrl", () => {
     expect(() => resolveWasmUrl("")).toThrow(TypeError);
   });
 
-  it("不传 + 锚点落在 src/（play src 联调）→ ../dist/pptx_parser_bg.wasm 兜底", () => {
+  it("不传 + 锚点落在 src/assets.ts（play src 联调）→ ../dist/pptx_parser_bg.wasm 兜底", () => {
     const url = resolveWasmUrl(
       undefined,
-      "file:///repo/packages/ppt-preview/src/index.ts",
+      "file:///repo/packages/ppt-preview/src/assets.ts",
     );
     expect(url).toBeInstanceOf(URL);
     expect((url as URL).pathname).toBe(
@@ -46,6 +46,20 @@ describe("resolveWasmUrl", () => {
   it("不传 + 锚点在 dist/（bundler emit 场景）→ undefined，不干预上游默认", () => {
     expect(
       resolveWasmUrl(undefined, "https://cdn.example.com/pkg/dist/index.js"),
+    ).toBeUndefined();
+  });
+
+  it("不传 + 产物路径恰含 /src/ 段但非本模块（自定义 outDir 等）→ 不误覆盖", () => {
+    // 旧实现的宽松 /\/src\// 会在这里误走 ../dist/ 兜底，覆盖掉 bundler
+    // 已 emit 的 wasm URL → 运行时 404
+    expect(
+      resolveWasmUrl(undefined, "https://app.example.com/dist/src/index.js"),
+    ).toBeUndefined();
+    expect(
+      resolveWasmUrl(
+        undefined,
+        "https://app.example.com/src/pages/chunk-abc123.js",
+      ),
     ).toBeUndefined();
   });
 });

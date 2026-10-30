@@ -58,10 +58,12 @@
 ## 布局与尺寸
 
 - `slideWidth` 创建时定型；**无 resize 重排** —— destroy 后重建。
-- 空 deck（`slideCount = 0`）加载不报错，也不触发 `onRendered`。
+- `dpr` 没有上限钳制：过大的值会按平方放大 canvas 位图（例如默认 960px 宽下设置 `dpr: 10`，每页会分配约 9600×5400 的位图，RGBA 约占 200 MB）。只有明确目标显示设备时才应覆盖。
+- 空 deck（`slideCount = 0`）加载不报错，也不触发 `onRendered`；但引擎实例（解析 Worker + WASM）会一直存活到 `destroy()`。不再使用空 deck 预览时应销毁，不要只让它保持挂载。
 - SSR：模块可在服务端 import；`createPptPreview` 只能在存在 `Worker` 与 WebCrypto 的环境执行。
 
 ## 错误归一边界
 
 - 引擎的 `not-ooxml`（非 pptx 的 zip、不可读容器、部分损坏的加密容器）归一为 `UNSUPPORTED` —— message 原样保留，但**不**进一步细分损坏原因（上游错误没有可依据的 `stage` 字段）。
 - 未知解析陷阱、Worker/WASM/CSP 与资产 URL 失败归 `UNKNOWN` —— 绝不误报为文件损坏。
+- **单页渲染失败会报错，但该页保持空白** —— 单页失败路径会释放该页 canvas 并恢复空态；只有离开并重新进入渲染带时才会重渲（IntersectionObserver 只在交叉状态变化时触发）。错误 message 来自引擎且不携带页码，因此仅凭错误载荷无法区分单页失败与 deck 级失败。

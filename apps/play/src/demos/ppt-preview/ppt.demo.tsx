@@ -232,7 +232,7 @@ export default function PptPreviewDemo() {
         <Alert
           type={error.code === "UNKNOWN" ? "warning" : "error"}
           showIcon
-          message={
+          title={
             <Space size="small">
               <Tag color="red">{error.code}</Tag>
               <Text>{ERROR_CODE_TEXT[error.code]}</Text>
@@ -247,7 +247,7 @@ export default function PptPreviewDemo() {
         <Alert
           type="success"
           showIcon
-          message={
+          title={
             <Space size="small" wrap>
               <Tag color="green">onRendered</Tag>
               <Text>共 {info.slideCount} 页</Text>
@@ -288,9 +288,11 @@ export default function PptPreviewDemo() {
                 try {
                   instanceRef.current?.goToSlide(Math.trunc(navIndex));
                 } catch (err) {
+                  // 越界是 RangeError（demo 调用参数问题，不是文件不支持）：
+                  // 如实展示异常名，不得套用 UNSUPPORTED 误导观众
                   setError({
-                    code: "UNSUPPORTED",
-                    message: `goToSlide: ${err instanceof Error ? err.message : String(err)}`,
+                    code: "UNKNOWN",
+                    message: `${err instanceof Error ? err.name : String(err)}: ${err instanceof Error ? err.message : String(err)}`,
                   });
                 }
               }}

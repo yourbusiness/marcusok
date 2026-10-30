@@ -123,6 +123,9 @@ export default function WordPreviewDemo() {
     bytesRef.current = new Uint8Array(buf);
     setHasFile(true);
     setFileName(file.name);
+    // 同名文件重传（内容已变）时 fileName 同值会被 React bail-out 吞掉，
+    // effect 不重跑——必须无条件 bump renderSeq 驱动重挂（pdf demo 同款）
+    setRenderSeq((n) => n + 1);
     return false;
   }, []);
 
@@ -206,7 +209,7 @@ export default function WordPreviewDemo() {
         <Alert
           type="error"
           showIcon
-          message={ERROR_CODE_TEXT[error.code] ?? error.code}
+          title={ERROR_CODE_TEXT[error.code] ?? error.code}
           description={error.message}
         />
       )}

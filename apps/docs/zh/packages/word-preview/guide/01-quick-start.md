@@ -35,7 +35,7 @@ const preview = createWordPreview(container, {
 preview.destroy();
 ```
 
-`destroy()` 立即生效：渲染 DOM 被摘除，之后才 resolve 的渲染结果被丢弃，所有回调静默。重复调用安全。同一容器可立即被新实例复用。
+`destroy()` 立即生效：渲染 DOM 被摘除，之后才 resolve 的渲染结果被丢弃，所有回调静默。重复调用安全。`destroy()` 之后同一容器可立即被新实例复用——每个实例各自 append 内部 wrapper，先 destroy 旧实例才能保持容器干净（不 destroy 旧实例直接再 create，两份渲染会叠加）。
 
 ## 默认值与引擎的三处差异
 

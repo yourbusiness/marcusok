@@ -34,7 +34,7 @@ export function PdfPanel({ file }: { file: File }) {
 }
 ```
 
-The scroll container is your own element — the preview grows inside it and the viewport-driven lazy rendering follows along automatically. The observers root at the nearest ancestor that actually scrolls or has a constrained height (fixed height, `max-height`, or a flex-resolved height), falling back to the browser viewport; an `overflow: auto` wrapper that merely grows with its content is skipped, so the preload/release bands track the element that really scrolls.
+The scroll container is your own element — the preview grows inside it and the viewport-driven lazy rendering follows along automatically. The observers root at the nearest ancestor that really clips the content: an ancestor with a constrained height (inline height, `max-height`) or one that is actually overflowing once the first page placeholder is inserted (which also picks up class-defined fixed heights and flex-resolved heights). An `overflow: auto` wrapper that merely grows with its content is skipped, and with no scrolling ancestor at all the observers fall back to the browser viewport — so the preload/release bands track the element that really scrolls.
 
 ## Scale modes
 

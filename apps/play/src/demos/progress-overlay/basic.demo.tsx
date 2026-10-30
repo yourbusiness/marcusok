@@ -132,7 +132,7 @@ export default function ProgressOverlayDemo() {
         </Flex>
       </Card>
 
-      {lastRun && <Alert type="success" showIcon message={lastRun} closable />}
+      {lastRun && <Alert type="success" showIcon title={lastRun} closable />}
     </Space>
   );
 }
