@@ -1,5 +1,11 @@
 # @marcusok/word-preview
 
+## 0.1.3
+
+### Patch Changes
+
+- 6a0be9e: Clear the detached render DOM on destroy and all late-render paths, enforce the documented runtime takeover of `h`/`experimental`/`debug`/`trimXmlDeclaration`, accept cross-realm `Uint8Array` sources and cross-realm thenable callback rejections, and correct the `breakPages`/`pageCount` JSDoc.
+
 ## 0.1.2
 
 ### Patch Changes

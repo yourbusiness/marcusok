@@ -1,5 +1,11 @@
 # @marcusok/pdf-preview
 
+## 0.1.3
+
+### Patch Changes
+
+- 9dfc708: Measure `fit-width`/`fit-page` against the container content box (padding excluded), apply PDF `/UserUnit` to the text layer, accept cross-realm byte sources and thenable callback rejections, and document the ShadowRoot/iframe and Vite 5–7 dev-server limits.
+
 ## 0.1.2
 
 ### Patch Changes
