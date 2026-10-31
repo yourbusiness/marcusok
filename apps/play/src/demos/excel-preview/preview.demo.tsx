@@ -72,6 +72,9 @@ export default function ExcelPreviewDemo() {
     bytesRef.current = new Uint8Array(buf);
     setHasFile(true);
     setFileName(file.name); // 触发下方 effect 挂载
+    // 同名文件重传（内容已变）时 fileName 同值会被 React bail-out 吞掉，
+    // 必须无条件 bump renderSeq，否则仍展示旧字节（word/pdf demo 同口径）。
+    setRenderSeq((n) => n + 1);
     return false;
   }, []);
 
