@@ -83,6 +83,18 @@ describe("WasmLoader error recovery", () => {
     }
   });
 
+  it("ignores explicitly-undefined options instead of clearing configured values", () => {
+    // 常见调用形态：configureWasm({ wasmUrl: process.env.WASM_URL }) —— 环境
+    // 变量缺失时该键为 undefined，不得把先前配置的 URL 静默清空。
+    const loader = new WasmLoader({
+      wasmUrl: "https://cdn.example.com/a.wasm",
+      timeoutMs: 5000,
+    });
+    loader.updateOptions({ wasmUrl: undefined, timeoutMs: undefined });
+    expect(loader.getOptions().wasmUrl).toBe("https://cdn.example.com/a.wasm");
+    expect(loader.getOptions().timeoutMs).toBe(5000);
+  });
+
   it("warns that a wasmUrl change cannot reload an already-initialized module", async () => {
     // Real-dependency caveat surfaced at the API boundary: modern-xlsx's
     // initWasm keeps the first successfully loaded module, so the reset+retry

@@ -52,9 +52,20 @@ export interface LoaderOptions {
    * cross-wiring (see `workerUrl`).
    */
   parseWorkerUrl?: string | URL;
-  /** Per-attempt load timeout, default 10s. */
+  /**
+   * Per-attempt WASM load timeout for the main-thread loader, default 10s.
+   *
+   * Scope: main thread (and Node). The Excel packages' workers call
+   * modern-xlsx's `initWasm` directly and do not receive this value — a
+   * worker-route operation is bounded by `workerTimeoutMs` instead (a hung
+   * worker WASM fetch surfaces as that timeout, without a main-thread retry).
+   */
   timeoutMs?: number;
-  /** Max load attempts (total, including the first), default 3. */
+  /**
+   * Max main-thread load attempts (total, including the first), default 3.
+   * Same scope note as `timeoutMs`: worker-side initialization is not retried
+   * here.
+   */
   maxRetries?: number;
   /**
    * Worker operation timeout, default 120s. A timed-out operation terminates
@@ -204,7 +215,13 @@ export class WasmLoader {
           "singleton shared across preview instances.",
       );
     }
-    this.opts = { ...this.opts, ...opts };
+    // 跳过显式 undefined：TS 调用方常把 `string | undefined` 的环境变量
+    // 直接传进来，若无条件展开会把已配置的 wasmUrl/workerUrl 静默清空
+    // （与"无法改回默认"的文档语义相反）。未提供的键即保持原值。
+    const defined = Object.fromEntries(
+      Object.entries(opts).filter(([, value]) => value !== undefined),
+    ) as LoaderOptions;
+    this.opts = { ...this.opts, ...defined };
     if ((urlChanged && this.state !== "idle") || this.state === "error") {
       this.state = "idle";
       this.promise = null;
