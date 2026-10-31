@@ -1,5 +1,11 @@
 # @marcusok/word-preview
 
+## 0.1.2
+
+### Patch Changes
+
+- f9d1ef5: Clean up comment highlights registered after an in-flight render is destroyed.
+
 ## 0.1.1
 
 ### Patch Changes
