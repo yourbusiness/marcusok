@@ -10,6 +10,7 @@
  *   play/docs demo 的浏览器验收覆盖，此处不声称渲染保真。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { runInNewContext } from "node:vm";
 import { createPdfPreview } from "../render/render";
 import type { PdfPreviewError } from "../types";
 
@@ -88,6 +89,8 @@ function deferred<T>(): Deferred<T> {
 export interface FakePageOptions {
   width?: number;
   height?: number;
+  /** PDF /UserUnit（默认 1）；viewer 在 viewport 上暴露同名字段。 */
+  userUnit?: number;
   /** render 返回受控 deferred（串行队列测试用）；缺省立即成功。 */
   deferred?: boolean;
   failRender?: Error;
@@ -111,6 +114,7 @@ function fakePage(num: number, opts: FakePageOptions = {}) {
       width: width * scale,
       height: height * scale,
       scale,
+      userUnit: opts.userUnit ?? 1,
     }),
     render: vi.fn(
       (params: {
@@ -279,6 +283,70 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     inst.destroy();
   });
 
+  it("accepts a cross-realm Uint8Array source (no instanceof reliance)", async () => {
+    const n = [...magicSource()];
+    const foreign = runInNewContext("new Uint8Array(n)", { n }) as Uint8Array;
+    expect(foreign instanceof Uint8Array).toBe(false);
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const onError = vi.fn();
+    const inst = createPdfPreview(container, { source: foreign, onError });
+    await waitForPages(container, 1);
+    expect(onError).not.toHaveBeenCalled();
+    expect(getDocument).toHaveBeenCalledTimes(1);
+    inst.destroy();
+  });
+
+  it("writes viewport.userUnit into --user-unit (PDF /UserUnit)", async () => {
+    const { doc } = fakeDoc([fakePage(1, { userUnit: 2 })]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      scale: 1,
+    });
+    await waitForPages(container, 1);
+    // 官方 viewer 同口径：--total-scale-factor = --scale-factor × --user-unit。
+    // 缺这一条时 /UserUnit=2 的文本层字号与坐标只剩一半。
+    expect(pageEls(container)[0].style.getPropertyValue("--user-unit")).toBe(
+      "2",
+    );
+    inst.destroy();
+  });
+
+  it("fit-width measures the content box (container padding is excluded)", async () => {
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    setClientSize(container, 340, 1000);
+    container.style.paddingLeft = "20px";
+    container.style.paddingRight = "20px";
+    // (340 - 20 - 20) / 612 = 0.4902 → 300px（含 padding 会得到 340px 并溢出）
+    const inst = createPdfPreview(container, { source: magicSource() });
+    await waitForPages(container, 1);
+    expect(pageEls(container)[0].style.width).toBe("300px");
+    inst.destroy();
+  });
+
+  it("fit-page excludes padding on both axes", async () => {
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    setClientSize(container, 400, 500);
+    container.style.padding = "20px";
+    // 内容盒 360×460：360/612≈0.588，460/792≈0.581（较小）→ 宽约 355px
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      scale: "fit-page",
+    });
+    await waitForPages(container, 1);
+    const w = Number.parseFloat(pageEls(container)[0].style.width);
+    expect(w).toBeGreaterThan(350);
+    expect(w).toBeLessThan(360);
+    inst.destroy();
+  });
+
   it("fit-page takes the smaller width/height ratio", async () => {
     const { doc } = fakeDoc([fakePage(1)]);
     setupDocument(doc);
@@ -345,6 +413,32 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     });
     expect(onRendered).toHaveBeenCalledTimes(1);
     inst.destroy();
+  });
+
+  it("onRendered 的跨 realm thenable 拒绝被兜住（不依赖 instanceof Promise）", async () => {
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      // 跨 iframe 的 Promise 不满足本 realm 的 instanceof Promise；用
+      // thenable 模拟该形态，rejection 必须被收口。
+      onRendered: () =>
+        ({
+          then: (_resolve: unknown, reject: (e: unknown) => void) =>
+            reject(new Error("cross-realm async cb boom")),
+        }) as never,
+    });
+    await waitForPages(container, 1);
+    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    await vi.waitFor(() => {
+      expect(
+        warn.mock.calls.some((c) => String(c[0]).includes("onRendered")),
+      ).toBe(true);
+    });
+    inst.destroy();
+    warn.mockRestore();
   });
 
   it("textLayer:false renders canvas only", async () => {

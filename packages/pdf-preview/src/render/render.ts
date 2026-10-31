@@ -108,6 +108,32 @@ function findScrollRoot(start: HTMLElement): HTMLElement | null {
   return null;
 }
 
+/** 容器内容盒尺寸（clientWidth/Height 扣除 padding）。
+ *
+ * `fit-width` / `fit-page` 的目标是内容区而不是整个 padding box：
+ * clientWidth 含左右 padding，带内边距的容器会让页面比可用宽度大出
+ * padding 宽度、出现水平溢出。样式从节点所在 realm 读取（iframe 容器的
+ * computed style 属于其自身 document，不能用全局 window）。解析失败按 0
+ * 处理——宁可退回 padding box 的旧行为，也不产生 NaN 缩放。 */
+function contentBoxSize(el: HTMLElement): { width: number; height: number } {
+  const view = el.ownerDocument?.defaultView;
+  const style = view ? view.getComputedStyle(el) : null;
+  const px = (value: string | undefined): number => {
+    const n = Number.parseFloat(value ?? "");
+    return Number.isFinite(n) ? n : 0;
+  };
+  return {
+    width: Math.max(
+      0,
+      el.clientWidth - px(style?.paddingLeft) - px(style?.paddingRight),
+    ),
+    height: Math.max(
+      0,
+      el.clientHeight - px(style?.paddingTop) - px(style?.paddingBottom),
+    ),
+  };
+}
+
 interface PageEntry {
   /** 1-based 页码。 */
   num: number;
@@ -132,10 +158,23 @@ interface PageEntry {
 // "File is empty." 假报错失败。复制成本一次性（MB 级 <2ms），远小于解析
 // 成本；File/Blob 每次 arrayBuffer() 都是新读，无需复制。
 async function toBytes(source: PdfSource): Promise<Uint8Array> {
-  if (source instanceof Uint8Array) return source.slice();
-  if (source instanceof ArrayBuffer) return new Uint8Array(source.slice());
+  // 跨 realm 判定（见下方注释）：instanceof 对 iframe/vm 的 TypedArray
+  // 恒为 false，会让源落到 `.arrayBuffer()`（Uint8Array 无此方法）。
+  if (ArrayBuffer.isView(source)) {
+    return new Uint8Array(
+      source.buffer,
+      source.byteOffset,
+      source.byteLength,
+    ).slice();
+  }
+  if (isArrayBuffer(source)) return new Uint8Array(source).slice();
   const buf = await source.arrayBuffer();
   return new Uint8Array(buf);
+}
+
+/** 跨 realm ArrayBuffer 判定（instanceof 不可靠，用内部标签）。 */
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
 }
 
 /** 用户回调异常隔离：调用方回调抛错不得被误报成渲染错误（word-preview 同
@@ -153,7 +192,15 @@ function guardCallback<A extends unknown[]>(
   return (...args: A) => {
     try {
       const result = cb(...args) as unknown;
-      if (result instanceof Promise) result.catch(warn);
+      // 按 thenable 判断而非 `instanceof Promise`：iframe 等跨 realm 的
+      // Promise 不满足后者，会让异步回调的 rejection 漏成 unhandled。
+      if (
+        result !== null &&
+        (typeof result === "object" || typeof result === "function") &&
+        typeof (result as { then?: unknown }).then === "function"
+      ) {
+        void (result as PromiseLike<unknown>).then(undefined, warn);
+      }
     } catch (e) {
       warn(e);
     }
@@ -410,8 +457,12 @@ export function createPdfPreview(
       const cssH = Math.max(1, Math.floor(viewport.height));
       e.el.style.width = `${cssW}px`;
       e.el.style.height = `${cssH}px`;
-      // 文本层 CSS 变量链的页级输入（text-layer-css.ts 的 .mop-pdf-page 段）
+      // 文本层 CSS 变量链的页级输入（text-layer-css.ts 的 .mop-pdf-page 段）。
+      // --user-unit 与官方 viewer 一致：/UserUnit != 1 的大幅面文档里
+      // viewport.width 已含该系数，文本层必须用同一系数换算，否则字号与
+      // 坐标只按 scale 计算、文字缩到页面左上角。
       e.el.style.setProperty("--scale-factor", String(viewport.scale));
+      e.el.style.setProperty("--user-unit", String(viewport.userUnit ?? 1));
 
       const canvas = document.createElement("canvas");
       const dpr =
@@ -503,8 +554,10 @@ export function createPdfPreview(
     el.style.width = `${Math.max(1, Math.floor(viewport.width))}px`;
     el.style.height = `${Math.max(1, Math.floor(viewport.height))}px`;
     // 占位期即写变量：文本层样式链在渲染前就有正确输入（renderEntry
-    // 渲染时会按最终 viewport 再写一次，同值幂等）
+    // 渲染时会按最终 viewport 再写一次，同值幂等）。--user-unit 的来源见
+    // renderEntry 的同名注释（/UserUnit 文档）。
     el.style.setProperty("--scale-factor", String(resolvedScale));
+    el.style.setProperty("--user-unit", String(viewport.userUnit ?? 1));
     const entry: PageEntry = {
       num,
       el,
@@ -630,7 +683,7 @@ export function createPdfPreview(
         resolvedScale = scaleOpt;
       } else {
         const base = first.getViewport({ scale: 1 });
-        const cw = container.clientWidth;
+        const { width: cw, height: ch } = contentBoxSize(container);
         if (!cw) {
           console.warn(
             "[pdf-preview] container has no measurable width (hidden?); falling back to scale=1.",
@@ -639,7 +692,6 @@ export function createPdfPreview(
         } else if (scaleOpt === "fit-width") {
           resolvedScale = cw / base.width;
         } else {
-          const ch = container.clientHeight;
           resolvedScale = Math.min(
             cw / base.width,
             ch > 0 ? ch / base.height : Infinity,

@@ -18,16 +18,16 @@ preview.destroy(); // cancel in-flight work + terminate the worker
 
 ## Why the wrapper (what you get over raw pdfjs-dist)
 
-| Concern                 | Raw pdfjs-dist                                                                                    | This package                                                                                                                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bad input               | A non-PDF dies inside the worker with an opaque error                                             | Sniffed before the engine: `%PDF-` magic in the first 1024 bytes (Adobe's own reader window) → readable `UNSUPPORTED` / `CORRUPT` codes                                                            |
-| Asset wiring            | `GlobalWorkerOptions.workerSrc` must be set by hand or the API throws; cmaps/fonts must be hosted | Worker located by a `new URL(..., import.meta.url)` anchor (bundler-emitted, zero config) + derived cmaps/fonts URLs, all overridable                                                              |
-| Text layer styling      | `TextLayer` ships **no** positioning CSS — spans need the official viewer's `.textLayer` rules    | Minimal style set injected as a document-level idempotent singleton (with the `--scale-factor` variable chain), `styleNonce` supported                                                             |
-| Large documents         | Every page you render stays rendered; canvas memory grows linearly                                | Viewport-driven lazy pipeline: 1-screen preload band renders, beyond 3 screens canvases are released (text streams cancelled, page resources cleaned) and re-render on return; serialized per page |
-| Scrollbar jumps         | N/A (you build the layout)                                                                        | Per-page placeholders sized from each page's own viewport — mixed-size documents don't jump; devicePixelRatio-aware canvas paint                                                                   |
-| Encrypted PDFs          | `PasswordException` surfaces raw (code 1/2 semantics undocumented at the call site)               | Normalized `PASSWORD_PROTECTED` with a message distinguishing needs-password from rejected-password                                                                                                |
-| destroy()               | Nothing to call but `loadingTask.destroy()`; in-flight renders reject into your console           | Full-chain cancellation: observers disconnected, render tasks and text streams cancelled, canvases zeroed, worker destroyed, DOM detached — destroy-path rejections are silent                     |
-| Embedded PDF JavaScript | Runs via the QuickJS sandbox if you load the sandbox module                                       | The sandbox module is never loaded — embedded PDF JavaScript never executes, unconditionally                                                                                                       |
+| Concern                 | Raw pdfjs-dist                                                                                    | This package                                                                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bad input               | A non-PDF dies inside the worker with an opaque error                                             | Sniffed before the engine: `%PDF-` magic in the first 1024 bytes (Adobe's own reader window) → readable `UNSUPPORTED` / `CORRUPT` codes                                                                   |
+| Asset wiring            | `GlobalWorkerOptions.workerSrc` must be set by hand or the API throws; cmaps/fonts must be hosted | Worker located by a `new URL(..., import.meta.url)` anchor (emitted in production builds / Vite 8+; Vite 5–7's dev pre-bundling needs `optimizeDeps.exclude`) + derived cmaps/fonts URLs, all overridable |
+| Text layer styling      | `TextLayer` ships **no** positioning CSS — spans need the official viewer's `.textLayer` rules    | Minimal style set injected as a document-level idempotent singleton (with the `--scale-factor` variable chain), `styleNonce` supported                                                                    |
+| Large documents         | Every page you render stays rendered; canvas memory grows linearly                                | Viewport-driven lazy pipeline: 1-screen preload band renders, beyond 3 screens canvases are released (text streams cancelled, page resources cleaned) and re-render on return; serialized per page        |
+| Scrollbar jumps         | N/A (you build the layout)                                                                        | Per-page placeholders sized from each page's own viewport — mixed-size documents don't jump; devicePixelRatio-aware canvas paint                                                                          |
+| Encrypted PDFs          | `PasswordException` surfaces raw (code 1/2 semantics undocumented at the call site)               | Normalized `PASSWORD_PROTECTED` with a message distinguishing needs-password from rejected-password                                                                                                       |
+| destroy()               | Nothing to call but `loadingTask.destroy()`; in-flight renders reject into your console           | Full-chain cancellation: observers disconnected, render tasks and text streams cancelled, canvases zeroed, worker destroyed, DOM detached — destroy-path rejections are silent                            |
+| Embedded PDF JavaScript | Runs via the QuickJS sandbox if you load the sandbox module                                       | The sandbox module is never loaded — embedded PDF JavaScript never executes, unconditionally                                                                                                              |
 
 ## Limits (stated honestly)
 
@@ -36,7 +36,8 @@ preview.destroy(); // cancel in-flight work + terminate the worker
 - **No annotation layer in v1** — hyperlinks, form widgets and comments do not render.
 - **Scale is resolved once** at creation (`fit-*` measures the container then); container resizes don't re-fit — re-create the instance.
 - **wasm-gated features degrade silently** — JPX/JBIG2 images and ICC color management need the pdf.js wasm assets, which are intentionally not bundled; pass `wasmUrl`/`iccUrl` if you need them.
-- **Bundler scenarios and cmaps** — bundlers emit the worker automatically but never copy the `cmaps/`/`standard_fonts/` directories; without explicit URLs, CJK documents degrade silently. See the docs-site quick start for the copy-plugin recipe.
+- **Bundler scenarios and cmaps** — bundlers emit the worker automatically in production builds but never copy the `cmaps/`/`standard_fonts/` directories; without explicit URLs, CJK documents degrade silently. See the docs-site quick start for the copy-plugin recipe.
+- **Vite 5–7 dev server** — dependency pre-bundling leaves the worker URL pointing into `.vite/deps` (404 → `UNKNOWN`). Add `optimizeDeps: { exclude: ["@marcusok/pdf-preview"] }`; production builds are unaffected.
 
 Full details in the [docs site limits page](https://yourbusiness.github.io/marcusok/packages/pdf-preview/guide/02-limits).
 
@@ -52,7 +53,7 @@ Full details in the [docs site limits page](https://yourbusiness.github.io/marcu
 pnpm add @marcusok/pdf-preview
 ```
 
-Requires Node `>=22.13.0 || >=24` at install time (the pdf.js engine's own declaration); the browser runtime only needs a modern evergreen browser.
+Requires Node `>=22.13.0 || >=24` at install time (the pdf.js engine's own declaration); the browser runtime only needs a modern evergreen browser. The preview container must live in the main document — ShadowRoot and iframe documents are not supported in this version (the layout/text-layer stylesheet is injected into `document.head`).
 
 ## License
 
