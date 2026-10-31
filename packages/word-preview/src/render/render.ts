@@ -219,7 +219,12 @@ export function createWordPreview(
       // sniff 已确认必需部件齐全，之后 renderAsync 抛错即"内容损坏/
       // 解析失败"，统一归 CORRUPT（保留 cause 供诊断）
       await renderAsync(bytes, wrapper, styleDetached, upstream);
-      if (destroyed) return; // 迟到结果：wrapper 已摘除，丢弃且不回调
+      if (destroyed) {
+        // 上游可能在 destroy 的首次清理之后才注册注释高亮；迟到完成时
+        // 必须再删一次，避免 Highlight 持有的 Range 永久留在全局注册表。
+        cleanupGlobalRegistrations(className);
+        return; // wrapper 已摘除，丢弃且不回调
+      }
 
       if (styleDetached) {
         rebuildStylesWithNonce(styleDetached, wrapper, options.styleNonce!);
@@ -234,7 +239,11 @@ export function createWordPreview(
         durationMs: Math.round(performance.now() - t0),
       });
     } catch (err) {
-      if (destroyed) return;
+      if (destroyed) {
+        // reject 同样可能发生在迟到注册之后；销毁态虽不回调，仍须收尾。
+        cleanupGlobalRegistrations(className);
+        return;
+      }
       // 同 sniff 失败路径：失败即无副作用，摘除 wrapper 再报错
       // （destroy 分支已自行 remove，此处必是未 destroy 的失败）。
       // renderAsync 抛错前可能已注册注释高亮（renderComments 半途失败），

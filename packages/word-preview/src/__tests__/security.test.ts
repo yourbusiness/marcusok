@@ -267,6 +267,67 @@ describe("destroy 静默与错误归一", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it("destroy 后上游迟到注册注释高亮：renderAsync 完成后仍清理全局注册", async () => {
+    const highlights = new Map<string, unknown>();
+    vi.stubGlobal("CSS", { highlights });
+    try {
+      let release!: () => void;
+      renderAsyncMock.mockImplementation(
+        (_data, _bodyContainer, _styleContainer, options: Partial<Options>) =>
+          new Promise<void>((resolve) => {
+            release = () => {
+              // 模拟上游在 destroy 的首次清理之后才注册高亮再 resolve
+              highlights.set(`${options.className}-comments`, {
+                fake: "Highlight",
+              });
+              resolve();
+            };
+          }),
+      );
+      const container = makeContainer();
+      const inst = createWordPreview(container, { source: simpleDocx("x") });
+      const className = (container.firstElementChild as HTMLElement).className;
+      await waitFor(() => renderAsyncMock.mock.calls.length > 0);
+      inst.destroy();
+      release();
+      await Promise.resolve(); // 让 await renderAsync 的 boot  continuation 执行
+
+      expect(highlights.has(`${className}-comments`)).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("destroy 后上游迟到注册高亮并 reject：失败终态仍清理全局注册", async () => {
+    const highlights = new Map<string, unknown>();
+    vi.stubGlobal("CSS", { highlights });
+    try {
+      let release!: () => void;
+      renderAsyncMock.mockImplementation(
+        (_data, _bodyContainer, _styleContainer, options: Partial<Options>) =>
+          new Promise<void>((_resolve, reject) => {
+            release = () => {
+              highlights.set(`${options.className}-comments`, {
+                fake: "Highlight",
+              });
+              reject(new Error("late failure"));
+            };
+          }),
+      );
+      const container = makeContainer();
+      const inst = createWordPreview(container, { source: simpleDocx("x") });
+      const className = (container.firstElementChild as HTMLElement).className;
+      await waitFor(() => renderAsyncMock.mock.calls.length > 0);
+      inst.destroy();
+      release();
+      await Promise.resolve(); // 让 await renderAsync 的 catch continuation 执行
+
+      expect(highlights.has(`${className}-comments`)).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("mock 抛错：归一 CORRUPT 并保留 cause", async () => {
     // 返回 rejected promise（同步抛出会被 mock 捕获、到不了 boot 的 catch）
     renderAsyncMock.mockImplementation(() =>
