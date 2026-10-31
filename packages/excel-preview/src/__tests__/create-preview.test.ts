@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
+import { runInNewContext } from "node:vm";
 import { createPreview } from "../index";
 
 /**
@@ -65,6 +66,47 @@ describe("createPreview 初始 sheet 校验", () => {
         message: `Sheet not found: ${String(bad)}`,
       });
       expect(onParsed).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("接受跨 realm 的 Uint8Array 源（不依赖 instanceof）", async () => {
+    const n = [...csvBytes];
+    const foreign = runInNewContext("new Uint8Array(n)", { n }) as Uint8Array;
+    expect(foreign instanceof Uint8Array).toBe(false);
+    const onParsed = vi.fn();
+    const onError = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    createPreview(container, {
+      source: foreign,
+      onParsed,
+      onError,
+    });
+    await flushBoot();
+    expect(onError).not.toHaveBeenCalled();
+    expect(onParsed).toHaveBeenCalledTimes(1);
+  });
+
+  it("异步 onParsed 的 rejection 被兜住（不产生 unhandled rejection）", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      createPreview(container, {
+        source: csvBytes,
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- 有意模拟 async void 回调的 rejected promise
+        onParsed: async () => {
+          await Promise.resolve();
+          throw new Error("async UI unmounted");
+        },
+      });
+      await flushBoot();
+      await new Promise((res) => setTimeout(res, 0));
+      expect(
+        warn.mock.calls.some((c) => String(c[0]).includes("onParsed")),
+      ).toBe(true);
+    } finally {
+      warn.mockRestore();
     }
   });
 

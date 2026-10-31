@@ -113,8 +113,12 @@ describe("日期段（原样交引擎 + 1904 平移）", () => {
       "1904-1-2 12:00",
     );
   });
-  it("1900 系统下同 serial 不平移", () => {
-    expect(F("number", "0", "yyyy-m-d", "date1900")).toBe("1899-12-31");
+  it("1900 系统 serial 0 按 Excel 的 1900-01-00 显示（不平移成 1899）", () => {
+    // Excel 对 serial 0 的显示口径是 "1/0/1900"（January 0, 1900），
+    // 与 serial 60 的 2/29/1900 同属 Lotus 兼容偏移；渲染成 1899-12-31
+    // 会让链接/公式得到的空日期与 Excel 对不上。
+    expect(F("number", "0", "yyyy-m-d", "date1900")).toBe("1900-1-0");
+    expect(F("number", "0", "m/d/yyyy", "date1900")).toBe("1/0/1900");
   });
   it("1900 幽灵日：serial 60 显示为 1900-02-29（Excel 保留的 Lotus 闰年 bug）", () => {
     // 引擎 serialToDate 把 60 折叠成 2/28，渲染层按 Excel 显示口径回补一天；

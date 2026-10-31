@@ -45,9 +45,18 @@ export { terminateParseWorker } from "./worker/worker-client";
 export { formatCellValue } from "./numfmt/format";
 export type { FormattedValue } from "./numfmt/format";
 
+/** 跨 realm ArrayBuffer 判定（instanceof 对 iframe/vm 不可靠）。 */
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
+}
+
 async function toBytes(source: PreviewOptions["source"]): Promise<Uint8Array> {
-  if (source instanceof Uint8Array) return source;
-  if (source instanceof ArrayBuffer) return new Uint8Array(source);
+  // ArrayBuffer.isView 按内部槽判定，跨 realm 的 Uint8Array 也能命中；
+  // 旧写法落到 `.arrayBuffer()`（TypedArray 没有该方法）会直接失败。
+  if (ArrayBuffer.isView(source)) {
+    return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+  }
+  if (isArrayBuffer(source)) return new Uint8Array(source);
   // File/Blob
   const buf = await source.arrayBuffer();
   return new Uint8Array(buf);
@@ -101,11 +110,24 @@ function guardCallback<A extends unknown[]>(
   name: string,
 ): ((...args: A) => void) | undefined {
   if (!cb) return cb;
+  const warn = (e: unknown): void => {
+    console.warn(`[excel-preview] user ${name} callback threw; ignoring`, e);
+  };
   return (...args: A) => {
     try {
-      cb(...args);
+      const result = cb(...args) as unknown;
+      // 异步回调是第二形态：TS 允许把 `async () => …` 赋给返回 void 的回调
+      // 类型，其 rejected promise 不会被同步 catch 捕到。按 thenable 判断而
+      // 非 `instanceof Promise`——iframe 等跨 realm 的 Promise 通不过后者。
+      if (
+        result !== null &&
+        (typeof result === "object" || typeof result === "function") &&
+        typeof (result as { then?: unknown }).then === "function"
+      ) {
+        void (result as PromiseLike<unknown>).then(undefined, warn);
+      }
     } catch (e) {
-      console.warn(`[excel-preview] user ${name} callback threw; ignoring`, e);
+      warn(e);
     }
   };
 }

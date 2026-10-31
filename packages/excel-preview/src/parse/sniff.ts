@@ -35,13 +35,30 @@ function canDecode(bytes: Uint8Array, encoding: string): boolean {
 }
 
 export function sniffFormat(bytes: Uint8Array): SniffedFormat {
-  if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) return "zip";
+  // 只认完整的 ZIP 签名（普通条目 PK\x03\x04、空包 PK\x05\x06、分卷
+  // PK\x07\x08）。仅匹配前两字节 "PK" 会把以 "PK," / "PKG" 开头的合法
+  // CSV（主键列很常见的表头）误判成 zip，最终报出 "Legacy .xls" 的错误。
+  if (
+    bytes.length >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4b &&
+    ((bytes[2] === 0x03 && bytes[3] === 0x04) ||
+      (bytes[2] === 0x05 && bytes[3] === 0x06) ||
+      (bytes[2] === 0x07 && bytes[3] === 0x08))
+  ) {
+    return "zip";
+  }
+  // OLE2 复合文档签名是完整 8 字节；截断的 4 字节前缀不应命中。
   if (
     bytes.length >= 8 &&
     bytes[0] === 0xd0 &&
     bytes[1] === 0xcf &&
     bytes[2] === 0x11 &&
-    bytes[3] === 0xe0
+    bytes[3] === 0xe0 &&
+    bytes[4] === 0xa1 &&
+    bytes[5] === 0xb1 &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0xe1
   ) {
     return "ole2";
   }

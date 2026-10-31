@@ -53,8 +53,8 @@ configureWasm({ wasmUrl, parseWorkerUrl });
 
 | 配置项            | 默认值    | 含义                                                                                                                                                 |
 | ----------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `timeoutMs`       | `10_000`  | 单次尝试的 WASM 加载超时（fetch/instantiate）                                                                                                        |
-| `maxRetries`      | `3`       | 总加载尝试次数（含首次；重试间隔 300ms / 600ms 退避）                                                                                                |
+| `timeoutMs`       | `10_000`  | **主线程** loader 的单次 WASM 加载超时（fetch/instantiate）。worker 解析在 parse worker 内初始化，不应用该值——该链路由 `workerTimeoutMs` 约束。      |
+| `maxRetries`      | `3`       | **主线程**总加载尝试次数（含首次；重试间隔 300ms / 600ms 退避）；worker 内初始化不重试。                                                             |
 | `workerTimeoutMs` | `120_000` | 解析 worker 的操作超时。超时的解析会终止共享 worker、拒绝在途请求且不在主线程重跑；下次解析重建新 worker。必须 > 0——`0`/负数是"立即超时"，不是"禁用" |
 
 ## Vite dev server 注意事项

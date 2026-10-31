@@ -366,7 +366,19 @@ export function formatDateSection(
   // Excel 显示口径回补一天（覆盖取整进位与未进位两种落入形态）。星期几无需
   // 调整——2/28/1900 与 Excel 的 2/29/1900 同为周三（Excel 的前置闰年偏差
   // 在该日恰好抵消）。
-  const dayOfMonth = serialDay === 60 ? 29 : dd.getUTCDate();
+  // serial 0 在 Excel 1900 日期系统中显示为 1900-01-00（"January 0,
+  // 1900"）——与 serial 60 的幽灵日同源，源自 Lotus 1-2-3 的日期偏移。
+  // 引擎 serialToDate(0) 返回 1899-12-31，直接渲染会写成 1899-12-31，
+  // 与 Excel 不一致；调用方已对 date1904 做 +1462 平移，故 serialDay 0
+  // 只可能是 1900 系统。
+  const isSerialZeroDay = serialDay === 0;
+  const displayYear = isSerialZeroDay ? 1900 : dd.getUTCFullYear();
+  const displayMonth = isSerialZeroDay ? 0 : dd.getUTCMonth();
+  const dayOfMonth = isSerialZeroDay
+    ? 0
+    : serialDay === 60
+      ? 29
+      : dd.getUTCDate();
   const secsOfDay = rollDay ? totalSec - SECS_PER_DAY : totalSec;
   // 浮点秒仅小数秒（ss.0）显示路径使用；整秒路径保持 round 口径不变
   const totalSecFloat = frac * SECS_PER_DAY;
@@ -398,13 +410,12 @@ export function formatDateSection(
     const head = tok[0].toLowerCase();
     const len = tok.length;
     if (head === "y") {
-      out +=
-        len >= 3 ? String(dd.getUTCFullYear()) : pad(dd.getUTCFullYear() % 100);
+      out += len >= 3 ? String(displayYear) : pad(displayYear % 100);
     } else if (head === "m") {
       if (isMinute) {
         out += len >= 2 ? pad(minute) : String(minute);
       } else {
-        const m = dd.getUTCMonth();
+        const m = displayMonth;
         out +=
           len >= 4
             ? MONTH_LONG[m]

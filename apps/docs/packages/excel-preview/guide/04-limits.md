@@ -16,7 +16,7 @@ What the package deliberately does not do, and why.
 ## Rendered with known approximations
 
 - **Rich text** runs render as their concatenated plain text; run-level styling is on the roadmap (the current model keeps only the joined text, so restoring runs will need a parser addition).
-- **Pattern fills** (hatched patterns like `gray125`) render as their background/foreground solid approximation; solid and gradient fills render exactly.
+- **Pattern fills** (hatched patterns like `gray125`) render as their background/foreground solid approximation; solid fills render exactly. Linear gradients use their `degree`; `path`/radial gradients are approximated as linear gradients (their `left`/`right`/`top`/`bottom` focal offsets are ignored).
 - **Rotated text** (`textRotation`) is clipped to the cell box when it does not fit — Excel also truncates rotated text that exceeds the cell, but its clipping follows the rotated text run rather than the axis-aligned cell rectangle, so edge cases near the diagonal differ slightly.
 - **Number columns narrower than their content** clip instead of showing Excel's `####` (real `####` needs text measurement per cell — not worth the scroll cost yet).
 - **Oversized merges** skip the per-cell coverage expansion when a single merge exceeds 1,000,000 covered cells (`rowSpan × colSpan`), or when the expansions of all merges combined exceed 2,000,000 cells (budget consumed in file order): the merge's anchor cell still renders with its span, but covered cells are no longer blanked out, so stray values stored inside such a merge become visible (Excel semantics would show them as empty). The caps exist because the expansion runs on the main thread — a whole-sheet merge, or many near-limit merges stacked, would freeze the page.

@@ -201,6 +201,59 @@ describe("主题色覆盖层（读取侧 null 的找回）", () => {
     });
   });
 
+  it("命名空间前缀 + 单引号属性的 styles.xml 仍能完整解析", () => {
+    // 合法 XML 的两种常见变体：元素带前缀（<x:fonts>）与单引号属性
+    // （patternType='solid'）。旧解析器会产出非 null 的空覆盖层，使模型层
+    // 不再回退引擎数组，样式整片静默丢失。
+    const styles = `<x:styleSheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><x:fonts count="2"><x:font><x:b/><x:sz val='12'/><x:name val='Arial'/><x:color rgb='FFFF0000'/></x:font><x:font/></x:fonts><x:fills count="1"><x:fill><x:patternFill patternType='solid'><x:fgColor rgb='FF00FF00'/></x:patternFill></x:fill></x:fills><x:borders count="1"><x:border><x:left style='thin'><x:color rgb='FF0000FF'/></x:left></x:border></x:borders><x:cellXfs count="1"><x:xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></x:cellXfs></x:styleSheet>`;
+    const bytes2 = buildXlsx({
+      sheets: [
+        {
+          name: "P",
+          xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles,
+    });
+    const { overlay } = buildStylesOverlay(bytes2);
+    expect(overlay).not.toBeNull();
+    expect(overlay!.fonts).toHaveLength(2);
+    expect(overlay!.fonts[0]).toMatchObject({
+      bold: true,
+      size: 12,
+      name: "Arial",
+      color: { kind: "rgb", rgb: "FFFF0000" },
+    });
+    expect(overlay!.fills).toHaveLength(1);
+    expect(overlay!.fills[0].patternType).toBe("solid");
+    expect(overlay!.fills[0].fgColor).toEqual({
+      kind: "rgb",
+      rgb: "FF00FF00",
+    });
+    expect(overlay!.borders).toHaveLength(1);
+    expect(overlay!.borders[0].left?.style).toBe("thin");
+    expect(overlay!.borders[0].left?.color).toEqual({
+      kind: "rgb",
+      rgb: "FF0000FF",
+    });
+  });
+
+  it("解析结果与 section count 不一致时降级（返回 null，交引擎数组）", () => {
+    // 覆盖层数组必须与 cellXfs 的 id 严格 1:1；数量对不上时宁可整体
+    // 放弃，也不能交出错位的样式表。
+    const styles = `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellXfs count="1"><xf numFmtId="0" fontId="1" fillId="0" borderId="0"/></cellXfs></styleSheet>`;
+    const bytes2 = buildXlsx({
+      sheets: [
+        {
+          name: "M",
+          xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles,
+    });
+    expect(buildStylesOverlay(bytes2).overlay).toBeNull();
+  });
+
   it("theme1.xml 调色板解出", () => {
     const palette = parseThemePalette(`<?xml version="1.0"?>${OFFICE_THEME}`);
     expect(palette.accent1).toBe("4472C4");
@@ -602,6 +655,19 @@ describe("解析入口（主线程路径 + 错误归一）", () => {
     }
   });
 
+  it("以 PK 开头的 CSV 不会被误判为 zip / legacy .xls", async () => {
+    // "PK,id" 是很常见的主键表头；只匹配两字节 PK 会把文本当 ZIP，引擎
+    // 报 "expected ZIP or OLE2 header"，随后被归一成 LEGACY_FORMAT。
+    const r = await parseOnMainThread({
+      bytes: strToU8("PK,id\n1,2\n3,4\n"),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.workbook.sheets[0].name).toBe("CSV");
+      expect(r.workbook.sheets[0].rowCount).toBe(3);
+    }
+  });
+
   it("伪造 OLE2 → LEGACY_FORMAT（.xls 友好报错）", async () => {
     const r = await parseOnMainThread({ bytes: fakeOle2Bytes() });
     expect(r.ok).toBe(false);
@@ -816,6 +882,19 @@ describe("CSV 解析", () => {
   it("分隔符嗅探", () => {
     const wb = csvToWorkbook(strToU8("a;b\n1;2\n"));
     expect(wb.sheets[0].rows[0].cells.map((c) => c.value)).toEqual(["a", "b"]);
+  });
+  it("TSV 字段内的逗号不会让分隔符误选为逗号", () => {
+    // 逗号总频次（3）高于制表符（2）；按频次投票会把整表按逗号拆成
+    // 4 列。按行一致性评分时 tab 是唯一稳定的两列结构。
+    const wb = csvToWorkbook(
+      strToU8("desc\tamount\nWidget, large, red, blue\t10\nRow2\t20\n"),
+    );
+    const sheet = wb.sheets[0];
+    expect(sheet.colCount).toBe(2);
+    expect(sheet.rows[1].cells.map((c) => c.value)).toEqual([
+      "Widget, large, red, blue",
+      "10",
+    ]);
   });
   it("BOM 剥离与数字类型推断", () => {
     const wb = csvToWorkbook(

@@ -320,6 +320,33 @@ function parseFillElem(content: string): OverlayFill {
   return out;
 }
 
+/**
+ * 把 styles.xml 归一成解析器能处理的形态：
+ * 1. 去掉元素名前缀（`<x:fonts>` → `<fonts>`）——带命名空间前缀的
+ *    styles.xml 是合法 XML（第三方导出器会产出），旧解析器按裸标签名
+ *    找不到任何 section，却仍返回非 null 的空覆盖层，模型层因此不再回退
+ *    引擎数组，全部样式静默丢失；
+ * 2. 单引号属性统一成双引号——XML 允许 `patternType='solid'`，旧
+ *    parseAttrs 只认双引号，同样会解析出空字段。
+ * 只改标签语法（`<`/`</` 之后紧跟前缀），不碰属性值与文本；属性值里的
+ * 双引号先转义为实体，后续 decodeXmlEntities 会还原。
+ */
+function normalizeStylesXml(xml: string): string {
+  return xml
+    .replace(/<(\/?)[A-Za-z_][\w.-]*:(?=[A-Za-z_])/g, "<$1")
+    .replace(
+      /([\w:.-]+)\s*=\s*'([^']*)'/g,
+      (_, name: string, value: string) =>
+        `${name}="${value.replace(/"/g, "&quot;")}"`,
+    );
+}
+
+/** section 声明的 count（缺失返回 null，不做一致性校验）。 */
+function declaredCount(xml: string, tag: string): number | null {
+  const m = new RegExp(`<${tag}\\b[^>]*\\bcount="(\\d+)"`).exec(xml);
+  return m ? Number(m[1]) : null;
+}
+
 /** 从 zip 字节构建覆盖层（styles.xml 缺失时返回 null，调用方降级）。 */
 export function buildStylesOverlay(bytes: Uint8Array): {
   overlay: StylesOverlay | null;
@@ -328,7 +355,7 @@ export function buildStylesOverlay(bytes: Uint8Array): {
   const parts = readParts(bytes);
   const palette = parts.theme ? parseThemePalette(parts.theme) : {};
   if (!parts.styles) return { overlay: null, palette };
-  const xml = parts.styles;
+  const xml = normalizeStylesXml(parts.styles);
 
   const fontsSec = /<fonts\b[^>]*>([\s\S]*?)<\/fonts>/.exec(xml)?.[1] ?? "";
   const fillsSec = /<fills\b[^>]*>([\s\S]*?)<\/fills>/.exec(xml)?.[1] ?? "";
@@ -342,6 +369,18 @@ export function buildStylesOverlay(bytes: Uint8Array): {
       parseBorderElem(e.attrs, e.content),
     ),
   };
+
+  // 覆盖层的核心契约是"数组下标与 cellXfs 的 fontId/fillId/borderId 严格
+  // 1:1"。解析结果与 section 声明的 count 不一致说明覆盖层不可信——此时
+  // 必须返回 null 让调用方回退引擎数组，而不是交出一份错位的样式表。
+  const declared: Array<[number | null, number]> = [
+    [declaredCount(xml, "fonts"), overlay.fonts.length],
+    [declaredCount(xml, "fills"), overlay.fills.length],
+    [declaredCount(xml, "borders"), overlay.borders.length],
+  ];
+  if (declared.some(([count, actual]) => count !== null && count !== actual)) {
+    return { overlay: null, palette };
+  }
 
   return { overlay, palette };
 }

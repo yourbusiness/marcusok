@@ -53,8 +53,8 @@ The shared loader's tunables and their defaults (same for the exporter — one l
 
 | Option            | Default   | Meaning                                                                                                                                                                                                                                                    |
 | ----------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `timeoutMs`       | `10_000`  | Per-attempt WASM load timeout (fetch/instantiate)                                                                                                                                                                                                          |
-| `maxRetries`      | `3`       | Total load attempts including the first (backoff 300ms / 600ms between retries)                                                                                                                                                                            |
+| `timeoutMs`       | `10_000`  | Per-attempt WASM load timeout for the **main-thread** loader (fetch/instantiate). Worker parsing initializes inside the parse worker, where this value is not applied — that route is bounded by `workerTimeoutMs`.                                        |
+| `maxRetries`      | `3`       | Total **main-thread** load attempts including the first (backoff 300ms / 600ms between retries); worker-side initialization is not retried.                                                                                                                |
 | `workerTimeoutMs` | `120_000` | Parse-worker operation timeout. A timed-out parse terminates the shared worker and rejects its in-flight requests without a main-thread rerun; the next parse rebuilds a fresh worker. Must be > 0 — `0`/negative is "time out immediately", not "disable" |
 
 ## Vite dev-server caveat

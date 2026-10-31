@@ -12,31 +12,46 @@ const DEFAULT_STYLES = {
   xfs: [],
 };
 
-/** 嗅探分隔符：首段文本中引号外出现频次最高者。 */
+/**
+ * 嗅探分隔符：按"每行字段数的一致性"评分，而不是字符总频次。
+ *
+ * 纯频次会被字段内容投票：TSV 的文本列里逗号常多于制表符
+ * （`Widget, large, red, blue\t10`），整表会被按逗号拆错列且无告警。
+ * 正解是候选分隔符各自试解析样本，取"众数字段数 × 众数行占比"最高者：
+ * 真正的分隔符让每一行（含单列行）落在同一列数上，正文里的偶发符号
+ * 只会制造少量离群行。引用内的分隔符由 parseCsvText 正确跳过。
+ */
 function sniffDelimiter(text: string): string {
   const sample = text.slice(0, 8192);
-  const counts = new Map<string, number>();
-  let inQuote = false;
   const candidates = [",", ";", "\t", "|"];
-  for (const ch of sample) {
-    if (ch === '"') {
-      inQuote = !inQuote;
-      continue;
-    }
-    if (inQuote) continue;
-    if (candidates.includes(ch)) {
-      counts.set(ch, (counts.get(ch) ?? 0) + 1);
-    }
-  }
   let best = ",";
-  let bestCount = counts.get(",") ?? 0;
-  for (const [d, n] of counts) {
-    if (n > bestCount) {
-      best = d;
-      bestCount = n;
+  let bestScore = 0;
+  for (const delimiter of candidates) {
+    const rows = parseCsvText(sample, delimiter).filter(
+      (r) => !(r.length === 1 && r[0] === ""),
+    );
+    if (rows.length === 0) continue;
+    const counts = new Map<number, number>();
+    for (const row of rows) {
+      counts.set(row.length, (counts.get(row.length) ?? 0) + 1);
+    }
+    let modalCols = 0;
+    let modalRows = 0;
+    for (const [cols, n] of counts) {
+      // 同票取列数更多者：一致的两列结构比一致的单列更可能是分隔符。
+      if (n > modalRows || (n === modalRows && cols > modalCols)) {
+        modalCols = cols;
+        modalRows = n;
+      }
+    }
+    const score = (modalCols * modalRows) / rows.length;
+    // 严格大于：平分时保留候选顺序（逗号优先），与旧默认一致。
+    if (score > bestScore) {
+      best = delimiter;
+      bestScore = score;
     }
   }
-  return bestCount === 0 ? "," : best;
+  return best;
 }
 
 /** RFC 4180 解析（支持 CRLF/LF、双引号转义、跨行引号字段）。 */
