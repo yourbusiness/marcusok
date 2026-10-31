@@ -274,6 +274,13 @@ describe("加载生命周期", () => {
     expect(() =>
       createPptPreview(container, { source: magicSource(), dpr: -1 }),
     ).toThrow(TypeError);
+    // 非法 cjkFallback 也在此 fail-fast，而不是等到 load 内部报异步 UNKNOWN
+    expect(() =>
+      createPptPreview(container, {
+        source: magicSource(),
+        renderOptions: { cjkFallback: "zh" as never },
+      }),
+    ).toThrow(TypeError);
     expect(loadMock).not.toHaveBeenCalled();
   });
 });

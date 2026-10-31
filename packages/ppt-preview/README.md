@@ -16,7 +16,7 @@ Read-only `.pptx` preview in the browser: continuous scrolling with lazy per-sli
 pnpm add @marcusok/ppt-preview
 ```
 
-ESM-only, Node >= 22. The engine (~2.5 MB JS) and parser wasm (~2 MB, ~800 KB gzipped) ship inside `dist`. Under Vite/webpack the wasm needs **zero configuration**; two build-time warnings about worker assets are expected and safe to ignore (they reference the engine's worker-mode/legacy paths this package never loads — see the docs' Limits page).
+ESM-only, Node >= 22. The engine (~2.5 MB JS) and parser wasm (~2 MB, ~800 KB gzipped) ship inside `dist`. Production builds (Vite 8+, webpack 5) emit the wasm with **zero configuration**; two build-time warnings about worker assets are expected and safe to ignore (they reference the engine's worker-mode/legacy paths this package never loads — see the docs' Limits page). **Vite 5–7's dev server pre-bundles dependencies** and breaks the wasm URL — add `optimizeDeps: { exclude: ["@marcusok/ppt-preview"] }` (see the docs quick start). The preview container must live in the main document — ShadowRoot and iframe documents are not supported (the layout/text-layer stylesheet is injected into `document.head`).
 
 ## Usage
 

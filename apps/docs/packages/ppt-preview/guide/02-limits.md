@@ -43,13 +43,14 @@ This package intentionally does not inject the engine's optional renderer module
 - CSP requirements:
   - `worker-src blob:` and `worker-src data:` — the engine inlines its parser worker via a Blob URL (data: fallback). Opaque-origin iframes (sandboxed without `allow-scripts`-compatible origin) may break worker creation.
   - `script-src 'wasm-unsafe-eval'` (or equivalent) for WASM execution.
-  - `style-src-attr 'unsafe-inline'` — the engine's text-layer nodes carry inline `style` attributes; `styleNonce` only covers **this package's** injected stylesheet, not the engine's inline styles.
-  - If your CSP cannot allow inline style attributes, set `enableTextSelection: false` (pure canvas).
+  - `style-src` (with the `styleNonce` you pass) — covers **this package's** injected layout/text-layer stylesheet.
+  - The engine positions text-layer spans and this package sizes slide placeholders through CSSOM (`element.style` / `style.cssText`). In Chromium those writes are **not** blocked by `style-src-attr 'none'`, so `style-src-attr 'unsafe-inline'` is not required there. Firefox/WebKit were not verified; if your target blocks these writes, allow `style-src-attr 'unsafe-inline'` or set `enableTextSelection: false` (canvas only).
 
 ## Workers & multi-instance memory
 
 - Each instance owns its parser Worker and a WASM instantiation. Multiple instances on one page multiply that cost — for example a main preview plus thumbnails. Main-thread rendering is serialized per instance, but parsing workers run concurrently.
 - The two build-time warnings consumer bundlers may print about `pptx-source-worker.mjs` / `assets/render-worker-*.js` reference engine assets for the `mode: "worker"` rendering path and the legacy path — **this package never loads them** (`mode: "main"` fixed). The warnings are safe to ignore; suppressing them would require shipping ~2 MB of dead assets.
+- **Vite 5–7 dev server**: dependency pre-bundling moves the package into `.vite/deps/`, so the wasm URL resolves to a missing file (HTML fallback/404) and loading reports `UNKNOWN`. Add `optimizeDeps: { exclude: ["@marcusok/ppt-preview"] }`; production builds are unaffected. See the quick start.
 
 ## Resource budgets
 
@@ -61,6 +62,7 @@ Valid files that exceed the engine's archive budgets (entry size, total inflated
 - `dpr` has no upper clamp: a large value multiplies the canvas bitmap quadratically (e.g. `dpr: 10` at the default 960-px width allocates ~9600×5400 bitmaps, ≈200 MB RGBA per slide). Only override it when you know the target displays.
 - Empty decks (`slideCount = 0`) load without error and never fire `onRendered` — but the engine instance (parser Worker + WASM) stays alive until `destroy()`. Destroy empty-deck previews you are done with instead of leaving them mounted.
 - SSR: the module can be imported on the server; `createPptPreview` must only run where `Worker` and WebCrypto exist.
+- **Containers must live in the main document** — the wrapper creates slide/canvas/text-layer nodes through the global `document` and injects its layout/text-layer stylesheet into `document.head`. Rendering into a ShadowRoot or an iframe document is not supported in this version (the injected CSS would not reach the nodes, breaking placeholder layout and text selection).
 
 ## Error-normalization boundaries
 

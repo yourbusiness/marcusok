@@ -12,6 +12,7 @@
 import { describe, expect, it } from "vitest";
 import { openPptxPresentation } from "@silurus/ooxml/node";
 import { normalizeError } from "../errors";
+import { toBytes, toLoadBuffer } from "../source";
 import { encryptAgile } from "./agile-crypto";
 import {
   buildPptx,
@@ -34,6 +35,22 @@ function errOf(
     },
   );
 }
+
+describe("source 防御性复制", () => {
+  it("Buffer（Uint8Array 子类）按自身 offset/length 复制，不携带内存池", async () => {
+    // Node Buffer 底层通常是一块 64KB 内存池，byteOffset 非 0。直接取
+    // .buffer 会把无关内存交给解析器/被 transfer detach 调用方内存池。
+    const buf = Buffer.from([1, 2, 3, 4, 5]);
+    const bytes = await toBytes(buf);
+    expect(Buffer.isBuffer(bytes)).toBe(false);
+    expect([...bytes]).toEqual([1, 2, 3, 4, 5]);
+    expect(bytes.byteLength).toBe(5);
+
+    const loadBuffer = toLoadBuffer(bytes);
+    expect(loadBuffer.byteLength).toBe(5);
+    expect([...new Uint8Array(loadBuffer)]).toEqual([1, 2, 3, 4, 5]);
+  });
+});
 
 describe("官方 Node 入口：真实解析矩阵", () => {
   it("正常 deck：open/slideCount/slideSize/close 全链路", async () => {

@@ -9,6 +9,7 @@
  * 可见性/滚动计算通过 spy 注入可控 rect。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runInNewContext } from "node:vm";
 
 const loadMock = vi.hoisted(() => vi.fn());
 const engineRenderMock = vi.hoisted(() => vi.fn());
@@ -146,6 +147,55 @@ describe("renderSlide 参数合同", () => {
     expect(opts.dpr).toBe(2);
     expect(typeof opts.onTextRun).toBe("function");
     inst.destroy();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("跨 realm 输入源", () => {
+  it("接受跨 realm 的 Uint8Array（不依赖 instanceof）", async () => {
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    loadMock.mockResolvedValue(fakeEngine(1));
+    const n = [...buildPptx({ texts: ["cross realm"] })];
+    const foreign = runInNewContext("new Uint8Array(n)", { n }) as Uint8Array;
+    expect(foreign instanceof Uint8Array).toBe(false);
+    const onError = vi.fn();
+    const inst = createPptPreview(container, { source: foreign, onError });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(1);
+    });
+    expect(onError).not.toHaveBeenCalled();
+    inst.destroy();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("用户回调异常隔离", () => {
+  it("onRendered 的跨 realm thenable 拒绝被兜住（不依赖 instanceof Promise）", async () => {
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    loadMock.mockResolvedValue(fakeEngine(1));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+      slideWidth: 480,
+      // 跨 iframe 的 Promise 不满足本 realm 的 instanceof Promise；用
+      // thenable 模拟该形态，rejection 必须被收口。
+      onRendered: () =>
+        ({
+          then: (_resolve: unknown, reject: (e: unknown) => void) =>
+            reject(new Error("cross-realm async cb boom")),
+        }) as never,
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(1);
+    });
+    renderIOs()[0].fire(pageAt(0), true);
+    await vi.waitFor(() => {
+      expect(
+        warn.mock.calls.some((c) => String(c[0]).includes("onRendered")),
+      ).toBe(true);
+    });
+    inst.destroy();
+    warn.mockRestore();
     vi.unstubAllGlobals();
   });
 });

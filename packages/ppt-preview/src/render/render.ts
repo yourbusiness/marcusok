@@ -50,7 +50,15 @@ function guardCallback<A extends unknown[]>(
   return (...args: A) => {
     try {
       const result = cb(...args) as unknown;
-      if (result instanceof Promise) result.catch(warn);
+      // 按 thenable 判断而非 `instanceof Promise`：iframe 等跨 realm 的
+      // Promise 不满足后者，会让异步回调的 rejection 漏成 unhandled。
+      if (
+        result !== null &&
+        (typeof result === "object" || typeof result === "function") &&
+        typeof (result as { then?: unknown }).then === "function"
+      ) {
+        void (result as PromiseLike<unknown>).then(undefined, warn);
+      }
     } catch (e) {
       warn(e);
     }
@@ -101,6 +109,18 @@ export function createPptPreview(
     (typeof devicePixelRatio === "number" && devicePixelRatio > 0
       ? devicePixelRatio
       : 1);
+  // 非法 cjkFallback 原本在 load() 内部才由上游抛 TypeError，最终被归一成
+  // 异步 UNKNOWN（"Failed to load…"），与 slideWidth/dpr 的 fail-fast 口径
+  // 不一致，也误导成文件/环境问题。合法集合与上游 LoadOptions 对齐。
+  const cjkFallback = options.renderOptions?.cjkFallback;
+  if (
+    cjkFallback !== undefined &&
+    !["auto", "kr", "sc", "tc", "hk", "jp"].includes(cjkFallback)
+  ) {
+    throw new TypeError(
+      `Invalid cjkFallback: ${String(cjkFallback)}. Use "auto", "kr", "sc", "tc", "hk" or "jp".`,
+    );
+  }
 
   ensurePptStyles(options.styleNonce);
 

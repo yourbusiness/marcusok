@@ -181,7 +181,9 @@ export class LazySlideRenderer {
 
   /** 串行队列：同一时刻最多 1 页在渲（scroll 洪峰限流）；离带/过期条目直接丢弃。 */
   private pump(): void {
-    if (this.rendering) return;
+    // 浏览器在 disconnect() 后仍可能投递已排队的 IO 回调；销毁后不得再
+    // 进入 renderEntry（会调用已销毁引擎并向游离节点追加 canvas）。
+    if (this.destroyed || this.rendering) return;
     for (;;) {
       const next = this.queue.shift();
       if (!next) return;
@@ -229,6 +231,7 @@ export class LazySlideRenderer {
   }
 
   private async renderEntry(e: SlideEntry): Promise<void> {
+    if (this.destroyed) return;
     e.state = "rendering";
     const tStart = performance.now();
     // canvas 由本模块创建：尺寸/挂载统一，释放路径（置 0 + remove）可控

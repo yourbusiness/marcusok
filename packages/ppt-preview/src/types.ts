@@ -59,9 +59,9 @@ export interface PptPreviewOptions {
    */
   password?: string;
   /**
-   * 幻灯片渲染宽度（CSS 像素，默认 960）。高度按 deck 实际宽高比等比
-   * 推导；必须是有限正数，非法值同步抛 `TypeError`。deck 尺寸异常导致
-   * 比例无效时按内容错误上报，不会生成 NaN 占位。
+   * 幻灯片渲染宽度（CSS 像素，默认 960），小数向下取整。高度按 deck 实际
+   * 宽高比等比推导；必须是有限正数，非法值同步抛 `TypeError`。deck 尺寸
+   * 异常导致比例无效时按内容错误上报，不会生成 NaN 占位。
    */
   slideWidth?: number;
   /**
@@ -88,9 +88,12 @@ export interface PptPreviewOptions {
    */
   wasmUrl?: string | URL;
   /**
-   * CSP nonce：本包注入的布局/文本层 `<style>` 会带上 nonce。注意上游
-   * 文本层节点使用 inline `style` 属性（非本包样式表），严格 CSP 的
-   * `style-src-attr` 需自行放行，见 limits 文档。
+   * CSP nonce：本包注入的布局/文本层 `<style>` 会带上 nonce（受
+   * `style-src` 约束）。上游文本层与页面占位通过 CSSOM（`element.style`）
+   * 写定位，Chromium 下不受 `style-src-attr` 拦截；只有以 HTML `style`
+   * 属性形式存在的内联样式才需要 `style-src-attr 'unsafe-inline'`。其他
+   * 内核若对 CSSOM 写入也施加该指令，可放行 unsafe-inline 或关闭文本层，
+   * 见 limits 文档。
    *
    * 多实例边界：样式表是文档级幂等单例（首个实例注入、不随 destroy 删除），
    * nonce 先到先得——首个实例的值生效，后续实例传入的 nonce 不会被应用。
@@ -107,8 +110,10 @@ export interface PptPreviewOptions {
    *   解密、**全 deck preflight** 与渲染——非渐进加载会预检全部页，
    *   懒渲染只延迟绘制，不等于懒解析）。
    *
-   * 每实例最多触发一次，由首张**成功**页触发；全部页失败或空 deck
-   * （slideCount=0）不触发。
+   * 每实例最多触发一次，由首张**成功**页触发；全部页失败、空 deck
+   * （slideCount=0），或容器在创建时不可见/尺寸为 0（例如 `display:none`
+   * 的 tab 面板，占位永远进不了渲染带）都不触发。等容器可见后
+   * IntersectionObserver 才会开始渲染并触发回调。
    */
   onRendered?: (info: PptRenderedInfo) => void;
   /** 错误回调。destroy 触发的取消静默，不报错；destroy 后回调静默。 */
@@ -157,10 +162,11 @@ export interface PptPreviewInstance {
   destroy(): void;
   /**
    * 滚动到指定页（0-based，与 `slideCount` 同口径、含隐藏页、保持原始
-   * 页序）。只滚动本包识别的滚动容器，不连带滚动外层文档。
+   * 页序）。识别到滚动容器时只滚动该容器；容器本身不滚动（普通文档流）
+   * 时回退滚动视口（`window`），此时外层页面会联动。
    *
    * 混合边界（有意设计，注意）：
-   * - 非整数参数 → 同步抛 `TypeError`；
+   * - 非整数参数 → 同步抛 `TypeError`（校验先于状态检查，destroy 后同样抛）；
    * - 加载完成前或 destroy 后 → no-op（此时页占位尚不存在）；
    * - 加载完成后越界（`index < 0 || index >= slideCount`）→ 抛 `RangeError`。
    */

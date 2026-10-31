@@ -9,6 +9,15 @@ pnpm add @marcusok/ppt-preview
 
 The package is ESM-only and bundles its rendering engine (Rust/WASM, `@silurus/ooxml` 0.89.6) at build time — consumers get **zero transitive dependencies**. Node ≥ 22.
 
+> **Vite 5–7 dev server.** Production builds (Vite 8+, webpack 5) emit the parser wasm automatically, but Vite 5–7 pre-bundles npm-installed dependencies with esbuild into `node_modules/.vite/deps/`. The pre-bundled copy keeps `new URL("pptx_parser_bg.wasm", import.meta.url)` verbatim, so the wasm request resolves into `.vite/deps/` where the file does not exist (Vite answers with its HTML fallback or 404) and the preview reports `UNKNOWN`. Add the package to `optimizeDeps.exclude` and restart the dev server:
+>
+> ```ts
+> // vite.config.ts
+> export default { optimizeDeps: { exclude: ["@marcusok/ppt-preview"] } };
+> ```
+>
+> Production builds are unaffected. (Vite 8's rolldown-based optimizer rewrites the literal correctly; linked workspace packages are not pre-bundled.)
+
 ## Render a presentation
 
 ```ts

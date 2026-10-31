@@ -9,6 +9,15 @@ pnpm add @marcusok/ppt-preview
 
 本包仅 ESM，渲染引擎（Rust/WASM，`@silurus/ooxml` 0.89.6）在构建期打进包内 —— 消费方**零传递依赖**。Node ≥ 22。
 
+> **Vite 5–7 dev server。** 生产构建（Vite 8+、webpack 5）会自动 emit 解析器 wasm；但 Vite 5–7 用 esbuild 把 npm 安装的依赖预打包进 `node_modules/.vite/deps/`。预打包副本会原样保留 `new URL("pptx_parser_bg.wasm", import.meta.url)`，wasm 请求因此落到 `.vite/deps/` 下（文件不存在，Vite 以 HTML fallback 或 404 响应），预览报 `UNKNOWN`。把包加入 `optimizeDeps.exclude` 并重启 dev server：
+>
+> ```ts
+> // vite.config.ts
+> export default { optimizeDeps: { exclude: ["@marcusok/ppt-preview"] } };
+> ```
+>
+> 生产构建不受影响。（Vite 8 的 rolldown 预打包会正确改写该字面量；workspace 链接包不参与预打包。）
+
 ## 渲染一份演示文稿
 
 ```ts

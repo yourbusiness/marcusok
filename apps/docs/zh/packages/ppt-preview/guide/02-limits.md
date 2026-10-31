@@ -43,8 +43,8 @@
 - CSP 要求：
   - `worker-src blob:` 与 `worker-src data:` —— 引擎经 Blob URL 内联解析 worker（data: 兜底）。opaque-origin iframe（无可用 origin 的沙箱）可能无法创建 worker。
   - WASM 执行需要 `script-src 'wasm-unsafe-eval'`（或等价配置）。
-  - `style-src-attr 'unsafe-inline'` —— 引擎文本层节点携带内联 `style` 属性；`styleNonce` 只覆盖**本包**注入的样式表，不覆盖引擎的内联样式。
-  - CSP 无法放行内联 style 属性时，设置 `enableTextSelection: false`（纯 canvas）。
+  - `style-src`（配合传入的 `styleNonce`）—— 覆盖**本包**注入的布局/文本层样式表。
+  - 引擎通过 CSSOM（`element.style` / `style.cssText`）写文本层定位、本包同法设置页占位尺寸；Chromium 下 `style-src-attr 'none'` **不会**拦截这些写入，因此不需要放宽 `style-src-attr 'unsafe-inline'`。Firefox/WebKit 未验证；若目标浏览器会拦截，再放行 `style-src-attr 'unsafe-inline'` 或设置 `enableTextSelection: false`（纯 canvas）。
 
 ## Worker 与多实例内存
 
@@ -61,6 +61,7 @@
 - `dpr` 没有上限钳制：过大的值会按平方放大 canvas 位图（例如默认 960px 宽下设置 `dpr: 10`，每页会分配约 9600×5400 的位图，RGBA 约占 200 MB）。只有明确目标显示设备时才应覆盖。
 - 空 deck（`slideCount = 0`）加载不报错，也不触发 `onRendered`；但引擎实例（解析 Worker + WASM）会一直存活到 `destroy()`。不再使用空 deck 预览时应销毁，不要只让它保持挂载。
 - SSR：模块可在服务端 import；`createPptPreview` 只能在存在 `Worker` 与 WebCrypto 的环境执行。
+- **容器必须位于主文档**——本包通过全局 `document` 创建幻灯片/canvas/文本层节点，并把布局与文本层样式表注入 `document.head`。本版本不支持渲染进 ShadowRoot 或 iframe 文档（注入的 CSS 到不了节点，占位布局与文本选择会失效）。
 
 ## 错误归一边界
 

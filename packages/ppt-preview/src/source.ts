@@ -17,10 +17,25 @@
  */
 import type { PptSource } from "./types";
 
+/**
+ * 跨 realm 判定：`instanceof` 对 iframe/Node vm 的构造器恒为 false，
+ * 会让跨 realm 的 TypedArray 落到 `.arrayBuffer()`（Uint8Array 没有该
+ * 方法）而报错。ArrayBuffer.isView 按内部槽判定，跨 realm 有效。
+ */
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
+}
+
 /** 归一 source 为独立字节副本（不 detach、不复用调用方 buffer）。 */
 export async function toBytes(source: PptSource): Promise<Uint8Array> {
-  if (source instanceof Uint8Array) return source.slice();
-  if (source instanceof ArrayBuffer) return new Uint8Array(source.slice());
+  if (ArrayBuffer.isView(source)) {
+    return new Uint8Array(
+      source.buffer,
+      source.byteOffset,
+      source.byteLength,
+    ).slice();
+  }
+  if (isArrayBuffer(source)) return new Uint8Array(source).slice();
   const buf = await source.arrayBuffer();
   return new Uint8Array(buf);
 }
