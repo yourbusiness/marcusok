@@ -112,13 +112,16 @@ export async function exportExcel(
     return await exportExcelCore({
       ...options,
       // 链式追加而非替换：调用方挂在自己回调上的指标面板照常工作。
+      // 必须 return 调用方回调的返回值：exportExcelCore 的 guardCallback 靠
+      // thenable 识别异步回调，链条吞掉返回值会让 async 回调的 rejection
+      // 逃过隔离（overlay:false 的直通路径无此问题）。
       onProgress: (progress) => {
         overlay.setProgress(progress);
-        options?.onProgress?.(progress);
+        return options?.onProgress?.(progress);
       },
       onPhase: (phase, durationMs) => {
         overlay.setPhase(overlayPhaseKey(phase, willDownload));
-        options?.onPhase?.(phase, durationMs);
+        return options?.onPhase?.(phase, durationMs);
       },
     });
   } finally {
@@ -140,11 +143,24 @@ function guardCallback<A extends unknown[]>(
   cb: ((...args: A) => void) | undefined,
 ): ((...args: A) => void) | undefined {
   if (!cb) return cb;
+  const warn = (e: unknown): void => {
+    console.warn("[excel-exporter] user callback threw; ignoring", e);
+  };
   return (...args: A) => {
     try {
-      cb(...args);
+      const result = cb(...args) as unknown;
+      // 异步回调是第二形态：TS 允许把 `async () => …` 赋给返回 void 的回调
+      // 类型，其 rejected promise 不会被同步 catch 捕到。按 thenable 判断而
+      // 非 `instanceof Promise`——iframe 等跨 realm 的 Promise 通不过后者。
+      if (
+        result !== null &&
+        (typeof result === "object" || typeof result === "function") &&
+        typeof (result as { then?: unknown }).then === "function"
+      ) {
+        void (result as PromiseLike<unknown>).then(undefined, warn);
+      }
     } catch (e) {
-      console.warn("[excel-exporter] user callback threw; ignoring", e);
+      warn(e);
     }
   };
 }
@@ -309,6 +325,10 @@ async function exportExcelCore(options: ExportOptions): Promise<ExportResult> {
     );
     try {
       const result = await runOnMainThread(true);
+      // 构建期间被取消（onProgress 回调里 abort）：runOnMainThread 已返回
+      // 结构化的 AbortError，不能被下面的降级错误覆盖——调用方按 name
+      // 识别取消，覆盖后只剩"样式被剥离"的误导信息。
+      if (!result.success) return result;
       return {
         ...result,
         // Surface the degradation programmatically (parity with the old

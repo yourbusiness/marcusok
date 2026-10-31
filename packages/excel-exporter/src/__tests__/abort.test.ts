@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { exportExcel } from "../index";
 import { exportAsStream } from "../streaming-builder";
 
@@ -51,5 +51,35 @@ describe("AbortSignal cancellation", () => {
     await expect(
       exportAsStream(sheets, undefined, ac.signal),
     ).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("aborting during the terminal stream fallback keeps the AbortError", async () => {
+    // 无 WebAssembly → 直接降级到 fast stream。onProgress 中断开 signal：
+    // runOnMainThread 返回结构化 AbortError 后，finishWithStream 不得把它
+    // 覆盖成 "Fallback: styles stripped"（调用方靠 name 识别取消）。
+    vi.stubGlobal("WebAssembly", undefined);
+    try {
+      const ac = new AbortController();
+      const r = await exportExcel({
+        filename: "abort-during-fallback",
+        download: false,
+        overlay: false,
+        signal: ac.signal,
+        onProgress: (p) => {
+          if (p > 0 && p < 1) ac.abort();
+        },
+        sheets: [
+          {
+            name: "S",
+            columns: [{ prop: "a", label: "A" }],
+            data: Array.from({ length: 5000 }, (_, i) => ({ a: i })),
+          },
+        ],
+      });
+      expect(r.success).toBe(false);
+      expect(r.error?.name).toBe("AbortError");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -291,7 +291,7 @@ Alternatively, `configureWasm({ wasmUrl })` accepts an HTTP(S) URL (fetched), a 
 - **ESM-only**: this package provides no CJS build.
 - **Worker-compatible format**: functions cannot cross structured clone. The browser Worker path (including stream executed inside a Worker) accepts only `FormatSpec`, and `exportInWorker` strips function formats; Node's stream runs on the main thread, so functions are fine there.
 - **Fast stream has no styles**: the large-file path emits minimal OOXML and does not support `StyleBuilder`. Multi-row headers and merges are preserved; `width`/`freezeRows` etc. are dropped with a warning under stream.
-- **Concurrency safety**: Worker communication routes by requestId with a `pending: Map`; `onmessage` is registered only once.
+- **Concurrency safety**: one shared Worker with a single in-flight request plus an explicit FIFO queue (responses are matched by requestId against the active slot); `onmessage` is registered only once. Concurrent exports are serialized, and a timed-out/aborted request only settles itself — queued requests continue on a fresh worker.
 
 ## License
 

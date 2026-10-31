@@ -82,10 +82,15 @@ export function applyFormat(value: unknown, spec: FormatSpec): string | number {
       return mapped ?? spec.fallback ?? key;
     }
     case "date": {
+      // 与 number/padding/stream 路径同一判空口径：空串/纯空白串是缺失值，
+      // 渲染空单元格；否则会写成带空白的文本格，与跨 50k 阈值的 stream
+      // 路径（直接跳过）产生"单元格存在性"差异。
+      if (value == null || isBlankString(value)) return "";
       const d = toJsDate(value);
       return d === null ? toStr(value) : dateToSerial(d);
     }
     case "datetime": {
+      if (value == null || isBlankString(value)) return "";
       const d = toJsDate(value);
       return d === null ? toStr(value) : dateToSerial(d);
     }
@@ -279,15 +284,14 @@ export function displayValue(
   const spec = typeof col.format === "object" ? col.format : null;
   if (spec) {
     if (spec.type === "date" || spec.type === "datetime") {
+      const raw = row == null ? undefined : row[columnProp(col) ?? ""];
+      // 与 applyFormat / streamCellValue 对齐：空串/纯空白串是缺失值。
+      if (raw == null || isBlankString(raw)) return "";
       const pattern =
         spec.type === "datetime"
           ? (spec.pattern ?? DEFAULT_DATETIME_PATTERN)
           : (spec.pattern ?? DEFAULT_DATE_PATTERN);
-      // row may be null on pathological input; reads as all-fields-missing.
-      return formatDateByPattern(
-        row == null ? undefined : row[columnProp(col) ?? ""],
-        pattern,
-      );
+      return formatDateByPattern(raw, pattern);
     }
     if (spec.type === "number") {
       // The stream path has no numFormat support, so the configured
@@ -459,6 +463,11 @@ export function validateMerges(sheet: SheetConfig, leafCount: number): void {
   const pending: Pending[] = [];
   for (let i = 0; i < merges.length; i++) {
     const m = merges[i];
+    if (m === null || typeof m !== "object") {
+      throw new Error(
+        `[excel-exporter] sheet "${sheet.name}" merge #${i} must be an object`,
+      );
+    }
     const at = atOf(i);
     if (
       !Number.isInteger(m.row) ||

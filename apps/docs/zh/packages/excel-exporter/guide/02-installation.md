@@ -59,8 +59,8 @@ configureWasm({ wasmUrl, workerUrl });
 | ----------------- | --------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `wasmUrl`         | `string \| URL` | 随包发布的 `.wasm` | 覆盖为自托管 / CDN 副本                                                                                                                                  |
 | `workerUrl`       | `string \| URL` | 随包发布的 worker  | 覆盖为**同源**自托管副本——跨域 URL 在 `Worker` 构造时即被浏览器拒绝，普通 CDN 在这里不可用                                                               |
-| `timeoutMs`       | `number`        | `10_000`           | 单次加载超时                                                                                                                                             |
-| `maxRetries`      | `number`        | `3`                | 最大尝试次数；失败后按 300ms、600ms 指数退避等待                                                                                                         |
+| `timeoutMs`       | `number`        | `10_000`           | **主线程** loader 的单次 WASM 加载超时；worker 导出的初始化发生在导出 worker 内，不应用该值（该链路由 `workerTimeoutMs` 约束）                           |
+| `maxRetries`      | `number`        | `3`                | **主线程**总加载尝试次数；失败后按 300ms、600ms 指数退避等待；worker 内初始化不重试                                                                      |
 | `workerTimeoutMs` | `number`        | `120_000`          | Worker 导出超时；超时导出会终止共享 worker 并快速失败——不重试主线程、不落到流式兜底。必须保持 > 0——没有"禁用"取值：`0`/负数意味着"立即超时"而非"不超时"  |
 | `parseWorkerUrl`  | `string \| URL` | —                  | 共享 `LoaderOptions` 类型上存在但对本包无效：它配置的是 `@marcusok/excel-preview` 的解析 worker，不会作用于本包的导出 worker（后者是上方的 `workerUrl`） |
 

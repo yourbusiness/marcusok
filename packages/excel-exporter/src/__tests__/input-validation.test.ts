@@ -806,6 +806,25 @@ describe("numeric field validation (width / freezeRows / format spec)", () => {
       sheet: { merges: {} as never },
       message: /sheet "S" merges must be an array of MergeRange/,
     },
+    {
+      // 数组元素为 null：旧实现直接解引用 c.children，抛裸 TypeError，
+      // 没有表名/下标定位。
+      label: "null column entry (JS caller)",
+      sheet: { columns: [null] as never },
+      message: /sheet "S" columns\[0\] must be an object/,
+    },
+    {
+      label: "null child column entry (JS caller)",
+      sheet: {
+        columns: [{ prop: "g", label: "G", children: [null] }] as never,
+      },
+      message: /sheet "S" columns\[0\]\.children\[0\] must be an object/,
+    },
+    {
+      label: "null merge entry (JS caller)",
+      sheet: { merges: [null] as never },
+      message: /sheet "S" merge #0 must be an object/,
+    },
   ];
 
   for (const { label, sheet, message } of cases) {

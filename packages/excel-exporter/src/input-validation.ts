@@ -19,6 +19,30 @@ import { assertXmlSafeText } from "./xml-safety";
 /** validateInput 的 mode 枚举校验用；与 ExportMode 类型一一对应。 */
 const VALID_MODES = new Set<ExportMode>(["auto", "main", "worker", "stream"]);
 
+/** 递归校验 columns/children 的元素都是对象（null/标量会炸下游解引用）。 */
+function assertColumnObjects(columns: unknown[], sheetName: string): void {
+  const visit = (cols: unknown[], path: string): void => {
+    for (let i = 0; i < cols.length; i++) {
+      const col = cols[i];
+      if (col === null || typeof col !== "object") {
+        throw new Error(
+          `[excel-exporter] sheet "${sheetName}" ${path}[${i}] must be an object`,
+        );
+      }
+      const children = (col as { children?: unknown }).children;
+      if (children !== undefined) {
+        if (!Array.isArray(children)) {
+          throw new Error(
+            `[excel-exporter] sheet "${sheetName}" ${path}[${i}].children must be an array`,
+          );
+        }
+        visit(children, `${path}[${i}].children`);
+      }
+    }
+  };
+  visit(columns, "columns");
+}
+
 /** 递归校验列树（含分组列）上的样式；分组列的 style 虽被忽略，非法值一并拦截。 */
 function validateColumnStyles(
   columns: ColumnConfig[],
@@ -101,6 +125,10 @@ export function validateInput(options: ExportOptions): void {
         `[excel-exporter] sheet "${sheet.name}" must have a data array`,
       );
     }
+    // 数组元素也要校验：JS 调用方传 [null] 时，下游 c.children / m.row 会
+    // 抛裸 TypeError（"Cannot read properties of null..."），与其余结构化
+    // 错误相比没有表名/下标定位。递归覆盖分组列的 children。
+    assertColumnObjects(sheet.columns, sheet.name);
     const { leaves, headerRowCount } = flattenColumnTree(sheet.columns);
     // 保留列在这里**无条件**拦截（与是否启用 indexColumn 无关）：构建器对
     // INDEX_PROP 的特判是无条件的，放行只会让用户自带的该列被行号静默顶替

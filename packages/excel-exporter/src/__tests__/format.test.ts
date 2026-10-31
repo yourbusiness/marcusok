@@ -5,6 +5,7 @@ import {
   numFormatForSpec,
   formatDateByPattern,
   displayValue,
+  streamCellValue,
   validateSheetName,
   toStr,
 } from "../format-utils";
@@ -109,6 +110,23 @@ describe("applyFormat", () => {
     expect(
       applyFormat(undefined, { type: "padding", fill: "0", length: 5 }),
     ).toBe("");
+  });
+
+  it("date/datetime: blank strings are missing values on every path", () => {
+    // 主线程 Workbook 路径与 stream/worker 路径必须给同一结论：空串 /
+    // 纯空白串不写单元格。旧实现 date 分支缺守卫，main 会写出带空白的
+    // 文本格，跨 50k 阈值后同一份数据"少了一格"。
+    for (const value of ["", "   "]) {
+      expect(applyFormat(value, { type: "date" })).toBe("");
+      expect(applyFormat(value, { type: "datetime" })).toBe("");
+      const col: ColumnConfig = {
+        prop: "d",
+        label: "D",
+        format: { type: "date" },
+      };
+      expect(streamCellValue(col, { d: value })).toBe("");
+      expect(displayValue(col, { d: value })).toBe("");
+    }
   });
 
   it("padding: blank strings are missing values, never a padded fake code", () => {

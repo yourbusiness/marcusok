@@ -127,6 +127,31 @@ describe("user callback error isolation", () => {
     }
   });
 
+  it("an async onProgress rejection is contained (no unhandled rejection)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const r = await exportExcel({
+        filename: "cb-async-reject",
+        download: false,
+        mode: "main",
+        sheets: [sheet],
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- 有意模拟 async void 回调的 rejected promise
+        onProgress: async () => {
+          await Promise.resolve();
+          throw new Error("async ui component unmounted");
+        },
+      });
+      // 让 guardCallback 挂上的 rejection 处理器跑完（未接住会由 vitest
+      // 报 unhandled rejection 直接失败）
+      await new Promise((res) => setTimeout(res, 0));
+      expect(r.success).toBe(true);
+      expect(r.blob).toBeDefined();
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("a throwing onPhase does not fail the export", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
