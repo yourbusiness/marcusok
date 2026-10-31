@@ -1,6 +1,6 @@
 {
   "name": "@marcusok/word-preview",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Read-only docx preview in the browser: visual-faithful Word rendering powered by docx-preview, with format sniffing, hardened defaults (altChunks off, hyperlink scheme allowlist) and multi-instance style isolation.",
   "license": "MIT",

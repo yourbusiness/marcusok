@@ -1,5 +1,11 @@
 # @marcusok/pdf-preview
 
+## 0.1.2
+
+### Patch Changes
+
+- 71229de: Detect scroll containers after page placeholders are mounted and isolate rejected promises from user callbacks.
+
 ## 0.1.1
 
 ### Patch Changes
