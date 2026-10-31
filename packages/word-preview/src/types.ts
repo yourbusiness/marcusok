@@ -23,8 +23,9 @@ export type WordSource = File | Blob | Uint8Array | ArrayBuffer;
  *   hook、实验特性、日志开关与内部细节，不进公开面。
  */
 export interface WordRenderOptions {
-  /** 按分页符断页（默认 true）。false 时整篇渲染为单一 section——
-   * `onRendered` 的 `pageCount` 恒为 1。 */
+  /** 按分页符断页（默认 true）。false 只关闭显式分页符与
+   * `lastRenderedPageBreak` 断页；`pageBreakBefore` 段落属性与节属性仍会
+   * 分页，因此 `onRendered.pageCount` 可能大于 1，不保证整篇单一 section。 */
   breakPages?: boolean;
   /** 渲染进 `.docx-N-wrapper` 页面容器（默认 true）。false 改变包裹结构。 */
   inWrapper?: boolean;

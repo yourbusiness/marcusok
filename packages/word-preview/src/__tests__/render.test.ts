@@ -9,6 +9,7 @@
  * （mock / 非标准 id fixture），真实浏览器复核在 play/docs demo。
  */
 import { describe, expect, it, vi } from "vitest";
+import { runInNewContext } from "node:vm";
 import { createWordPreview } from "../index";
 import type { WordPreviewError } from "../types";
 import {
@@ -48,6 +49,23 @@ function makeContainer(): HTMLElement {
 }
 
 describe("createWordPreview 渲染闭环", () => {
+  it("跨 realm 的 Uint8Array 源可正常渲染（不依赖 instanceof）", async () => {
+    const n = [...simpleDocx("cross realm source")];
+    const foreign = runInNewContext("new Uint8Array(n)", { n }) as Uint8Array;
+    expect(foreign instanceof Uint8Array).toBe(false); // 前置：确为跨 realm
+    const container = makeContainer();
+    const onRendered = vi.fn();
+    const onError = vi.fn();
+    createWordPreview(container, {
+      source: foreign,
+      onRendered,
+      onError,
+    });
+    await waitFor(() => onRendered.mock.calls.length > 0);
+    expect(onError).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("cross realm source");
+  });
+
   it("最小 docx：段落文本渲染进容器，onRendered 报 pageCount", async () => {
     const container = makeContainer();
     const onRendered = vi.fn();
@@ -160,6 +178,25 @@ describe("createWordPreview 渲染闭环", () => {
     inst.destroy();
   });
 
+  it("destroy 清空已渲染 DOM（脱离文档的 wrapper 也不被实例闭包持有）", async () => {
+    const container = makeContainer();
+    const onRendered = vi.fn();
+    const inst = createWordPreview(container, {
+      source: simpleDocx("retained content"),
+      onRendered,
+    });
+    await waitFor(() => onRendered.mock.calls.length > 0);
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.querySelector("section")).not.toBeNull();
+
+    inst.destroy();
+
+    expect(container.children.length).toBe(0);
+    // wrapper 已被 destroy 闭包持有；若不显式清空，整份渲染 DOM
+    // （含 base64 图片/字体）会随实例一起常驻。
+    expect(wrapper.childNodes.length).toBe(0);
+  });
+
   it("destroy 清理上游注册进 CSS.highlights 的注释高亮（防反复 create/destroy 累积）", async () => {
     // 上游 renderComments 路径向全局 CSS.highlights 注册 <className>-comments
     // 且全库无 delete——Highlight/Range 随注册表常驻，不清理则 React 反复
@@ -178,6 +215,32 @@ describe("createWordPreview 渲染闭环", () => {
   });
 });
 
+describe("接管选项的运行时边界", () => {
+  it("强传 h / experimental 等接管键不会透传上游", async () => {
+    // 类型层未暴露这些键，但 JS 调用方可强传：h 能接管上游整棵渲染树的
+    // 元素创建、experimental 会打开上游定时器。本包承诺"传入无效"。
+    const container = makeContainer();
+    const onRendered = vi.fn();
+    const onError = vi.fn();
+    createWordPreview(container, {
+      source: simpleDocx("mapped options"),
+      renderOptions: {
+        h: () => {
+          throw new Error("CUSTOM_H_LEAKED_TO_UPSTREAM");
+        },
+        experimental: true,
+        debug: true,
+      } as never,
+      onRendered,
+      onError,
+    });
+    await waitFor(() => onRendered.mock.calls.length > 0);
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("mapped options");
+  });
+});
+
 describe("用户回调异常隔离", () => {
   it("异步回调抛错被兜住（仅 warn，不产生 unhandled rejection）", async () => {
     // TS 允许把 async 函数赋给返回 void 的回调类型：其 rejected promise
@@ -191,6 +254,28 @@ describe("用户回调异常隔离", () => {
         await Promise.resolve();
         throw new Error("async cb boom");
       },
+    });
+    await vi.waitFor(() => {
+      expect(
+        warn.mock.calls.some((c) => String(c[0]).includes("onRendered")),
+      ).toBe(true);
+    });
+    inst.destroy();
+    warn.mockRestore();
+  });
+
+  it("跨 realm 的 thenable 拒绝同样被兜住（不依赖 instanceof Promise）", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const container = makeContainer();
+    const inst = createWordPreview(container, {
+      source: simpleDocx("cb-thenable"),
+      // 跨 iframe 的 Promise 不满足本 realm 的 instanceof Promise；用
+      // thenable 模拟该形态。返回值的 rejection 必须被收口。
+      onRendered: () =>
+        ({
+          then: (_resolve: unknown, reject: (e: unknown) => void) =>
+            reject(new Error("cross-realm async cb boom")),
+        }) as never,
     });
     await vi.waitFor(() => {
       expect(

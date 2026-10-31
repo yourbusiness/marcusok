@@ -23,9 +23,21 @@ import type {
 /** 实例序号：内部唯一 className 的来源（docx-1、docx-2…）。 */
 let instanceSeq = 0;
 
+/**
+ * 跨 realm 判定：`instanceof` 在不同 iframe/Node vm 的构造器间恒为 false，
+ * 会让跨 realm 的 Uint8Array 落到 `.arrayBuffer()`（TypedArray 没有该
+ * 方法）而报 "source.arrayBuffer is not a function"。ArrayBuffer.isView
+ * 按内部槽判定，跨 realm 有效；ArrayBuffer 自身用 toString 标签兜底。
+ */
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
+}
+
 async function toBytes(source: WordSource): Promise<Uint8Array> {
-  if (source instanceof Uint8Array) return source;
-  if (source instanceof ArrayBuffer) return new Uint8Array(source);
+  if (ArrayBuffer.isView(source)) {
+    return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+  }
+  if (isArrayBuffer(source)) return new Uint8Array(source);
   const buf = await source.arrayBuffer();
   return new Uint8Array(buf);
 }
@@ -50,7 +62,15 @@ function guardCallback<A extends unknown[]>(
   return (...args: A) => {
     try {
       const result = cb(...args) as unknown;
-      if (result instanceof Promise) result.catch(warn);
+      // 按 thenable 判断而非 `instanceof Promise`：iframe 等跨 realm 的
+      // Promise 不满足后者，会让异步回调的 rejection 漏成 unhandled。
+      if (
+        result !== null &&
+        (typeof result === "object" || typeof result === "function") &&
+        typeof (result as { then?: unknown }).then === "function"
+      ) {
+        void (result as PromiseLike<unknown>).then(undefined, warn);
+      }
     } catch (e) {
       warn(e);
     }
@@ -59,6 +79,17 @@ function guardCallback<A extends unknown[]>(
 
 /** 超链接放行协议（相对形态经 base 解析后落在其中）。 */
 const SAFE_HREF_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
+
+/** 由本包接管、禁止透传上游的 renderOptions 键（见创建处的选项映射）。 */
+const TAKEN_OVER_OPTION_KEYS = [
+  "className",
+  "useBase64URL",
+  "renderAltChunks",
+  "h",
+  "experimental",
+  "debug",
+  "trimXmlDeclaration",
+] as const;
 
 /**
  * scheme 白名单判定。用 `URL` 解析而非 `startsWith`：WHATWG URL 规范在
@@ -198,17 +229,19 @@ export function createWordPreview(
 
       // 选项映射：白名单透传 + 本包接管的默认加固（useBase64URL /
       // ignoreLastRenderedPageBreak / renderAltChunks / className）。
-      // WordRenderOptions 类型层面就没有 className 等接管键；运行期强传
-      // 同名键也会被下面的显式赋值覆盖（不在白名单的 experimental 等键
-      // 类型未含，JS 调用方强传会原样透传上游——薄封装不做二次过滤）。
+      // WordRenderOptions 类型层面没有这些接管键，但 JS 调用方可强传——
+      // 必须显式删除，否则 h/experimental/debug 等仍会直达上游（h 可接管
+      // 整棵渲染树的元素创建、experimental 会打开上游定时器），与对外
+      // "由本包接管、传入无效" 的承诺不符。
       const ro = options.renderOptions ?? {};
-      const upstream: Partial<Options> = {
-        ...ro,
+      const upstream: Partial<Options> = { ...ro };
+      for (const key of TAKEN_OVER_OPTION_KEYS) delete upstream[key];
+      Object.assign(upstream, {
         className,
         useBase64URL: true,
         ignoreLastRenderedPageBreak: ro.ignoreLastRenderedPageBreak ?? false,
         renderAltChunks: options.allowAltChunks === true,
-      };
+      });
 
       // 有 nonce 时用游离容器收拢上游全部 <style>（渲染后统一重建）；
       // 无 nonce 不传第三参（上游并入 bodyContainer，勿多走一次重建）
@@ -223,6 +256,10 @@ export function createWordPreview(
         // 上游可能在 destroy 的首次清理之后才注册注释高亮；迟到完成时
         // 必须再删一次，避免 Highlight 持有的 Range 永久留在全局注册表。
         cleanupGlobalRegistrations(className);
+        // 迟到的渲染结果全部写进了已脱离文档的 wrapper；destroy 的第一轮
+        // 清空发生在这些节点存在之前，必须再清一次，否则实例闭包会一直
+        // 持有整份渲染 DOM（含 base64 图片/字体）。
+        wrapper.replaceChildren();
         return; // wrapper 已摘除，丢弃且不回调
       }
 
@@ -242,6 +279,7 @@ export function createWordPreview(
       if (destroyed) {
         // reject 同样可能发生在迟到注册之后；销毁态虽不回调，仍须收尾。
         cleanupGlobalRegistrations(className);
+        wrapper.replaceChildren();
         return;
       }
       // 同 sniff 失败路径：失败即无副作用，摘除 wrapper 再报错
@@ -268,6 +306,9 @@ export function createWordPreview(
       // 后只会往已脱离文档的 wrapper 写入，boot 的 destroyed 检查丢弃结果。
       // destroy 后所有回调静默（取消不是错误）。上游注册进全局
       // CSS.highlights 的注释高亮一并删除（见 cleanupGlobalRegistrations）。
+      // 先清空再摘除：wrapper 仍被本 destroy 闭包引用，只 remove() 会把
+      // 整份渲染 DOM（base64 图片/字体）留在闭包里直到实例被回收。
+      wrapper.replaceChildren();
       wrapper.remove();
       cleanupGlobalRegistrations(className);
     },
