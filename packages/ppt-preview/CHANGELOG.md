@@ -1,5 +1,11 @@
 # @marcusok/ppt-preview
 
+## 0.1.4
+
+### Patch Changes
+
+- 9a80c05: Copy `Buffer`/`Uint8Array` sources by offset and length (no memory-pool exposure), validate `cjkFallback` synchronously, guard lazy rendering after destroy, accept cross-realm sources and thenable callbacks, and correct the CSP, navigation, cause, hidden-container and `slideWidth` documentation.
+
 ## 0.1.3
 
 ### Patch Changes

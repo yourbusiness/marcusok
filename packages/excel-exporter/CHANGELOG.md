@@ -1,5 +1,12 @@
 # @marcusok/excel-exporter
 
+## 3.4.3
+
+### Patch Changes
+
+- f7b5f2e: Render blank date/datetime FormatSpec values as empty cells on every path, isolate async callback rejections (including the overlay chain), preserve `AbortError` during the terminal stream fallback, validate null column/merge entries with actionable errors, and align the docs with the single-slot worker queue and main-thread-only WASM timeouts.
+- 584fc82: Ignore explicitly `undefined` options in `configureWasm` so an unset environment variable no longer clears an already-configured WASM/worker URL. The shared loader change ships with both Excel business packages that bundle it.
+
 ## 3.4.2
 
 ### Patch Changes
