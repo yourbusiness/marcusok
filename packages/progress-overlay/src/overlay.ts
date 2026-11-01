@@ -310,6 +310,8 @@ interface OverlayDom {
   title: HTMLDivElement;
   hint: HTMLDivElement;
   percent: HTMLDivElement;
+  /** 滚动/触控拦截监听器；blockInteraction 切换时挂载/摘除。 */
+  blockHandler: ((e: Event) => void) | null;
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -382,12 +384,16 @@ function createDom(cfg: ResolvedOptions): OverlayDom {
   root.setAttribute("aria-busy", "true");
   root.style.zIndex = String(cfg.zIndex);
   root.style.opacity = "0";
-  if (!cfg.blockInteraction) root.style.pointerEvents = "none";
-  // 滚动拦截挂在遮罩自身：节点随遮罩移除，不会在宿主页面上留下监听器。
+  let blockHandler: ((e: Event) => void) | null = null;
   if (cfg.blockInteraction) {
-    const block = (e: Event): void => e.preventDefault();
-    root.addEventListener("wheel", block, { passive: false });
-    root.addEventListener("touchmove", block, { passive: false });
+    blockHandler = (e: Event): void => e.preventDefault();
+  } else {
+    root.style.pointerEvents = "none";
+  }
+  // 滚动拦截挂在遮罩自身：节点随遮罩移除，不会在宿主页面上留下监听器。
+  if (blockHandler) {
+    root.addEventListener("wheel", blockHandler, { passive: false });
+    root.addEventListener("touchmove", blockHandler, { passive: false });
   }
 
   const panel = doc.createElement("div");
@@ -429,7 +435,43 @@ function createDom(cfg: ResolvedOptions): OverlayDom {
 
   panel.append(createSpinner(doc), title, bar, row, hint);
   root.appendChild(panel);
-  return { root, bar, fill, label, title, hint, percent };
+  return {
+    root,
+    bar,
+    fill,
+    label,
+    title,
+    hint,
+    percent,
+    blockHandler,
+  };
+}
+
+/**
+ * 复用已存在的遮罩 DOM 时应用新调用方的结构类选项（theme / zIndex /
+ * blockInteraction）。这些值此前只在 createDom 时写入一次：并发接管或
+ * 淡出窗口内复用时，后来者的选项会被静默忽略（主题/层级错误、
+ * blockInteraction:false 仍拦截页面）。
+ */
+function applyChrome(dom: OverlayDom, cfg: ResolvedOptions): void {
+  dom.root.dataset.mxeTheme = cfg.theme;
+  dom.root.style.zIndex = String(cfg.zIndex);
+  if (cfg.blockInteraction) {
+    dom.root.style.pointerEvents = "";
+    if (!dom.blockHandler) {
+      const block = (e: Event): void => e.preventDefault();
+      dom.blockHandler = block;
+      dom.root.addEventListener("wheel", block, { passive: false });
+      dom.root.addEventListener("touchmove", block, { passive: false });
+    }
+  } else {
+    dom.root.style.pointerEvents = "none";
+    if (dom.blockHandler) {
+      dom.root.removeEventListener("wheel", dom.blockHandler);
+      dom.root.removeEventListener("touchmove", dom.blockHandler);
+      dom.blockHandler = null;
+    }
+  }
 }
 
 /** 快照里的阶段 key → 实际显示文案；未覆盖的 key 原样显示（可发现拼写错误）。 */
@@ -668,6 +710,9 @@ export function showProgressOverlay(
       };
     }
     const h = active;
+    // 复用节点时应用本次调用方的结构类选项（theme/zIndex/blockInteraction）；
+    // 这些值不能沿用创建者的。
+    applyChrome(h.dom, cfg);
     // 上一轮挂起的移除（淡出 / 最短可见延时）取消：本次复用同一份 DOM。
     clearTimer(h.unmountTimer);
     h.unmountTimer = null;
@@ -699,6 +744,9 @@ export function showProgressOverlay(
       // 不得停留于前任调用方（此前只在淡出复活分支渲染，并发接管分支漏掉，
       // 文案会停留到新调用方收到第一个有效进度/阶段事件为止）。
       h.dom.root.style.opacity = "1";
+      // 新调用方的 minVisibleMs 从本次 show 起算：沿用旧 revealedAt 会让
+      // 在上一场最短可见窗口内启动又结束的新任务提前消失（闪烁）。
+      h.revealedAt = Date.now();
       renderSafely(() => render(h.dom, state.snapshot(), cfg.text));
     }
 

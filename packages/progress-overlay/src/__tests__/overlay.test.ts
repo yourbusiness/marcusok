@@ -319,6 +319,53 @@ describe("遮罩渲染", () => {
     show({ theme: "dark" });
     expect(root()!.dataset.mxeTheme).toBe("dark");
   });
+
+  it("复用时应用新调用方的 theme / zIndex / blockInteraction", () => {
+    show({ theme: "light", zIndex: 1, blockInteraction: true });
+    const el = root()!;
+    expect(el.dataset.mxeTheme).toBe("light");
+    expect(el.style.pointerEvents).toBe("");
+
+    show({ theme: "dark", zIndex: 42, blockInteraction: false });
+    expect(el.dataset.mxeTheme).toBe("dark");
+    expect(el.style.zIndex).toBe("42");
+    expect(el.style.pointerEvents).toBe("none");
+
+    show({ blockInteraction: true });
+    expect(el.style.pointerEvents).toBe("");
+  });
+
+  it("复用时切换 blockInteraction 会挂载/摘除滚动拦截", () => {
+    show({ blockInteraction: true });
+    const el = root()!;
+    const blocked = new WheelEvent("wheel", {
+      cancelable: true,
+      bubbles: true,
+    });
+    expect(el.dispatchEvent(blocked)).toBe(false); // preventDefault 生效
+
+    show({ blockInteraction: false });
+    const allowed = new WheelEvent("wheel", {
+      cancelable: true,
+      bubbles: true,
+    });
+    expect(el.dispatchEvent(allowed)).toBe(true);
+  });
+
+  it("复用时按新调用方的 show 重新计时 minVisible（回归：曾沿用旧 revealedAt 提前消失）", () => {
+    const a = show({ delayMs: 0, minVisibleMs: 300 });
+    vi.advanceTimersByTime(200);
+    a.close(); // 还差 100ms 才允许移除
+    vi.advanceTimersByTime(50);
+    expect(root()).not.toBeNull();
+
+    const b = show({ delayMs: 0, minVisibleMs: 300 });
+    b.close(); // 新生命周期：应从此刻重新计 300ms
+    vi.advanceTimersByTime(150);
+    expect(root()).not.toBeNull();
+    vi.advanceTimersByTime(200);
+    expect(root()).toBeNull();
+  });
 });
 
 describe("非浏览器环境", () => {
