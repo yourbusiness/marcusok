@@ -8,7 +8,7 @@
  * 必须专门覆盖。
  */
 import { describe, expect, it } from "vitest";
-import { unzipSync, zipSync } from "fflate";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import { sniffWordDocument } from "../sniff";
 import {
   simpleDocx,
@@ -19,6 +19,28 @@ import {
   fakeOle2Bytes,
   plainZipBytes,
 } from "./fixtures";
+
+const WORD_MAIN_CT =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml";
+
+const CT_XML = (mainPart: string, contentType: string): string =>
+  `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+  `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+  `<Default Extension="xml" ContentType="application/xml"/>` +
+  `<Override PartName="/${mainPart}" ContentType="${contentType}"/></Types>`;
+
+const ROOT_RELS_XML = (target: string): string =>
+  `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+  `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="${target}"/></Relationships>`;
+
+/** 与 docx 同构的 OPC 包（部件齐全，仅主部件路径/类型不同）。 */
+function opcBytes(mainPart: string, contentType: string): Uint8Array {
+  return zipSync({
+    "[Content_Types].xml": strToU8(CT_XML(mainPart, contentType)),
+    "_rels/.rels": strToU8(ROOT_RELS_XML(mainPart)),
+    [mainPart]: strToU8("<root/>"),
+  });
+}
 
 describe("sniffWordDocument", () => {
   it("完整四文件 docx：放行", async () => {
@@ -147,5 +169,51 @@ describe("sniffWordDocument", () => {
     const r = await sniffWordDocument(fakeOle2Bytes());
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).not.toBe("UNSUPPORTED");
+  });
+
+  it("同构 OPC 但主部件是 xlsx/pptx：UNSUPPORTED（不是损坏的 Word）", async () => {
+    // 三种 OPC 包都有 [Content_Types].xml、_rels/.rels 与 officeDocument
+    // 主部件；旧实现只校验部件存在，xlsx/pptx 会被送进 Word 引擎并以
+    // CORRUPT + 引擎内部错误收场。主部件 ContentType 才是类型标识。
+    for (const [mainPart, contentType] of [
+      [
+        "xl/workbook.xml",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+      ],
+      [
+        "ppt/presentation.xml",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
+      ],
+    ] as const) {
+      const r = await sniffWordDocument(opcBytes(mainPart, contentType));
+      expect(r.ok, mainPart).toBe(false);
+      if (!r.ok) {
+        expect(r.error.code).toBe("UNSUPPORTED");
+        expect(r.error.message).toContain("Not a Word document");
+        expect(r.error.message).toContain(contentType);
+      }
+    }
+  });
+
+  it("docm（macroEnabled 主部件）放行", async () => {
+    const r = await sniffWordDocument(
+      opcBytes(
+        "word/document.xml",
+        "application/vnd.ms-word.document.macroEnabled.main+xml",
+      ),
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("关系 Target 使用十六进制字符引用时仍能定位主部件", async () => {
+    // 与引擎的 DOMParser 解码口径对齐：&#x64; = "d"。
+    const bytes = zipSync({
+      "[Content_Types].xml": strToU8(CT_XML("word/document.xml", WORD_MAIN_CT)),
+      "_rels/.rels": strToU8(ROOT_RELS_XML("word/&#x64;ocument.xml")),
+      "word/document.xml": strToU8("<w:document/>"),
+      "word/_rels/document.xml.rels": strToU8("<Relationships/>"),
+    });
+    const r = await sniffWordDocument(bytes);
+    expect(r.ok).toBe(true);
   });
 });

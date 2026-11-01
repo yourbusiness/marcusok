@@ -107,6 +107,39 @@ function isSafeHref(raw: string): boolean {
 }
 
 /**
+ * 上游把“解析不到的图片/字体”写成字符串 `"null"`（`img.src = null` /
+ * `url(null)`），浏览器会把它当相对 URL 请求到 `/null`（真实 Chromium
+ * 实测 404），且坏图标可见。这里清掉这些占位，避免无谓请求与误导 UI：
+ * - img[src]、SVG image[href]/[xlink:href] 指向 "null" 时摘除属性；
+ * - <style> 中 @font-face 的 url(null) 整块删除，其余 url(null) 换成
+ *   无网络请求的空 data URL。
+ * 注意必须在上游资源任务全部 await 完成后执行（本函数即在 renderAsync
+ * resolve 之后调用）；不改变合法图片/字体。
+ */
+function scrubBrokenResources(wrapper: HTMLElement): void {
+  for (const el of wrapper.querySelectorAll("img[src]")) {
+    if (el.getAttribute("src") === "null") el.removeAttribute("src");
+  }
+  for (const el of wrapper.querySelectorAll("image")) {
+    for (const attr of ["href", "xlink:href"] as const) {
+      if (el.getAttribute(attr) === "null") el.removeAttribute(attr);
+    }
+  }
+  const brokenUrl = /url\(\s*(?:'null'|"null"|null)\s*\)/gi;
+  for (const style of wrapper.querySelectorAll("style")) {
+    const css = style.textContent;
+    if (!css || !brokenUrl.test(css)) continue;
+    brokenUrl.lastIndex = 0;
+    style.textContent = css
+      .replace(
+        /@font-face\s*\{[^{}]*url\(\s*(?:'null'|"null"|null)\s*\)[^{}]*\}/gi,
+        "",
+      )
+      .replace(brokenUrl, 'url("data:,")');
+  }
+}
+
+/**
  * 渲染后安全后处理（与渲染同通道，上游 resolve 时图片/字体等异步任务已
  * 全部 await 完成，这里无需二次等待）：
  * - 超链接：上游 `renderHyperlink` 把外链关系 target **原始字符串直赋**
@@ -115,6 +148,7 @@ function isSafeHref(raw: string): boolean {
  * - altChunk（仅 allowAltChunks 路径）：上游 iframe 无 sandbox，补
  *   `sandbox=""`（禁止脚本）。注意这是渲染后属性赋值，与 srcdoc 首帧
  *   加载的先后不保证——尽力而为，limits 文档明示残余风险。
+ * - 解析不到的图片/字体资源：清掉 "null" 占位（见 scrubBrokenResources）。
  */
 function postProcessRender(
   wrapper: HTMLElement,
@@ -130,6 +164,23 @@ function postProcessRender(
       f.setAttribute("sandbox", "");
     }
   }
+  scrubBrokenResources(wrapper);
+}
+
+/**
+ * 空引用类上游错误的文案归一（V8 / Firefox / Safari 三种形态）。
+ * 典型来源是文档引用了关系部件但包里缺失对应文件（如超链接/图片存在、
+ * word/_rels/document.xml.rels 缺失）；不解析原始文案会直接把引擎内部
+ * 错误暴露给调用方。
+ */
+const NULL_PROPERTY_ERROR_RE =
+  /cannot read properties of (?:null|undefined) \(reading '[^']+'\)|can't access property ["'][^"']+["'],?\s*\S+ is (?:null|undefined)|null is not an object \(evaluating '[^']+'\)/i;
+
+/** 导出供测试直接覆盖三种浏览器文案（不进入包公开 API）。 */
+export function describeRenderFailure(message: string): string {
+  return NULL_PROPERTY_ERROR_RE.test(message)
+    ? "the document references a relationship part that is missing from the package (for example word/_rels/document.xml.rels). The file is incomplete or corrupt."
+    : message;
 }
 
 /**
@@ -338,14 +389,9 @@ export function createWordPreview(
       wrapper.remove();
       cleanupGlobalRegistrations(className);
       const message = err instanceof Error ? err.message : String(err);
-      // 缺 document.xml.rels 且文档引用了关系（超链接/图片）时，上游只抛
-      // 空引用 TypeError——这正是本包声称要消除的晦涩错误。改写为可操作的
-      // 说明，保留 cause 供诊断。
-      const friendly = /Cannot read properties of null \(reading 'find'\)/.test(
-        message,
-      )
-        ? "the document references a relationship part that is missing from the package (for example word/_rels/document.xml.rels). The file is incomplete or corrupt."
-        : message;
+      // 缺关系部件时上游只抛浏览器各异的空引用 TypeError——这正是本包
+      // 声称要消除的晦涩错误。统一改写为可操作说明，保留 cause 供诊断。
+      const friendly = describeRenderFailure(message);
       onError?.({
         code: "CORRUPT",
         message: `Failed to render document: ${friendly}`,

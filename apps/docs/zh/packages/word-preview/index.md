@@ -7,7 +7,7 @@
 | 能力       | 说明                                                                                                                                                                                                                                   |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 文件格式   | `.docx` / `.docm`（ZIP/OOXML）。`.doc` 老格式与加密 docx 同为 OLE2 魔数，统一报 `LEGACY_FORMAT`；罕见的 zip 直接加密形态报 `PASSWORD_PROTECTED`                                                                                        |
-| 视觉保真   | 分页符（显式 `<w:br type="page"/>`、`lastRenderedPageBreak` 标记、分节符）、页眉页脚、脚注尾注、内嵌图片与字体——由 docx-preview 引擎渲染；批注与修订需显式开启（`renderComments` / `renderChanges`）                                   |
+| 视觉保真   | 分页符（显式 `<w:br type="page"/>`、`lastRenderedPageBreak` 标记；分节符仅在页面尺寸/方向变化时断页）、页眉页脚、脚注尾注、内嵌图片与字体——由 docx-preview 引擎渲染；批注与修订需显式开启（`renderComments` / `renderChanges`）        |
 | 格式嗅探   | 魔数 + zip 加密位 + 必需部件校验（`[Content_Types].xml`、`_rels/.rels`，以及根关系 `officeDocument` 指向的主部件——通常是 `word/document.xml`）在引擎**之前**执行，非 Word 的 zip 得到可读的 `UNSUPPORTED` 报错而非莫名其妙的空引用堆栈 |
 | 加固默认值 | altChunk（引擎渲染为无 sandbox 的 `srcdoc` iframe）默认**关闭**；渲染后对 `http`/`https`/`mailto`/`tel` 白名单之外的超链接置空 href（保留链接文本）                                                                                    |
 | 多实例     | 每个实例在唯一样式类名下渲染，同页两份文档的编号/主题 CSS 互不串扰（引擎固定类名会互相覆盖）                                                                                                                                           |
@@ -45,7 +45,7 @@ preview.destroy(); // 卸载 + 兜住任何在途渲染
 
 ## 不在范围内
 
-- **实时排版分页**——只在显式分页/分节符与编辑器存盘的 `lastRenderedPageBreak` 标记处断页；引擎不做文本重排。
+- **实时排版分页**——只在显式分页符与编辑器存盘的 `lastRenderedPageBreak` 标记处断页（分节符仅在页面尺寸/方向变化时断页；引擎不识别单凭 `nextPage`/`evenPage`/`oddPage` 类型的节）；引擎不做文本重排。
 - **TOC 字段**——目录字段不渲染。
 - **编辑**——这是预览器，不编辑、不另存。
 - **Worker 解析**——引擎在主线程产出 DOM（上游约束）；大文档的 DOM 构建期间会阻塞 UI（见 [限制](/zh/packages/word-preview/guide/02-limits)）。

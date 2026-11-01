@@ -58,18 +58,73 @@ beforeEach(() => {
 });
 
 describe("上游晦涩错误归一", () => {
-  it("缺失关系文件的空引用 TypeError 改写成可读 message", async () => {
-    renderAsyncMock.mockRejectedValue(
-      new TypeError("Cannot read properties of null (reading 'find')"),
-    );
+  for (const [browser, raw] of [
+    ["V8", "Cannot read properties of null (reading 'find')"],
+    [
+      "V8 (childNodes)",
+      "Cannot read properties of null (reading 'childNodes')",
+    ],
+    ["Firefox", 'can\'t access property "find", n is null'],
+    ["Safari", "null is not an object (evaluating 'n.find')"],
+  ] as const) {
+    it(`${browser} 的空引用文案改写成可读 message`, async () => {
+      renderAsyncMock.mockRejectedValue(new TypeError(raw));
+      const container = makeContainer();
+      const onError = vi.fn();
+      createWordPreview(container, { source: simpleDocx("x"), onError });
+      await waitFor(() => onError.mock.calls.length > 0);
+      const err = onError.mock.calls[0][0] as { code: string; message: string };
+      expect(err.code).toBe("CORRUPT");
+      expect(err.message).toContain("relationship part");
+      expect(err.message).toContain("word/_rels/document.xml.rels");
+    });
+  }
+
+  it("无关错误保留原始 message（不误报缺关系部件）", async () => {
+    renderAsyncMock.mockRejectedValue(new TypeError("something else broke"));
     const container = makeContainer();
     const onError = vi.fn();
     createWordPreview(container, { source: simpleDocx("x"), onError });
     await waitFor(() => onError.mock.calls.length > 0);
     const err = onError.mock.calls[0][0] as { code: string; message: string };
-    expect(err.code).toBe("CORRUPT");
-    expect(err.message).toContain("relationship part");
-    expect(err.message).toContain("word/_rels/document.xml.rels");
+    expect(err.message).toContain("something else broke");
+    expect(err.message).not.toContain("relationship part");
+  });
+});
+
+describe("坏资源占位清理", () => {
+  it('清掉 src="null" 的图片与 url(null) 字体，不产生 /null 请求', async () => {
+    mockRender(
+      `<img id="i1" src="null" alt="">` +
+        `<svg><image id="i2" href="null"></image></svg>` +
+        `<style>@font-face{font-family:missing;src:url(null) format("truetype")}` +
+        `.deco{background-image:url(null)}</style>`,
+    );
+    const container = makeContainer();
+    createWordPreview(container, { source: simpleDocx("x") });
+    await waitFor(() => container.querySelector("img") !== null);
+
+    expect(container.querySelector("#i1")!.getAttribute("src")).toBeNull();
+    expect(container.querySelector("#i2")!.getAttribute("href")).toBeNull();
+    const css = container.querySelector("style")!.textContent ?? "";
+    expect(css).not.toContain("@font-face");
+    expect(css.toLowerCase()).not.toContain("url(null)");
+  });
+
+  it("合法图片与字体不被清理", async () => {
+    mockRender(
+      `<img id="ok" src="data:image/png;base64,AAAA">` +
+        `<style>@font-face{font-family:ok;src:url(data:font/ttf;base64,AAAA)}</style>`,
+    );
+    const container = makeContainer();
+    createWordPreview(container, { source: simpleDocx("x") });
+    await waitFor(() => container.querySelector("img") !== null);
+    expect(container.querySelector("#ok")!.getAttribute("src")).toBe(
+      "data:image/png;base64,AAAA",
+    );
+    expect(container.querySelector("style")!.textContent).toContain(
+      "@font-face",
+    );
   });
 });
 

@@ -29,7 +29,7 @@ preview.destroy();
 ## Limits (inherited from the engine, stated honestly)
 
 - **Main-thread rendering** — no worker mode; large documents block the UI for the DOM build.
-- **No real-time pagination** — pages break at explicit breaks and `lastRenderedPageBreak` markers only; TOC fields do not render.
+- **No real-time pagination** — pages break at explicit breaks and `lastRenderedPageBreak` markers only (a section break also breaks when the page size/orientation changes); TOC fields do not render; tab stops (`w:tab`) are rendered as fixed spacing, not aligned to ruler positions.
 - **`.docx` / `.docm` only** — legacy `.doc` and encrypted docx are both OLE2 and both rejected; the directly-encrypted ZIP form is rejected too.
 - **CSS injection surface** — document-controlled strings reach the injected `<style>` text; the class-name isolation covers legitimate styles only. Use CSP for hostile inputs (`style-src`, `img-src data:`, `font-src data:`).
 - **Containers must be in the main document** — iframe documents / ShadowRoots are not verified.

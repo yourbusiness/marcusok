@@ -35,19 +35,25 @@ function fail(
     : { ok: false, error: { code, message, cause } };
 }
 
-/** XML 属性值实体解码（关系 Target 可能含 &amp; 等）。与读取侧同口径。 */
+/** 十进制 / 十六进制字符引用 → 字符串（非法码点回退替换符）。 */
+function decodeCharRef(digits: string, radix: number): string {
+  const code = Number.parseInt(digits, radix);
+  return code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+    ? "�"
+    : String.fromCodePoint(code);
+}
+
+/** XML 属性值实体解码（关系 Target 可能含 &amp; 等）。与读取侧（DOM
+ * DOMParser）同口径：十进制与十六进制字符引用都要解，否则合法的
+ * `word/&#x64;ocument.xml` 会在本层被误判为缺部件。 */
 function decodeXmlEntities(s: string): string {
   return s
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, dec: string) => {
-      const code = Number(dec);
-      return code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
-        ? "�"
-        : String.fromCodePoint(code);
-    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => decodeCharRef(hex, 16))
+    .replace(/&#(\d+);/g, (_, dec: string) => decodeCharRef(dec, 10))
     .replace(/&amp;/g, "&");
 }
 
@@ -71,6 +77,44 @@ function normalizePartPath(target: string): string | null {
 
 function findPart(zip: JSZip, path: string): JSZip.JSZipObject | null {
   return zip.files[path] ?? zip.files[path.replace(/\//g, "\\")] ?? null;
+}
+
+/** WordprocessingML 主部件允许的 ContentType（docx / docm）。 */
+const WORD_MAIN_CONTENT_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+  "application/vnd.ms-word.document.macroenabled.main+xml",
+]);
+
+/**
+ * 主部件在 [Content_Types].xml 中声明的 ContentType（无 Override 时 null）。
+ *
+ * 只校验 OPC 部件齐全无法区分 docx / xlsx / pptx——三者都有
+ * [Content_Types].xml、_rels/.rels 与 officeDocument 主部件，随后会被
+ * 引擎按 Word 解析并失败，用户看到误导性的 CORRUPT。主部件的 Override
+ * 是 OPC 里唯一稳定的类型标识。
+ */
+async function mainPartContentType(
+  zip: JSZip,
+  mainPart: string,
+): Promise<string | null> {
+  const ct = findPart(zip, CONTENT_TYPES);
+  if (!ct) return null;
+  let xml: string;
+  try {
+    xml = await ct.async("string");
+  } catch {
+    return null; // 损坏的 Content_Types：交给后续渲染阶段的 CORRUPT 归一
+  }
+  const target = mainPart.replace(/\\/g, "/").replace(/^\/+/, "");
+  for (const tag of xml.match(/<Override\b[^>]*?(?:\/>|>)/g) ?? []) {
+    const partName = attrValue(tag, "PartName");
+    const contentType = attrValue(tag, "ContentType");
+    if (partName === undefined || contentType === undefined) continue;
+    if (partName.replace(/\\/g, "/").replace(/^\/+/, "") === target) {
+      return contentType.trim();
+    }
+  }
+  return null;
 }
 
 /**
@@ -188,6 +232,16 @@ async function sniffZipParts(bytes: Uint8Array): Promise<WordSniffResult> {
     return fail(
       "UNSUPPORTED",
       `Not a Word document: missing required part(s) ${missing.map((p) => `"${p}"`).join(", ")}.`,
+    );
+  }
+  const contentType = await mainPartContentType(zip, mainPart);
+  if (
+    contentType !== null &&
+    !WORD_MAIN_CONTENT_TYPES.has(contentType.toLowerCase())
+  ) {
+    return fail(
+      "UNSUPPORTED",
+      `Not a Word document: the package main part "${mainPart}" is declared as "${contentType}", not WordprocessingML.`,
     );
   }
   return { ok: true };
