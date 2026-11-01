@@ -18,7 +18,7 @@ This package is a thin, hardened wrapper around the [docx-preview](https://githu
 
 ## Security hardening (what the wrapper does)
 
-- **altChunks are off by default.** The engine renders altChunks (embedded HTML parts) into `<iframe srcdoc>` **without a `sandbox` attribute**, and its own default is `renderAltChunks: true` — untrusted documents could execute script on render. This package flips the default to `false`. Opting in via `allowAltChunks: true` is for trusted documents only; the wrapper then adds `sandbox=""` after rendering — note this is a post-render attribute assignment and the race with the iframe's first load is not guaranteed to be won in every browser. Content inside the iframe is also **outside** the hyperlink allowlist below.
+- **altChunks are off by default.** The engine renders altChunks (embedded HTML parts) into `<iframe srcdoc>` **without a `sandbox` attribute**, and its own default is `renderAltChunks: true` — untrusted documents could execute script on render. This package flips the default to `false`. Opting in via `allowAltChunks: true` is for trusted documents only. When enabled, the wrapper supplies a hardened element factory so the iframe is created with `sandbox=""` **before** the engine assigns `srcdoc` (a post-render attribute patch loses the race in Chromium — the script executes first). Content inside the iframe is still **outside** the hyperlink allowlist below.
 - **Hyperlink scheme allowlist.** The engine assigns external relationship targets to `href` verbatim, with no scheme validation — a crafted docx can produce `<a href="javascript:…">`. After rendering, the wrapper parses every `a[href]` with the URL API (handling case, leading whitespace/control chars, `//host` forms) and keeps only `http:`, `https:`, `mailto:`, `tel:` plus anchor/relative forms; everything else gets its `href` removed (link text is kept). There is no opt-out — there is no legitimate case for `javascript:` links in a document preview.
 - **Format sniffing before the engine.** Magic bytes, the ZIP encryption bit, and required-part checks run first, so hostile or malformed inputs get readable errors (`UNSUPPORTED` / `CORRUPT`) instead of the engine's null-deref stack traces.
 
@@ -42,6 +42,8 @@ This package is a thin, hardened wrapper around the [docx-preview](https://githu
 ## SSR
 
 Importing the package is safe in Node (the module top level touches no DOM globals — verified). Only the `createWordPreview` call needs a DOM; call it client-side.
+
+In the browser, importing the package has one global side effect from the bundled JSZip build: it installs `window.setImmediate`/`clearImmediate` and one `message` listener (scheduling polyfill). `window.JSZip` and other globals are not defined. This is why the package declares `"sideEffects": true`.
 
 ## Multi-instance
 

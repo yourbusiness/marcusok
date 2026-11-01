@@ -18,7 +18,7 @@
 
 ## 安全加固（封装层做了什么）
 
-- **altChunk 默认关闭。** 引擎把 altChunk（内嵌 HTML 部件）渲染进 `<iframe srcdoc>` 且**不带 `sandbox` 属性**，引擎自身默认还是 `renderAltChunks: true`——不可信文档可在渲染时执行脚本。本包把默认值翻转为 `false`。经 `allowAltChunks: true` 显式开启仅限受信文档；封装层会在渲染后补 `sandbox=""`——注意这是渲染后的属性赋值，与 iframe 首帧加载的竞态不保证在所有浏览器都赢。iframe 内部的内容也不在下述超链接白名单的覆盖范围内。
+- **altChunk 默认关闭。** 引擎把 altChunk（内嵌 HTML 部件）渲染进 `<iframe srcdoc>` 且**不带 `sandbox` 属性**，引擎自身默认还是 `renderAltChunks: true`——不可信文档可在渲染时执行脚本。本包把默认值翻转为 `false`。经 `allowAltChunks: true` 显式开启仅限受信文档。开启后封装层会注入加固版元素工厂，iframe 在引擎写入 `srcdoc` **之前**就带 `sandbox=""`（渲染后再补属性在 Chromium 下会输掉竞态——脚本先执行）。iframe 内部的内容仍不在下述超链接白名单的覆盖范围内。
 - **超链接 scheme 白名单。** 引擎把外链关系 target **原样直赋** href、无任何 scheme 校验——恶意 docx 可产出 `<a href="javascript:…">`。渲染完成后，封装层用 URL API 解析每个 `a[href]`（正确处理大小写、前导空白/控制字符、`//host` 形态），仅放行 `http:`、`https:`、`mailto:`、`tel:` 与锚点/相对形态；其余摘除 href（保留链接文本）。没有关闭开关——文档预览里想不出放行 `javascript:` 链接的正当场景。
 - **引擎之前先嗅探格式。** 魔数、zip 加密位与必需部件检查先行，恶意/畸形输入得到可读错误（`UNSUPPORTED` / `CORRUPT`），而不是引擎的空引用堆栈。
 
@@ -42,6 +42,8 @@
 ## SSR
 
 在 Node 里 import 本包是安全的（模块顶层不触碰任何 DOM 全局——已实测）。只有 `createWordPreview` 调用需要 DOM；在客户端调用即可。
+
+浏览器侧 import 有一个来自内置 JSZip 构建的全局副作用：安装 `window.setImmediate`/`clearImmediate` 与一个 `message` 监听（调度 polyfill）。`window.JSZip` 等其他全局不会被定义。这也是 package.json 声明 `"sideEffects": true` 的原因。
 
 ## 多实例
 

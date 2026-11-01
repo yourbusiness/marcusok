@@ -8,10 +8,13 @@
  * 必须专门覆盖。
  */
 import { describe, expect, it } from "vitest";
+import { unzipSync, zipSync } from "fflate";
 import { sniffWordDocument } from "../sniff";
 import {
   simpleDocx,
+  centralDirEncryptedZipBytes,
   docxMissingPart,
+  docxWithMainPart,
   encryptedZipBytes,
   fakeOle2Bytes,
   plainZipBytes,
@@ -93,6 +96,49 @@ describe("sniffWordDocument", () => {
     if (!r.ok) {
       expect(r.error.code).toBe("PASSWORD_PROTECTED");
       expect(r.error.message).toMatch(/password/i);
+    }
+  });
+
+  it("只有中央目录头带加密位（local header 未标记）：同样 PASSWORD_PROTECTED", async () => {
+    // JSZip 在 readCentralPart 抛 "Encrypted zip are not supported"；
+    // 旧实现把它统一归 CORRUPT，与文档承诺的 PASSWORD_PROTECTED 不符。
+    const r = await sniffWordDocument(centralDirEncryptedZipBytes());
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe("PASSWORD_PROTECTED");
+      expect(r.error.message).toMatch(/password/i);
+    }
+  });
+
+  it("以 PK 开头但不是 ZIP 签名（如 PKG 文本）：UNSUPPORTED", async () => {
+    // 旧实现只校验前两字节 PK；"PKG archive" 被送进 JSZip，
+    // 抛 "end of central directory" 后误归 CORRUPT。
+    const r = await sniffWordDocument(
+      new TextEncoder().encode("PKG archive, not a zip"),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe("UNSUPPORTED");
+  });
+
+  it("主部件由根关系的 officeDocument Target 决定（非 word/document.xml）", async () => {
+    // OPC 允许主部件使用任意路径；上游按 _rels/.rels 解析，sniff 不能
+    // 硬编码 word/document.xml 把合法文档拒之门外。
+    const r = await sniffWordDocument(docxWithMainPart("word/main.xml"));
+    expect(r.ok).toBe(true);
+  });
+
+  it("主部件目标缺失时：UNSUPPORTED 且 message 指名实际路径", async () => {
+    const bytes = docxWithMainPart("word/main.xml");
+    // 用 zipSync 重建并删掉主部件
+    const files: Record<string, Uint8Array> = {};
+    for (const [k, v] of Object.entries(unzipSync(bytes))) {
+      if (k !== "word/main.xml") files[k] = v;
+    }
+    const r = await sniffWordDocument(zipSync(files));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe("UNSUPPORTED");
+      expect(r.error.message).toContain("word/main.xml");
     }
   });
 

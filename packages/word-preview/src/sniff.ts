@@ -5,6 +5,10 @@
  * `Cannot read properties of null (reading 'find')`；非 zip 是 jszip 的
  * `Can't find end of central directory`。魔数只能区分 zip/OLE2，区分不了
  * zip 里装的是 docx、xlsx 还是 odt——必须再做 zip 目录的必需部件校验。
+ *
+ * 主部件路径不能硬编码 word/document.xml：OPC 允许任意主部件路径，由
+ * 根关系 `_rels/.rels` 的 officeDocument 关系决定；上游按该关系解析，
+ * 嗅探必须同口径，否则会把引擎可渲染的合法文档误拒为 UNSUPPORTED。
  */
 import type { WordPreviewErrorCode } from "./types";
 import JSZip from "jszip";
@@ -16,16 +20,10 @@ export type WordSniffResult =
       error: { code: WordPreviewErrorCode; message: string; cause?: unknown };
     };
 
-/**
- * Word 必需部件（主流约定路径，覆盖 Word/WPS/LibreOffice 产物）。与上游
- * `OpenXmlPackage` 内部取文件的方式一致：正斜杠键查不到时兼容反斜杠键
- * （部分打包器产物的路径形态）。
- */
-const REQUIRED_PARTS = [
-  "[Content_Types].xml",
-  "_rels/.rels",
-  "word/document.xml",
-] as const;
+const CONTENT_TYPES = "[Content_Types].xml";
+const ROOT_RELS = "_rels/.rels";
+const DEFAULT_MAIN_PART = "word/document.xml";
+const OFFICE_DOCUMENT_REL_SUFFIX = "/officeDocument";
 
 function fail(
   code: WordPreviewErrorCode,
@@ -35,6 +33,80 @@ function fail(
   return cause === undefined
     ? { ok: false, error: { code, message } }
     : { ok: false, error: { code, message, cause } };
+}
+
+/** XML 属性值实体解码（关系 Target 可能含 &amp; 等）。与读取侧同口径。 */
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, dec: string) => {
+      const code = Number(dec);
+      return code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+        ? "�"
+        : String.fromCodePoint(code);
+    })
+    .replace(/&amp;/g, "&");
+}
+
+/** 读取标签内的属性（双引号/单引号均可）。 */
+function attrValue(tag: string, name: string): string | undefined {
+  const m = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(tag);
+  const raw = m?.[1] ?? m?.[2];
+  return raw === undefined ? undefined : decodeXmlEntities(raw);
+}
+
+/** 关系 Target → 包内部件路径；外部 URI 返回 null。 */
+function normalizePartPath(target: string): string | null {
+  const value = target.trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return null; // 外部 URI
+  const path = value
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/^\.\/+/, "");
+  return path === "" ? null : path;
+}
+
+function findPart(zip: JSZip, path: string): JSZip.JSZipObject | null {
+  return zip.files[path] ?? zip.files[path.replace(/\//g, "\\")] ?? null;
+}
+
+/**
+ * 主部件路径：根关系的 officeDocument Target；缺失/不可读时回退约定路径。
+ * 读取失败不在此报错——必需部件检查会把缺失的 _rels/.rels 或主部件
+ * 如实列进 UNSUPPORTED message。
+ */
+async function resolveMainPart(zip: JSZip): Promise<string> {
+  const rels = findPart(zip, ROOT_RELS);
+  if (!rels) return DEFAULT_MAIN_PART;
+  try {
+    const xml = await rels.async("string");
+    for (const tag of xml.match(/<Relationship\b[^>]*?(?:\/>|>)/g) ?? []) {
+      const type = attrValue(tag, "Type");
+      if (!type || !type.endsWith(OFFICE_DOCUMENT_REL_SUFFIX)) continue;
+      const target = attrValue(tag, "Target");
+      const path = target ? normalizePartPath(target) : null;
+      if (path) return path;
+    }
+  } catch {
+    // 关系文件损坏：交给渲染阶段的 CORRUPT 归一
+  }
+  return DEFAULT_MAIN_PART;
+}
+
+/** ZIP 签名：普通条目 / 空包 / 分卷。只认两字节 PK 会把 "PKG" 文本当 zip。 */
+function isZipSignature(bytes: Uint8Array): boolean {
+  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    return false;
+  }
+  const [a, b] = [bytes[2], bytes[3]];
+  return (
+    (a === 0x03 && b === 0x04) ||
+    (a === 0x05 && b === 0x06) ||
+    (a === 0x07 && b === 0x08)
+  );
 }
 
 export async function sniffWordDocument(
@@ -50,15 +122,19 @@ export async function sniffWordDocument(
     bytes[0] === 0xd0 &&
     bytes[1] === 0xcf &&
     bytes[2] === 0x11 &&
-    bytes[3] === 0xe0
+    bytes[3] === 0xe0 &&
+    bytes[4] === 0xa1 &&
+    bytes[5] === 0xb1 &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0xe1
   ) {
     return fail(
       "LEGACY_FORMAT",
       "Not supported: legacy .doc format and encrypted .docx files are both OLE2 containers and neither is supported.",
     );
   }
-  // docx 必为 zip 容器（PK 魔数）
-  if (!(bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b)) {
+  // docx 必为 zip 容器（完整 ZIP 签名）
+  if (!isZipSignature(bytes)) {
     return fail(
       "UNSUPPORTED",
       "Not a Word document: expected a .docx (ZIP) file.",
@@ -89,15 +165,24 @@ async function sniffZipParts(bytes: Uint8Array): Promise<WordSniffResult> {
   try {
     zip = await JSZip.loadAsync(bytes);
   } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    // 中央目录/条目带加密位时 JSZip 抛 "Encrypted zip are not supported"；
+    // 这是密码保护，不是结构损坏（旧实现统一归 CORRUPT）。
+    if (/encrypted zip/i.test(message)) {
+      return fail(
+        "PASSWORD_PROTECTED",
+        "Password-protected documents are not supported.",
+        e,
+      );
+    }
     // 截断 zip / 中央目录损坏等（实测 jszip 报 Can't find end of central
     // directory 一类错误）——归 CORRUPT 而非 UNSUPPORTED：zip 意图存在，
     // 是结构坏了
     return fail("CORRUPT", "Corrupted file: broken ZIP structure.", e);
   }
-  const missing = REQUIRED_PARTS.filter(
-    (p) =>
-      zip.files[p] === undefined &&
-      zip.files[p.replace(/\//g, "\\")] === undefined,
+  const mainPart = await resolveMainPart(zip);
+  const missing = [CONTENT_TYPES, ROOT_RELS, mainPart].filter(
+    (p) => findPart(zip, p) === null,
   );
   if (missing.length > 0) {
     return fail(

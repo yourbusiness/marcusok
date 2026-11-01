@@ -15,24 +15,24 @@ function createWordPreview(
 
 ## WordPreviewOptions
 
-| 选项             | 类型                                        | 默认值  | 说明                                                                                                                                                                                                                                                      |
-| ---------------- | ------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`         | `File \| Blob \| Uint8Array \| ArrayBuffer` | —       | 文档字节。                                                                                                                                                                                                                                                |
-| `renderOptions`  | `WordRenderOptions`                         | —       | 白名单引擎选项（见下）。                                                                                                                                                                                                                                  |
-| `styleNonce`     | `string`                                    | —       | 注入 `<style>` 的 CSP nonce。以"换节点"实现（CSP 在插入时拦截——事后补属性无效）。见 [限制 → CSP](/zh/packages/word-preview/guide/02-limits#csp-要求)。                                                                                                    |
-| `allowAltChunks` | `boolean`                                   | `false` | 渲染 altChunk（内嵌 HTML）。默认关闭——引擎用无 sandbox 的 `srcdoc` iframe。仅限受信文档；渲染后会补 `sandbox=""` 属性（残余竞态见 [限制](/zh/packages/word-preview/guide/02-limits)）。                                                                   |
-| `onRendered`     | `(info) => void`                            | —       | 每次渲染成功触发一次。`info.pageCount` 按 `section` 元素计数（仅在默认分页选项下有意义）；`info.durationMs` 从 `createWordPreview` 调用起计——涵盖源读取、格式嗅探与**含图片/字体加载**的完整渲染（引擎 resolve 前 await 全部资源任务），不是纯 DOM 构建。 |
-| `onError`        | `(error) => void`                           | —       | 致命错误。destroy 触发的取消是静默的，永不进入该回调。                                                                                                                                                                                                    |
+| 选项             | 类型                                        | 默认值  | 说明                                                                                                                                                                                                                                                                                                                        |
+| ---------------- | ------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`         | `File \| Blob \| Uint8Array \| ArrayBuffer` | —       | 文档字节。                                                                                                                                                                                                                                                                                                                  |
+| `renderOptions`  | `WordRenderOptions`                         | —       | 白名单引擎选项（见下）。                                                                                                                                                                                                                                                                                                    |
+| `styleNonce`     | `string`                                    | —       | 注入 `<style>` 的 CSP nonce。以"换节点"实现（CSP 在插入时拦截——事后补属性无效）。见 [限制 → CSP](/zh/packages/word-preview/guide/02-limits#csp-要求)。                                                                                                                                                                      |
+| `allowAltChunks` | `boolean`                                   | `false` | 渲染 altChunk（内嵌 HTML）。默认关闭——引擎用无 sandbox 的 `srcdoc` iframe。仅限受信文档；开启后 iframe 在写入 `srcdoc` 之前即带 `sandbox=""`（见 [限制](/zh/packages/word-preview/guide/02-limits)）。                                                                                                                      |
+| `onRendered`     | `(info) => void`                            | —       | 每次渲染成功触发一次。`info.pageCount` 按 `section` 元素计数（仅在默认分页选项下有意义）；`info.durationMs` 从 `createWordPreview` 调用起计——涵盖源读取、格式嗅探与渲染本身（引擎的 ZIP 读取、图片/字体 data URL 编码任务，resolve 前会 await），不是纯 DOM 构建。**不**等待浏览器字体解析/绘制（`document.fonts.ready`）。 |
+| `onError`        | `(error) => void`                           | —       | 致命错误。destroy 触发的取消是静默的，永不进入该回调。                                                                                                                                                                                                                                                                      |
 
 错误带 `code`：
 
-| 错误码               | 含义                                                                                                                  |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `UNSUPPORTED`        | 非 zip 容器，或 zip 缺 Word 必需部件（`[Content_Types].xml`、`_rels/.rels`、`word/document.xml`）——即不是 Word 文档。 |
-| `LEGACY_FORMAT`      | OLE2 容器：`.doc` 老格式**或**加密 docx（同魔数；两者均不支持）。                                                     |
-| `PASSWORD_PROTECTED` | zip general purpose 加密位置位（罕见的直接加密形态）。                                                                |
-| `CORRUPT`            | zip 结构损坏，或必需部件齐全但解析/渲染失败（`cause` 保留原始错误）。                                                 |
-| `UNKNOWN`            | 其他（如源 `Blob` 读取失败）。                                                                                        |
+| 错误码               | 含义                                                                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UNSUPPORTED`        | 非 zip 容器，或 zip 缺 Word 必需部件（`[Content_Types].xml`、`_rels/.rels`，以及根关系 `officeDocument` 指向的主部件——通常是 `word/document.xml`）——即不是 Word 文档。 |
+| `LEGACY_FORMAT`      | OLE2 容器：`.doc` 老格式**或**加密 docx（同魔数；两者均不支持）。                                                                                                      |
+| `PASSWORD_PROTECTED` | zip general purpose 加密位置位（罕见的直接加密形态）。                                                                                                                 |
+| `CORRUPT`            | zip 结构损坏，或必需部件齐全但解析/渲染失败（`cause` 保留原始错误）。                                                                                                  |
+| `UNKNOWN`            | 其他（如源 `Blob` 读取失败）。                                                                                                                                         |
 
 ## WordRenderOptions
 
@@ -42,7 +42,7 @@ function createWordPreview(
 
 `breakPages`、`inWrapper`、`hideWrapperOnPrint`、`ignoreWidth`、`ignoreHeight`、`ignoreFonts`、`ignoreLastRenderedPageBreak`（本包默认 `false`、引擎默认 `true`——设 `true` 恢复引擎行为）、`renderHeaders`、`renderFooters`、`renderFootnotes`、`renderEndnotes`、`renderComments`、`renderChanges`
 
-全部为可选布尔值；未设置的键用引擎默认。`onRendered` 的 `pageCount` 仅在默认分页选项（`breakPages: true`、`inWrapper: true`）下有意义。
+全部为可选布尔值；**除** `ignoreLastRenderedPageBreak`（本包默认 `false`，引擎默认 `true`）外，未设置的键用引擎默认。`onRendered` 的 `pageCount` 仅在默认分页选项（`breakPages: true`、`inWrapper: true`）下有意义。
 
 **接管项（不在类型里，共 7 项）：**
 

@@ -6,8 +6,10 @@ import { defineConfig } from "tsup";
 // 变化（与 excel-preview 的 worker 配置同风格）。
 //
 // platform 必须保持 browser：jszip 的 browser 字段映射到自包含的
-// dist/jszip.min.js（lie/pako/readable-stream/setimmediate 四个 runtime
-// 依赖已内联），改成 node 会使打包图突变、把传递依赖泄漏给消费方。
+// dist/jszip.min.js（lie/immediate/setimmediate/pako 已内联；readable-stream
+// 走 browser shim，不进入产物），改成 node 会使打包图突变、把传递依赖
+// 泄漏给消费方。该 bundle 在 import 时会安装 window.setImmediate 调度
+// polyfill，故 package.json 的 sideEffects 必须为 true。
 //
 // 不 minify（与 excel-preview 一致）：esbuild 对 bundle 默认
 // legalComments=eof，docx-preview（Apache-2.0）与 jszip（MIT）的许可头

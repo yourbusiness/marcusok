@@ -57,6 +57,47 @@ beforeEach(() => {
   renderAsyncMock.mockReset();
 });
 
+describe("上游晦涩错误归一", () => {
+  it("缺失关系文件的空引用 TypeError 改写成可读 message", async () => {
+    renderAsyncMock.mockRejectedValue(
+      new TypeError("Cannot read properties of null (reading 'find')"),
+    );
+    const container = makeContainer();
+    const onError = vi.fn();
+    createWordPreview(container, { source: simpleDocx("x"), onError });
+    await waitFor(() => onError.mock.calls.length > 0);
+    const err = onError.mock.calls[0][0] as { code: string; message: string };
+    expect(err.code).toBe("CORRUPT");
+    expect(err.message).toContain("relationship part");
+    expect(err.message).toContain("word/_rels/document.xml.rels");
+  });
+});
+
+describe("altChunk sandbox 时序", () => {
+  it("allowAltChunks 下 iframe 在 srcdoc 赋值前已带 sandbox", async () => {
+    // 上游 renderAltChunk 先 h({tagName:"iframe"})、异步 task 里再设
+    // srcdoc；渲染完成后补 sandbox 已太晚（Chromium 实测脚本先执行）。
+    // 这里强制验证本包注入的 h 在节点创建时就带 sandbox。
+    let sandboxAtCreation: string | null = null;
+    renderAsyncMock.mockImplementation(
+      (_data, bodyContainer: HTMLElement, _style, options?: Options) => {
+        const iframe = options!.h({ tagName: "iframe" }) as HTMLIFrameElement;
+        sandboxAtCreation = iframe.getAttribute("sandbox");
+        iframe.srcdoc = "<p>alt</p>";
+        bodyContainer.appendChild(iframe);
+      },
+    );
+    const container = makeContainer();
+    createWordPreview(container, {
+      source: simpleDocx("x"),
+      allowAltChunks: true,
+    });
+    await waitFor(() => container.querySelector("iframe") !== null);
+    expect(sandboxAtCreation).toBe("");
+    expect(container.querySelector("iframe")!.getAttribute("sandbox")).toBe("");
+  });
+});
+
 describe("超链接 scheme 白名单", () => {
   it("javascript: href 被摘除、链接文本保留", async () => {
     mockRender(`<a href="javascript:alert(1)">click me</a>`);

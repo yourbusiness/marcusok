@@ -76,8 +76,9 @@ export interface WordPreviewOptions {
   allowAltChunks?: boolean;
   /**
    * 渲染完成回调。`durationMs` 从 `createWordPreview` 调用起计——含源
-   * 读取与格式嗅探，再加**含图片/内嵌字体加载**的渲染本身（上游
-   * resolve 前 await 全部资源任务），非纯 DOM 构建。
+   * 读取、格式嗅探与上游资源任务（ZIP 读取、图片/内嵌字体 data URL 编码，
+   * 上游 resolve 前 await 这些任务），非纯 DOM 构建。注意上游不 await
+   * `document.fonts.ready` 或实际绘制：回调时字体可能尚未用于绘制。
    * `pageCount` 按容器内 `section` 元素计数——仅在默认分页选项
    * （`breakPages: true` / `inWrapper: true`）下有意义。
    */
@@ -90,7 +91,7 @@ export interface WordRenderedInfo {
   /** 渲染出的 section（页）元素数；仅默认分页选项下有意义。 */
   pageCount: number;
   /** 从 createWordPreview 调用到渲染完成的耗时（毫秒，含源读取、
-   * 嗅探与图片/字体等资源加载）。 */
+   * 嗅探与上游资源任务；不保证浏览器字体解析/绘制已完成）。 */
   durationMs: number;
 }
 

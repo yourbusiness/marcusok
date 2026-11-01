@@ -118,14 +118,24 @@ export default function WordPreviewDemo() {
 
   const onFile = useCallback(async (file: File) => {
     const seq = ++loadSeqRef.current;
-    const buf = await file.arrayBuffer();
-    if (seq !== loadSeqRef.current) return false; // 期间又选了别的文件
-    bytesRef.current = new Uint8Array(buf);
-    setHasFile(true);
-    setFileName(file.name);
-    // 同名文件重传（内容已变）时 fileName 同值会被 React bail-out 吞掉，
-    // effect 不重跑——必须无条件 bump renderSeq 驱动重挂（pdf demo 同款）
-    setRenderSeq((n) => n + 1);
+    try {
+      const buf = await file.arrayBuffer();
+      if (seq !== loadSeqRef.current) return false; // 期间又选了别的文件
+      bytesRef.current = new Uint8Array(buf);
+      setHasFile(true);
+      setFileName(file.name);
+      // 同名文件重传（内容已变）时 fileName 同值会被 React bail-out 吞掉，
+      // effect 不重跑——必须无条件 bump renderSeq 驱动重挂（pdf demo 同款）
+      setRenderSeq((n) => n + 1);
+    } catch (err) {
+      // 读取失败（文件被移走/权限）不能让 promise 悬空成未处理拒绝
+      if (seq === loadSeqRef.current) {
+        setError({
+          code: "UNKNOWN",
+          message: `Failed to read the file: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
     return false;
   }, []);
 
@@ -149,6 +159,9 @@ export default function WordPreviewDemo() {
     bytesRef.current = bigDocx();
     setHasFile(true);
     setFileName("synthetic-1000-paras.docx");
+    // 同名再次点击时 fileName bail-out 会吞掉 effect；无条件 bump 才能
+    // 在失败后重试重挂（与文件选择路径一致）
+    setRenderSeq((n) => n + 1);
   }, []);
 
   const mountDual = useCallback(() => {

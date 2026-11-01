@@ -28,7 +28,7 @@ const t = computed(() =>
         hint: "Rendering runs on the main thread (engine constraint — no worker mode). Legacy .doc and encrypted files report clear error codes; hyperlinks outside the http/https/mailto/tel allowlist are neutralized.",
         choose: "Choose file",
         pages: "pages (sections)",
-        rendered: "full render (incl. images/fonts)",
+        rendered: "full render (incl. engine resource tasks)",
         unsupported: "Unsupported file",
       }
     : {
@@ -36,7 +36,7 @@ const t = computed(() =>
         hint: "渲染在主线程完成（引擎限制，无 Worker 模式）。.doc 老格式与加密文件会给出明确错误码；http/https/mailto/tel 白名单之外的超链接会被置空。",
         choose: "选择文件",
         pages: "页（section）",
-        rendered: "完整渲染（含图片/字体）",
+        rendered: "完整渲染（含引擎资源任务）",
         unsupported: "暂不支持的文件",
       },
 );
@@ -55,6 +55,9 @@ const errorTexts: Record<string, string> = {
   CORRUPT: isEn.value
     ? "The file is corrupted or failed to parse."
     : "文件结构损坏或解析失败。",
+  UNKNOWN: isEn.value
+    ? "Unknown error (for example the source could not be read)."
+    : "未知错误（例如源文件读取失败）。",
 };
 
 async function onFile(e: Event) {

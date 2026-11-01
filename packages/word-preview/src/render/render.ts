@@ -133,6 +133,52 @@ function postProcessRender(
 }
 
 /**
+ * altChunk 的前置 sandbox：docx-preview 的 `renderAltChunk` 先 `h({tagName:
+ * "iframe"})`，**随后**才在异步任务里设置 `srcdoc`。渲染完成后补
+ * `sandbox` 属性已经太晚（实测 Chromium 下脚本必然先执行）——必须在
+ * iframe 节点创建的那一刻就带 sandbox。
+ *
+ * 上游 `h` 未导出，这里按 0.4.1 的实现镜像（pinned 版本，升级时必须复核
+ * docx-preview 的 h 语义）。仅 allowAltChunks 路径启用，避免影响默认路径。
+ */
+function createHardenedH(): NonNullable<Options["h"]> {
+  const h: NonNullable<Options["h"]> = (elemOrText) => {
+    if (typeof elemOrText === "string") {
+      return document.createTextNode(elemOrText);
+    }
+    if (elemOrText instanceof Node) return elemOrText;
+    const { tagName, className, style, children, ns, ...props } = elemOrText;
+    if (tagName === "#fragment") {
+      const fragment = document.createDocumentFragment();
+      for (const child of children ?? []) fragment.appendChild(h(child));
+      return fragment;
+    }
+    if (tagName === "#comment") {
+      return document.createComment(
+        typeof children?.[0] === "string" ? children[0] : "",
+      );
+    }
+    const el = ns
+      ? document.createElementNS(ns, tagName)
+      : document.createElement(tagName);
+    // 关键：在返回给上游之前设置，早于 srcdoc 赋值/节点挂载
+    if (tagName.toLowerCase() === "iframe") {
+      el.setAttribute("sandbox", "");
+    }
+    if (className) el.setAttribute("class", className);
+    if (typeof style === "string") el.setAttribute("style", style);
+    else if (style) Object.assign((el as HTMLElement).style, style);
+    for (const [key, value] of Object.entries(props)) {
+      if (value !== undefined)
+        (el as unknown as Record<string, unknown>)[key] = value;
+    }
+    for (const child of children ?? []) el.appendChild(h(child));
+    return el;
+  };
+  return h;
+}
+
+/**
  * styleNonce 的"换节点"实现：CSP 对 `<style>` 的拦截发生在节点**插入时**，
  * 事后给已被拒的 style 补 nonce 属性不会重新生效——必须删旧节点、新建带
  * nonce 的 `<style>` 塞同样 CSS（excel-preview styleNonce 的同款口径）。
@@ -242,6 +288,9 @@ export function createWordPreview(
         ignoreLastRenderedPageBreak: ro.ignoreLastRenderedPageBreak ?? false,
         renderAltChunks: options.allowAltChunks === true,
       });
+      if (upstream.renderAltChunks) {
+        upstream.h = createHardenedH();
+      }
 
       // 有 nonce 时用游离容器收拢上游全部 <style>（渲染后统一重建）；
       // 无 nonce 不传第三参（上游并入 bodyContainer，勿多走一次重建）
@@ -289,9 +338,17 @@ export function createWordPreview(
       wrapper.remove();
       cleanupGlobalRegistrations(className);
       const message = err instanceof Error ? err.message : String(err);
+      // 缺 document.xml.rels 且文档引用了关系（超链接/图片）时，上游只抛
+      // 空引用 TypeError——这正是本包声称要消除的晦涩错误。改写为可操作的
+      // 说明，保留 cause 供诊断。
+      const friendly = /Cannot read properties of null \(reading 'find'\)/.test(
+        message,
+      )
+        ? "the document references a relationship part that is missing from the package (for example word/_rels/document.xml.rels). The file is incomplete or corrupt."
+        : message;
       onError?.({
         code: "CORRUPT",
-        message: `Failed to render document: ${message}`,
+        message: `Failed to render document: ${friendly}`,
         cause: err,
       });
     }

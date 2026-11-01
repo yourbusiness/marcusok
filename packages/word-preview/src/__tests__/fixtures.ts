@@ -102,6 +102,48 @@ export function encryptedZipBytes(): Uint8Array {
   return bytes;
 }
 
+/**
+ * 只把中央目录头（PK\x01\x02，GP flags 在偏移 8）的加密位置位的 zip：
+ * local header 检查漏过，JSZip 在 readCentralPart 抛 "Encrypted zip are
+ * not supported"。用于验证 sniff 把该错误归为 PASSWORD_PROTECTED。
+ */
+export function centralDirEncryptedZipBytes(): Uint8Array {
+  const bytes = new Uint8Array(simpleDocx("secret"));
+  for (let i = 0; i + 4 < bytes.length; i++) {
+    if (
+      bytes[i] === 0x50 &&
+      bytes[i + 1] === 0x4b &&
+      bytes[i + 2] === 0x01 &&
+      bytes[i + 3] === 0x02
+    ) {
+      bytes[i + 8] |= 0x01;
+    }
+  }
+  return bytes;
+}
+
+/**
+ * 主部件路径由根关系文件决定的合法 docx（OPC 允许非 word/document.xml）。
+ * 构造完整的 Content_Types/根关系/主文档关系，只改主部件路径。
+ */
+export function docxWithMainPart(mainPart: string): Uint8Array {
+  const doc = `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p><w:r><w:t>custom main part</w:t></w:r></w:p></w:body></w:document>`;
+  const slash = mainPart.lastIndexOf("/");
+  const dir = slash === -1 ? "" : mainPart.slice(0, slash + 1);
+  const base = mainPart.slice(slash + 1);
+  const mainRels = `${dir}_rels/${base}.rels`;
+  return zipSync({
+    "[Content_Types].xml": u(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/${mainPart}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+    ),
+    "_rels/.rels": u(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="${mainPart}"/></Relationships>`,
+    ),
+    [mainPart]: u(doc),
+    [mainRels]: u(EMPTY_DOC_RELS),
+  });
+}
+
 /** 大样本（性能基线）：纯文本——1000 段落 + 一个 100 行 × 5 列表格。
  * 不放图片/内嵌字体：renderAsync resolve 前 await 全部资源任务，放图会把
  * base64 编码耗时计入，"DOM 构建"口径即失真。 */
