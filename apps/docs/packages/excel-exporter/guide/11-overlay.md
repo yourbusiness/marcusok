@@ -63,7 +63,7 @@ Progress comes from the library's existing callbacks (`onProgress` / `onPhase` a
 
 | Route                | Condition                                                                       | Intermediate progress |
 | -------------------- | ------------------------------------------------------------------------------- | --------------------- |
-| main + Workbook      | browser < 20,000 rows                                                           | none                  |
+| main + Workbook      | browser below the worker gate (rows < 20k **and** cells < 250k)                 | none                  |
 | main + Fast stream   | Node (auto at/above the stream gate, or explicit `stream` — Node has no Worker) | every 1,000 rows      |
 | Worker + Workbook    | auto below the stream gate (rows < 50k and cells < 1.5M)                        | none                  |
 | Worker + Fast stream | auto at/above the stream gate, or explicit `stream` in the browser              | every 1,000 rows      |
@@ -86,18 +86,24 @@ Either way, the spinner keeps spinning during a block (it is a CSS transform ani
 For a custom flow around the low-level entry points, drive the overlay directly through the `/overlay` subpath — the exporter's overlay option is exactly this protocol with export-flavored texts:
 
 ```ts
-import { showExportOverlay } from "@marcusok/excel-exporter/overlay";
+import { nextPaint, showExportOverlay } from "@marcusok/excel-exporter/overlay";
 
 const overlay = showExportOverlay({
+  delayMs: 0, // required: a 200ms reveal timer is starved by the sync writer
   text: { title: "正在导出 Excel", phases: { building: "正在构建工作簿…" } },
 });
 try {
+  // exportAsStream's synchronous writer blocks the thread: yield two frames so
+  // the browser paints the overlay before the work starts.
+  await nextPaint();
   // exportAsStream's second argument is the callback itself, not an options object
   return await exportAsStream(sheets, (p) => overlay.setProgress(p));
 } finally {
   overlay.close(); // idempotent
 }
 ```
+
+With the default `delayMs: 200`, `exportAsStream`'s synchronous writer runs before the reveal timer can fire and the overlay usually never appears — use `delayMs: 0` plus `nextPaint()` for custom flows around blocking entry points.
 
 ## Legacy subpath
 

@@ -62,7 +62,7 @@ await exportExcel({
 
 | 路由                 | 触发条件                                                         | 中间进度        |
 | -------------------- | ---------------------------------------------------------------- | --------------- |
-| main + Workbook      | 浏览器 < 20,000 行                                               | 无              |
+| main + Workbook      | 浏览器低于 worker 门槛（行 < 2 万**且**格 < 25 万）              | 无              |
 | main + Fast stream   | Node（auto 达到 stream 门槛，或显式 `stream`——Node 没有 Worker） | 每 1,000 行一次 |
 | Worker + Workbook    | auto 低于 stream 门槛（行 < 5 万且格 < 150 万）                  | 无              |
 | Worker + Fast stream | auto 达到 stream 门槛，或浏览器下的显式 `stream`                 | 每 1,000 行一次 |
@@ -85,18 +85,23 @@ await exportExcel({
 围绕底层入口的自定义流程，经 `/overlay` 子路径直接驱动遮罩——导出包的 overlay 选项就是这套协议加导出语义文案：
 
 ```ts
-import { showExportOverlay } from "@marcusok/excel-exporter/overlay";
+import { nextPaint, showExportOverlay } from "@marcusok/excel-exporter/overlay";
 
 const overlay = showExportOverlay({
+  delayMs: 0, // 必须：200ms 揭示定时器会被同步写入器饿死
   text: { title: "正在导出 Excel", phases: { building: "正在构建工作簿…" } },
 });
 try {
+  // exportAsStream 的同步写入会占满线程：先让出两帧，让浏览器把遮罩画出来
+  await nextPaint();
   // exportAsStream 的第二个参数是回调函数本身，不是选项对象
   return await exportAsStream(sheets, (p) => overlay.setProgress(p));
 } finally {
   overlay.close(); // 幂等
 }
 ```
+
+默认 `delayMs: 200` 时，`exportAsStream` 的同步写入会在揭示定时器触发前就开始并结束，遮罩通常根本不会出现——围绕阻塞型底层入口自定义流程时请用 `delayMs: 0` + `nextPaint()`。
 
 ## 历史子路径
 

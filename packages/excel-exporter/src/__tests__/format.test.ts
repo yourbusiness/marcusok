@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { runInNewContext } from "node:vm";
 import {
   applyFormat,
   resolveCellFormat,
@@ -369,6 +370,19 @@ describe("toStr / Invalid Date", () => {
     const tricky = { toJSON: () => undefined };
     expect(toStr(tricky)).toBe("[object Object]");
     expect(typeof toStr(tricky)).toBe("string");
+  });
+
+  it("handles cross-realm Date values like local Dates", () => {
+    // iframe / node:vm 的 Date 不通过 instanceof：旧实现落到 JSON.stringify，
+    // 输出带引号的 ISO 文本，且 {type:"date"} 不再写 Excel serial。
+    const foreign = runInNewContext("new Date(Date.UTC(2025, 0, 5))") as Date;
+    expect(foreign instanceof Date).toBe(false);
+    expect(toStr(foreign)).toBe("2025-01-05T00:00:00.000Z");
+
+    const local = new Date(Date.UTC(2025, 0, 5));
+    expect(applyFormat(foreign, { type: "date" })).toBe(
+      applyFormat(local, { type: "date" }),
+    );
   });
 
   it("stringifies a circular object instead of failing the whole export", async () => {

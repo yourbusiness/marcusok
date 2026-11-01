@@ -165,18 +165,53 @@ export class WorkbookBuilder {
     // 任一前列缺失即整体左移，样式会静默写到错误的列上（与上方表头路径
     // 注释指出的同一引擎行为；toStr 的 toJSON 兜底注释也记录过同款错位）。
     const dataRows = ws.rows.slice(headerRowCount);
-    const colStyleIdx = columns.map((c) =>
+    const cellStyles = columns.map(
       // 基底恒非空，mergeStyles 在 base 存在时必返回样式——用 ! 收窄
-      this.cachedStyleIndex(
+      (c) =>
         mergeStyles(BaseCellStyle, mergeStyles(config.dataStyle, c.style))!,
-      ),
     );
+    const colStyleIdx = cellStyles.map((s) => this.cachedStyleIndex(s));
     for (const row of dataRows) {
       for (const cell of row.cells) {
         if (typeof cell.reference !== "string") continue;
         const col = refCol(cell.reference);
         if (col >= 0 && col < colStyleIdx.length) {
           cell.styleIndex = colStyleIdx[col];
+        }
+      }
+    }
+
+    // 缺失值单元格的视觉样式补齐：writeAoaRow 对 null 跳格（不建 <c>），
+    // 只遍历已有格子会让 dataStyle / 列 style 的 border、fill 在空格处断掉
+    // ——文档承诺 dataStyle "applied to every data cell"。只为含视觉属性
+    // （fill/border；字体/对齐/数字格式在空格上不可见）的列创造空格，
+    // 生成 <c s="…"/> 不写 <v>，ISBLANK/COUNTA 语义不变。
+    const visualCols = cellStyles.flatMap((style, i) =>
+      style.fill || style.border ? [i] : [],
+    );
+    if (visualCols.length > 0) {
+      const presentByRow = new Map<number, Set<number>>();
+      for (const row of ws.rows) {
+        presentByRow.set(
+          row.index,
+          new Set(
+            row.cells
+              .map((cell) =>
+                typeof cell.reference === "string"
+                  ? refCol(cell.reference)
+                  : -1,
+              )
+              .filter((col) => col >= 0),
+          ),
+        );
+      }
+      for (let r = 0; r < dataRowCount; r++) {
+        const sheetRow0 = headerRowCount + r;
+        const present = presentByRow.get(sheetRow0 + 1);
+        for (const col of visualCols) {
+          if (present?.has(col)) continue;
+          // cell() 会按需创建行与 <c>；styleIndex 是普通属性写入。
+          ws.cell(encodeCellRef(sheetRow0, col)).styleIndex = colStyleIdx[col]!;
         }
       }
     }

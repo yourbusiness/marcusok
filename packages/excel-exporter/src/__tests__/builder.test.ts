@@ -8,6 +8,27 @@ import type { SheetConfig } from "../types";
 import { readBuffer, makeData } from "./setup";
 
 describe("WorkbookBuilder round-trip", () => {
+  it("applies fill/border styles to missing-value cells", async () => {
+    // 稀疏数据 + dataStyle 边框：缺失的 B3 也必须生成带样式的空 <c>，
+    // 否则表格在空值处断边框（dataStyle 文档承诺覆盖每个数据格）。
+    const builder = await WorkbookBuilder.create();
+    builder.addSheet({
+      name: "Sparse",
+      dataStyle: StylePresets.bordered,
+      columns: [
+        { prop: "a", label: "A" },
+        { prop: "b", label: "B" },
+      ],
+      data: [{ a: "x", b: "y" }, { a: "z" }],
+    });
+    const wb = await readBuffer(await builder.toBuffer());
+    const ws = wb.getSheet("Sparse")!;
+    expect(ws.cell("B3").styleIndex).not.toBeNull();
+    expect(ws.cell("B3").value == null).toBe(true);
+    // 有值的格子仍按列样式写入
+    expect(ws.cell("B2").styleIndex).not.toBeNull();
+  });
+
   it("writes data, headers, styles, freeze, autofilter and merges", async () => {
     const data = makeData(5);
     const builder = await WorkbookBuilder.create();

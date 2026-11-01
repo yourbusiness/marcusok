@@ -57,7 +57,7 @@ function baseOptions(overlay?: ExportOptions["overlay"]): ExportOptions {
 }
 
 describe("exportExcel overlay 接线", () => {
-  it("默认（无 overlay 字段）显示遮罩：挂载→让帧→链式回调→finally 关闭", async () => {
+  it("默认（无 overlay 字段）显示遮罩：挂载→链式回调→finally 关闭（不让帧）", async () => {
     const seen: number[] = [];
     await exportExcel({
       ...baseOptions(),
@@ -65,7 +65,9 @@ describe("exportExcel overlay 接线", () => {
     });
 
     expect(showOptions).not.toBeNull();
-    expect(nextPaintCalls).toBe(1);
+    // 默认 delayMs=200：揭示定时器在同步构建期间本就被饿死，让帧无收益，
+    // 只增加 1–2 帧固定延迟。
+    expect(nextPaintCalls).toBe(0);
     // 链式追加：调用方回调照常收 0 -> ... -> 1
     expect(seen[0]).toBe(0);
     expect(seen[seen.length - 1]).toBe(1);
@@ -109,6 +111,8 @@ describe("exportExcel overlay 接线", () => {
       "正在构建工作簿…",
     );
     expect(showOptions!.delayMs).toBe(0);
+    // delayMs: 0 时先让出一帧是遮罩能被绘制的唯一保证
+    expect(nextPaintCalls).toBe(1);
   });
 
   it("阶段事件都映射到导出语义 key（init→building 等乐观推进）", async () => {

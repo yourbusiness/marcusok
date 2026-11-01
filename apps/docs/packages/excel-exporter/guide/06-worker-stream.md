@@ -40,7 +40,7 @@ Skipped features (cell styles, header styles, column width, freeze, ...) print `
 | Below both gates (rows < 50k and cells < 1.5M) with full styling | `auto` (main / worker + Workbook)  |
 | Rows ≥ 50k or cells ≥ 1.5M, styling can degrade                  | `auto` (worker + Fast stream)      |
 | Large batch in Node                                              | `auto` (main → stream at the gate) |
-| Zero main-thread blocking                                        | explicit `mode: "worker"`          |
+| Minimal main-thread blocking (structured clone only, ~94–200 ms) | explicit `mode: "worker"`          |
 
 ## Lower-level APIs
 

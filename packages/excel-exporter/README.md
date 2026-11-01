@@ -284,8 +284,8 @@ Alternatively, `configureWasm({ wasmUrl })` accepts an HTTP(S) URL (fetched), a 
 
 ## Design Decisions
 
-- **50k-row cutover**: `STREAM_THRESHOLD=50_000` (branch `>=`); below 50k rows uses Workbook (full styling), 50k and above uses Fast stream.
-- **Worker threshold at 20,000 rows**: below 20k rows uses main (10k×6 columns measures ~120ms in a browser); 20k and above uses a Worker to avoid long main-thread blocking.
+- **Stream gate: rows ≥ 50,000 OR cells ≥ 1,500,000** (`STREAM_ROW_THRESHOLD` / `STREAM_CELL_THRESHOLD`, both `>=`). Below both gates uses Workbook (full styling); at either gate uses Fast stream. The cell gate matters for wide sheets: 20k rows × 100 columns (2M cells) routes to stream even though the row count is far below 50k.
+- **Worker gate: rows ≥ 20,000 OR cells ≥ 250,000**. Below both uses `main` (10k×6 columns measures ~120ms in a browser); at either gate uses a Worker to avoid long main-thread blocking.
 - **Self-contained dist**: the engine (modern-xlsx glue, fflate) and the overlay UI are bundled into this package's `dist` at build time, and the wasm binary ships under this package's `exports` map — upstream `engines` ranges stay inert at runtime and there is no engine package for consumers to install. The trade-off: a page using several @marcusok spreadsheet packages carries one bundled engine copy per package (identical binaries, usually deduplicated as an asset by content-hash naming and the HTTP cache); each package's self-contained worker always carried its own copy anyway.
 - **Self-contained worker**: `dist/export.worker.js` is a single ESM file with zero imports. Bundlers emit it verbatim as an asset (the default `new URL` resolution), so a chunked worker whose sibling imports are not tracked can never 404 in production builds.
 - **ESM-only**: this package provides no CJS build.

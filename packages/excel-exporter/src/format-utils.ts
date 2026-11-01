@@ -11,6 +11,22 @@ import {
 export const DEFAULT_DATE_PATTERN = "yyyy-MM-dd";
 export const DEFAULT_DATETIME_PATTERN = "yyyy-MM-dd HH:mm";
 
+/**
+ * 跨 realm Date 判定：`instanceof Date` 对 iframe / node:vm / contextBridge
+ * 构造的 Date 恒为 false，会让日期落到 JSON.stringify 分支（输出带引号的
+ * ISO 字符串，且与 Worker 结构化克隆后的本地 Date 结果不一致）。
+ */
+export function isDateValue(value: unknown): value is Date {
+  return Object.prototype.toString.call(value) === "[object Date]";
+}
+
+/** 跨 realm 安全的 ISO 字符串；Invalid Date 与旧行为一致返回其字符串形态。 */
+export function dateValueToIso(value: Date): string {
+  return Number.isNaN(Date.prototype.getTime.call(value))
+    ? String(value)
+    : Date.prototype.toISOString.call(value);
+}
+
 /** Safely stringify any value to a string (objects -> JSON, null/undef -> '').
  *  Symbols/functions are not JSON-serializable (JSON.stringify returns
  *  undefined for them); String() them so the cell never receives a non-string.
@@ -24,10 +40,7 @@ export function toStr(value: unknown): string {
   // fast-xlsx 的 TextEncoder 会替换为 U+FFFD。在这里归一后两条路径写入
   // 相同内容，也避免一个坏字符触发整份降级。
   if (typeof value === "string") return sanitizeXmlText(value);
-  if (value instanceof Date)
-    return Number.isNaN(value.getTime())
-      ? sanitizeXmlText(String(value))
-      : value.toISOString();
+  if (isDateValue(value)) return sanitizeXmlText(dateValueToIso(value));
   if (
     typeof value === "number" ||
     typeof value === "boolean" ||
@@ -336,8 +349,10 @@ export function resolveCellFormat(
 }
 
 function toJsDate(value: unknown): Date | null {
-  if (value instanceof Date)
-    return Number.isNaN(value.getTime()) ? null : value;
+  if (isDateValue(value)) {
+    const ms = Date.prototype.getTime.call(value);
+    return Number.isNaN(ms) ? null : new Date(ms);
+  }
   if (typeof value === "number" || typeof value === "string") {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? null : d;

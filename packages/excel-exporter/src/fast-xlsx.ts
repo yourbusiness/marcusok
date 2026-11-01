@@ -2,6 +2,8 @@ import { strToU8, zipSync } from "fflate";
 import type { SheetConfig } from "./types";
 import {
   columnNumFmt,
+  dateValueToIso,
+  isDateValue,
   streamCellValue,
   validateSheetName,
   validateMerges,
@@ -91,7 +93,8 @@ function stringifyCell(value: unknown): string | number | boolean {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return value;
   if (value == null) return "";
-  if (value instanceof Date) return value.toISOString();
+  // 跨 realm Date（iframe / node:vm）不通过 instanceof；与 toStr 同口径
+  if (isDateValue(value)) return dateValueToIso(value);
   if (typeof value === "bigint") return value.toString();
   return JSON.stringify(value);
 }

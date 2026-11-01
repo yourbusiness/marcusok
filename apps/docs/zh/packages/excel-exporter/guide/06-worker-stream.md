@@ -40,7 +40,7 @@ Stream 路径的已知限制：
 | 低于两个门槛（行 < 5 万且格 < 150 万）且需要完整样式 | `auto`（main / worker + Workbook） |
 | 行 ≥ 5 万或格 ≥ 150 万，样式可接受降级               | `auto`（worker + Fast stream）     |
 | Node 服务端大批量                                    | `auto`（main → 达门槛后 stream）   |
-| 对主线程零阻塞有强要求                               | 显式 `mode: "worker"`              |
+| 尽量少占主线程（只剩一次结构化克隆，约 94–200ms）    | 显式 `mode: "worker"`              |
 
 ## 直接使用底层 API
 

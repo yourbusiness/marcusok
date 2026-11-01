@@ -105,10 +105,11 @@ export async function exportExcel(
     text: mergeOverlayText(overlayOptions.text),
   });
   try {
-    // 先让出一帧：遮罩挂载与紧接其后的同步构建若落在同一个任务里，浏览器
-    // 永远不会绘制遮罩（用户只看到页面卡死）。delayMs 为 0 时这一步是遮罩
-    // 能被看见的唯一保证。
-    await nextPaint();
+    // 只有 delayMs: 0（立即揭示）才需要先让出一帧：遮罩挂载与紧接其后的
+    // 同步构建若落在同一个任务里，浏览器永远不会绘制遮罩。delayMs > 0
+    // （含默认 200ms）时揭示定时器在同步构建期间本就会被饿死，让帧不会让
+    // 遮罩更早出现，只会给每次导出白加 1–2 帧（60Hz 约 33ms）延迟。
+    if (overlayOptions.delayMs === 0) await nextPaint();
     return await exportExcelCore({
       ...options,
       // 链式追加而非替换：调用方挂在自己回调上的指标面板照常工作。
