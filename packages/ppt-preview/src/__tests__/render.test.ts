@@ -626,6 +626,29 @@ describe("滚动祖先探测", () => {
     vi.unstubAllGlobals();
   });
 
+  it("百分比 max-height 不构成滚动根（auto 父级下随内容长高）", async () => {
+    // max-height:100% + auto 高父级：元素并不定高，不能选作 IO root，
+    // 否则 root 覆盖整份文档（全量渲染）且导航滚 scrollTop 无效。
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const outer = document.createElement("div");
+    outer.style.overflow = "auto";
+    outer.style.maxHeight = "100%";
+    document.body.appendChild(outer);
+    outer.appendChild(container);
+
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+    });
+
+    expect(renderIOs()[0].options?.root).toBeNull();
+    expect(releaseIOs()[0].options?.root).toBeNull();
+    inst.destroy();
+    vi.unstubAllGlobals();
+  });
+
   it("隐藏创建后变为可见：滚动根从视口升级为面板，导航不再滚窗口", async () => {
     // display:none 的 tab 面板（高度来自 class）在创建时量不到高度 →
     // IO root=null；可见后首次交互必须重探，否则 goToSlide 滚 window。

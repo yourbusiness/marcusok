@@ -33,12 +33,13 @@ const preview = createPptPreview(el, {
   source: file, // File | Blob | Uint8Array | ArrayBuffer
   slideWidth: 960, // CSS 像素（默认）；高度按 deck 比例
   password: "…", // 可选；仅 MS-OFFCRYPTO Agile 文件
-  onRendered: ({ slideCount, firstSlideMs, durationMs }) =>
-    console.log(slideCount, firstSlideMs, durationMs),
+  onRendered: ({ slideCount, firstSlideMs, durationMs }) => {
+    console.log(slideCount, firstSlideMs, durationMs);
+    preview.nextSlide(); // 0-based 导航（加载完成前为 no-op）
+  },
   onError: (e) => console.error(e.code, e.message),
 });
 
-preview.nextSlide(); // 0-based 导航
 preview.destroy(); // 取消在途工作 + 终止引擎
 ```
 

@@ -23,14 +23,21 @@ describe("toBytes 防御性复制", () => {
     expect(copy.buffer).not.toBe(src);
   });
 
-  it("toLoadBuffer 产出从 0 偏移、独占底层的 ArrayBuffer（引擎会 transfer 它）", () => {
-    const view = simplePptx();
+  it("toLoadBuffer 直接复用已独占的完整视图 buffer（不再复制第二份）", () => {
+    // 生产路径：toBytes 已产出独占副本，toLoadBuffer 必须直接交出该 buffer
+    const view = new Uint8Array(simplePptx()).slice(); // 从 0 偏移、独占
     const buf = toLoadBuffer(view);
     expect(buf).toBeInstanceOf(ArrayBuffer);
+    expect(buf).toBe(view.buffer);
     expect(buf.byteLength).toBe(view.byteLength);
-    // 引擎 transfer buf 后，调用方原 view 不受影响
-    structuredClone(view, { transfer: [buf] });
-    expect(view.byteLength).toBeGreaterThan(0);
+  });
+
+  it("toLoadBuffer 对非全量视图兜底复制", () => {
+    const base = new Uint8Array(100);
+    const view = base.subarray(10, 30);
+    const buf = toLoadBuffer(view);
+    expect(buf).not.toBe(base.buffer);
+    expect(buf.byteLength).toBe(20);
   });
 
   it("File/Blob 每次读取都是新 buffer", async () => {

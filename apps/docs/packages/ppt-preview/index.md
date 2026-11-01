@@ -33,12 +33,13 @@ const preview = createPptPreview(el, {
   source: file, // File | Blob | Uint8Array | ArrayBuffer
   slideWidth: 960, // CSS px (default); height follows the deck ratio
   password: "…", // optional; MS-OFFCRYPTO Agile files only
-  onRendered: ({ slideCount, firstSlideMs, durationMs }) =>
-    console.log(slideCount, firstSlideMs, durationMs),
+  onRendered: ({ slideCount, firstSlideMs, durationMs }) => {
+    console.log(slideCount, firstSlideMs, durationMs);
+    preview.nextSlide(); // 0-based navigation (no-op until the load completes)
+  },
   onError: (e) => console.error(e.code, e.message),
 });
 
-preview.nextSlide(); // 0-based navigation
 preview.destroy(); // cancel in-flight work + terminate the engine
 ```
 

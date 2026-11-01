@@ -56,10 +56,15 @@ function hasDefiniteHeight(
   style: CSSStyleDeclaration,
 ): boolean {
   const inlineHeight = el.style.height;
-  const inlineMaxHeight = el.style.maxHeight;
+  // 百分比 max-height 在父级高度 auto 时同样不定高（如 max-height:100%
+  // 的内容驱动包装层，Tailwind max-h-full）。把它当作定高会误选 root：
+  // root 高度等于整份内容，±100%/±300% 覆盖全部页 → 全量渲染；导航只改
+  // 它的 scrollTop 且不滚 window，表现为静默 no-op。
+  const definiteMax = (value: string | undefined): boolean =>
+    Boolean(value && value !== "none" && !value.trim().endsWith("%"));
   return Boolean(
-    (style.maxHeight && style.maxHeight !== "none") ||
-    (inlineMaxHeight && inlineMaxHeight !== "none") ||
+    definiteMax(style.maxHeight) ||
+    definiteMax(el.style.maxHeight) ||
     // 百分比高度在父级高度 auto 时并不定高，不能作为"会滚动"的证据
     (inlineHeight && inlineHeight !== "auto" && !inlineHeight.endsWith("%")) ||
     (el.clientHeight > 0 && el.scrollHeight > el.clientHeight),

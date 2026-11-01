@@ -15,7 +15,7 @@ Everything this package deliberately does **not** do, and every environment cons
 
 The engine's non-progressive load **preflights every slide** before `load()` resolves. Lazy rendering in this package only defers Canvas paint and the text layer; first-paint latency still grows with the total slide count. `onRendered.durationMs` therefore includes the full-deck preflight (this is also stated in the callback's doc comment).
 
-**Transient memory during load:** input bytes are defensively copied twice — one copy is kept for sniffing, and a second dedicated buffer is handed to the parser (which transfers it into its worker). Peak source-related memory during loading is therefore ~2× the file size, transient; the caller's original bytes are never touched, and the copies become collectible once loading finishes.
+**Transient memory during load:** input bytes are defensively copied once (the caller's original is never touched); that dedicated buffer is handed to the parser, which transfers it into its worker. Source-related peak memory during loading is therefore ~1× the file size on top of the caller's own bytes, and the copy becomes collectible once loading finishes.
 
 ## Media, hyperlinks, interactivity
 

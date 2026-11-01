@@ -47,6 +47,8 @@ const preview = createPptPreview(container!, {
 
 ## 页导航（0-based）
 
+加载完成前（`slideCount > 0` 之前）所有导航调用都是 no-op——请在 `onRendered` 或之后的用户交互中调用。空 deck（`slideCount === 0`）加载完成后同样保持 no-op。
+
 ```ts
 preview.goToSlide(0); // 滚到第一页
 preview.goToSlide(count - 1);

@@ -26,12 +26,13 @@ import { createPptPreview } from "@marcusok/ppt-preview";
 const preview = createPptPreview(container, {
   source: file, // File | Blob | Uint8Array | ArrayBuffer
   slideWidth: 960, // CSS px, default; height follows the deck ratio
-  onRendered: ({ slideCount, firstSlideMs, durationMs }) =>
-    console.log(slideCount, firstSlideMs, durationMs),
+  onRendered: ({ slideCount, firstSlideMs, durationMs }) => {
+    console.log(slideCount, firstSlideMs, durationMs);
+    preview.nextSlide(); // navigation is a no-op until the load completes
+  },
   onError: (e) => console.error(e.code, e.message),
 });
 
-preview.nextSlide();
 preview.destroy(); // idempotent; expires in-flight work + terminates the engine
 ```
 

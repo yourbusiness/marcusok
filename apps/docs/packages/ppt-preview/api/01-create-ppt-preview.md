@@ -54,6 +54,7 @@ Mixed boundaries (intentional):
 | Non-integer index                         | throws `TypeError` (checked before state — also after destroy) |
 | Before load completes / after `destroy()` | no-op                                                          |
 | Loaded, out of range                      | throws `RangeError`                                            |
+| Loaded, but empty deck (`slideCount` 0)   | no-op (there is no page to scroll to)                          |
 
 ### `nextSlide(): void` / `prevSlide(): void`
 

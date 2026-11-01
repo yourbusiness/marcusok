@@ -11,9 +11,9 @@
  * - File / Blob —— 每次 arrayBuffer() 都是新读，无需再复制。
  *
  * 产出统一为 Uint8Array：sniff 与 Node 解析入口（openPptxPresentation）
- * 都吃 Uint8Array；交给浏览器入口 PptxPresentation.load 前再取
- * `bytes.slice().buffer`（slice 保证从 0 偏移、独占底层 buffer——直接
- * 用视图的 .buffer 可能带偏移且与调用方共享）。
+ * 都吃 Uint8Array；交给浏览器入口 PptxPresentation.load 前由 toLoadBuffer
+ * 取出底层 ArrayBuffer——toBytes 已保证从 0 偏移、独占底层 buffer，可直接
+ * transfer，不再复制第二份（仅非全量视图才兜底 slice）。
  */
 import type { PptSource } from "./types";
 
@@ -40,7 +40,14 @@ export async function toBytes(source: PptSource): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
-/** 从独立副本构造引擎 load 需要的、从 0 偏移且独占底层的 ArrayBuffer。 */
+/** 从独立副本构造引擎 load 需要的、从 0 偏移且独占底层的 ArrayBuffer。
+ *
+ * toBytes 的三个分支都产出从 0 偏移、独占底层 buffer 的精确长度视图，
+ * 因此可以直接把底层 buffer 交给引擎 transfer——再 slice() 一次会让
+ * 加载期间的峰值内存翻倍（大文件/移动端显著）。仅在视图非全量时兜底复制。 */
 export function toLoadBuffer(bytes: Uint8Array): ArrayBuffer {
+  if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
+    return bytes.buffer as ArrayBuffer;
+  }
   return bytes.slice().buffer;
 }

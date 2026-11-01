@@ -47,6 +47,8 @@ There is no resize observer in v1: when the container changes size, `destroy()` 
 
 ## Navigation (0-based)
 
+All navigation calls are no-ops until the load completes (`slideCount > 0`) — call them from `onRendered` or a later user interaction. An empty deck (`slideCount === 0`) keeps the no-op behavior even after loading.
+
 ```ts
 preview.goToSlide(0); // scroll to the first slide
 preview.goToSlide(count - 1);
