@@ -38,7 +38,12 @@ import type {
   PdfPreviewError,
   PdfSource,
 } from "../types";
-import { PAGE_CLASS, ROOT_CLASS, ensurePdfStyles } from "./text-layer-css";
+import {
+  PAGE_CLASS,
+  ROOT_CLASS,
+  ROOT_VERTICAL_PADDING_PX,
+  ensurePdfStyles,
+} from "./text-layer-css";
 
 /** 渲染带（进入即入队渲染）：视口上下各预载 1 屏。 */
 const RENDER_MARGIN = "100% 0px 100% 0px";
@@ -132,6 +137,34 @@ function contentBoxSize(el: HTMLElement): { width: number; height: number } {
       el.clientHeight - px(style?.paddingTop) - px(style?.paddingBottom),
     ),
   };
+}
+
+/**
+ * `fit-page` 可用的内容高度。
+ *
+ * `max-height` 面板在占位插入前内容只有 wrapper 的 padding，clientHeight
+ * 量到的是 24px 而不是面板上限——直接用它会把整页缩到不可读（实测
+ * 400px max-height 容器得到 18×24 页面）。这里用计算样式的 px 上限替代
+ * 当前内容高度；百分比/calc 无法可靠解析时退回 clientHeight。
+ *
+ * 再减去 wrapper 自身的上下 padding：整页要落进容器可视区，而不是把
+ * 24px 的 wrapper chrome 算进页高后仍然溢出。
+ */
+function fitPageContentHeight(el: HTMLElement, contentHeight: number): number {
+  const view = el.ownerDocument?.defaultView;
+  const style = view ? view.getComputedStyle(el) : null;
+  const maxHeight = /^(\d+(?:\.\d+)?)px$/.exec(style?.maxHeight ?? "");
+  let height = contentHeight;
+  if (maxHeight) {
+    const paddingY =
+      Number.parseFloat(style?.paddingTop ?? "0") +
+      Number.parseFloat(style?.paddingBottom ?? "0");
+    height = Math.max(
+      0,
+      Number(maxHeight[1]) - (Number.isFinite(paddingY) ? paddingY : 0),
+    );
+  }
+  return Math.max(0, height - ROOT_VERTICAL_PADDING_PX);
 }
 
 interface PageEntry {
@@ -231,7 +264,8 @@ function normalizeError(err: unknown): PdfPreviewError {
     err instanceof PasswordException ||
     errorName(err) === "PasswordException"
   ) {
-    // code 1 = NEED_PASSWORD，2 = INCORRECT_PASSWORD（上游 PasswordResponses）
+    // code 1 = NEED_PASSWORD，2 = INCORRECT_PASSWORD（上游 PasswordResponses）。
+    // 首版没有 password 入口，code 2 实际不可达；保留分支只作防御。
     const code = (err as { code?: number }).code;
     return {
       code: "PASSWORD_PROTECTED",
@@ -628,6 +662,19 @@ export function createPdfPreview(
     try {
       if (destroyed) return;
 
+      // 懒渲染依赖 IntersectionObserver；缺失是宿主环境问题，不是文件
+      // 损坏——必须在进入渲染管线前以 UNKNOWN 报出，而不是让
+      // `new IntersectionObserver` 的 TypeError 落到 CORRUPT 归一里。
+      if (typeof IntersectionObserver !== "function") {
+        teardown();
+        onError?.({
+          code: "UNKNOWN",
+          message:
+            "IntersectionObserver is not available in this environment; the PDF preview cannot enable lazy rendering.",
+        });
+        return;
+      }
+
       const sniffed = sniffPdf(bytes);
       if (!sniffed.ok) {
         teardown();
@@ -692,9 +739,10 @@ export function createPdfPreview(
         } else if (scaleOpt === "fit-width") {
           resolvedScale = cw / base.width;
         } else {
+          const fitHeight = fitPageContentHeight(container, ch);
           resolvedScale = Math.min(
             cw / base.width,
-            ch > 0 ? ch / base.height : Infinity,
+            fitHeight > 0 ? fitHeight / base.height : Infinity,
           );
         }
       }

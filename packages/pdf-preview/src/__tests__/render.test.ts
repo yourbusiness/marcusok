@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { runInNewContext } from "node:vm";
 import { createPdfPreview } from "../render/render";
+import { ensurePdfStyles } from "../render/text-layer-css";
 import type { PdfPreviewError } from "../types";
 
 /* ------------------------------- Fake IO ------------------------------- */
@@ -329,21 +330,22 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     inst.destroy();
   });
 
-  it("fit-page excludes padding on both axes", async () => {
+  it("fit-page excludes padding on both axes and reserves wrapper chrome", async () => {
     const { doc } = fakeDoc([fakePage(1)]);
     setupDocument(doc);
     vi.stubGlobal("IntersectionObserver", FakeIO);
     setClientSize(container, 400, 500);
     container.style.padding = "20px";
-    // 内容盒 360×460：360/612≈0.588，460/792≈0.581（较小）→ 宽约 355px
+    // 内容盒 360×460；wrapper 上下 padding 24 → 可用高 436。
+    // 360/612≈0.588，436/792≈0.551（较小）→ 页宽 612×0.551≈337px。
     const inst = createPdfPreview(container, {
       source: magicSource(),
       scale: "fit-page",
     });
     await waitForPages(container, 1);
-    const w = Number.parseFloat(pageEls(container)[0].style.width);
-    expect(w).toBeGreaterThan(350);
-    expect(w).toBeLessThan(360);
+    const el = pageEls(container)[0];
+    expect(el.style.width).toBe("336px");
+    expect(Number.parseFloat(el.style.height) + 24).toBeLessThanOrEqual(460);
     inst.destroy();
   });
 
@@ -351,17 +353,64 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const { doc } = fakeDoc([fakePage(1)]);
     setupDocument(doc);
     vi.stubGlobal("IntersectionObserver", FakeIO);
-    // 400/612≈0.65 vs 500/792≈0.63 → 取 0.631...
+    // 400/612≈0.654 vs (500-24)/792≈0.601 → 取 0.601，页宽约 368px
     setClientSize(container, 400, 500);
     const inst = createPdfPreview(container, {
       source: magicSource(),
       scale: "fit-page",
     });
     await waitForPages(container, 1);
-    const w = Number.parseFloat(pageEls(container)[0].style.width);
-    expect(w).toBeGreaterThan(385);
-    expect(w).toBeLessThan(395);
+    expect(pageEls(container)[0].style.width).toBe("367px");
     inst.destroy();
+  });
+
+  it("fit-page uses max-height when the container has not grown yet", async () => {
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    // 空内容的 max-height 面板：clientHeight 只有 wrapper 的 24px，
+    // 但可用高度是 max-height 400 − wrapper padding 24 = 376。
+    setClientSize(container, 400, 24);
+    container.style.maxHeight = "400px";
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      scale: "fit-page",
+    });
+    await waitForPages(container, 1);
+    const el = pageEls(container)[0];
+    expect(el.style.width).toBe("290px");
+    expect(Number.parseFloat(el.style.height) + 24).toBeLessThanOrEqual(400);
+    inst.destroy();
+  });
+
+  it("missing IntersectionObserver reports UNKNOWN (environment, not corruption)", async () => {
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const onError = vi.fn();
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      onError,
+    });
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(onError.mock.calls[0][0]).toMatchObject({ code: "UNKNOWN" });
+    expect(onError.mock.calls[0][0].message).toContain("IntersectionObserver");
+    expect(container.querySelectorAll(".mop-pdf-page")).toHaveLength(0);
+    inst.destroy();
+  });
+
+  it("injects rotation transforms for /Rotate pages", () => {
+    ensurePdfStyles();
+    const css =
+      document.getElementById("marcusok-pdf-preview-styles")?.textContent ?? "";
+    for (const deg of [90, 180, 270]) {
+      expect(css).toContain(
+        `.mop-pdf-page .textLayer[data-main-rotation="${deg}"]`,
+      );
+    }
+    expect(css).toContain("rotate(90deg) translateY(-100%)");
+    expect(css).toContain("rotate(180deg) translate(-100%, -100%)");
+    expect(css).toContain("rotate(270deg) translateX(-100%)");
   });
 
   it("zero-width container falls back to scale=1 with a warning", async () => {

@@ -41,6 +41,20 @@ describe("resolveAssetUrls", () => {
     );
   });
 
+  it("falls back to package assets for non-hierarchical workerSrc (blob/data)", () => {
+    // blob:/data: 不能作为相对 URL 的 base；旧实现直接抛 Invalid URL，
+    // 合法的 object-URL worker 无法使用默认 cmaps/fonts。
+    for (const workerSrc of [
+      "blob:https://example.com/8c1b3d2a-0000-4000-8000-000000000000",
+      "data:text/javascript;base64,ZXhwb3J0IHt9Ow==",
+    ]) {
+      const out = resolveAssetUrls({ workerSrc });
+      expect(out.workerSrc).toBe(workerSrc);
+      expect(out.cMapUrl.endsWith("/cmaps/")).toBe(true);
+      expect(out.standardFontDataUrl.endsWith("/standard_fonts/")).toBe(true);
+    }
+  });
+
   it("lets explicit cMapUrl/standardFontDataUrl win over derivation", () => {
     const out = resolveAssetUrls({
       workerSrc: "/assets/worker.mjs",

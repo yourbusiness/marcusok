@@ -50,7 +50,7 @@ const preview = createPdfPreview(container, options);
 | 错误码               | 何时                                                                        |
 | -------------------- | --------------------------------------------------------------------------- |
 | `UNSUPPORTED`        | 头部 1024 字节内无 `%PDF-` 魔数，或输入为空                                 |
-| `PASSWORD_PROTECTED` | 加密 PDF（上游 `PasswordException`；message 区分需要密码与密码被拒）        |
+| `PASSWORD_PROTECTED` | 加密 PDF（上游 `PasswordException`；首版没有密码入口，因此恒为需要密码）    |
 | `CORRUPT`            | 魔数合法但解析/渲染失败（`InvalidPDFException` 与未预期异常；保留 `cause`） |
 | `UNKNOWN`            | 管线之外——源读取失败、worker/资产 URL 不可达、资产 URL 配置错误             |
 

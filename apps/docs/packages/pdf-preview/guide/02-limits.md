@@ -6,7 +6,7 @@
 - **One page at a time** — renders are serialized per instance (scroll bursts never fan out into parallel canvas work). Interleaved scrolling prioritizes whatever the observer reports next.
 - **Placeholder accuracy** — every page's placeholder is sized from that page's own viewport, so mixed-size documents (e.g. US Letter + A4 landscape) never jump. Page proxies for all pages are fetched up-front so total scroll height is correct immediately after mount.
 - **Canvas crispness** — canvases are painted at `devicePixelRatio` resolution with CSS-size placeholders, matching the official viewer.
-- **Scale is resolved once** — `fit-*` measures the container's content box at creation (padding is excluded). `fit-page` needs a measurable, height-constrained container (fixed height, `max-height`, or a flex-resolved height); in a container that grows with its content the measured height is not a viewport, so give it a fixed height or use `fit-width`. Container resizes never re-fit.
+- **Scale is resolved once** — `fit-*` measures the container's content box at creation (padding is excluded); `fit-page` also reserves the wrapper's 24 px vertical padding so the whole page fits without a scrollbar. It needs a measurable, height-constrained container (fixed height, `max-height`, or a flex-resolved height); in a container that grows with its content the measured height is not a viewport, so give it a fixed height or use `fit-width`. Container resizes never re-fit. `fit-width` derives the scale from the **first** page, so a mixed-size document whose later pages are wider can overflow horizontally.
 - **Containers must live in the main document** — the wrapper creates page/canvas/text-layer nodes through the global `document` and injects its layout/text-layer stylesheet into `document.head`. Rendering into a ShadowRoot or an iframe document is not supported in this version (the injected CSS would not reach the nodes, breaking page layout and text selection).
 - **Scrollbar timing** — `fit-width` measures the container **before** the page placeholders exist, i.e. before a vertical scrollbar appears in the scroll container. On platforms with classic (non-overlay) scrollbars the content box then narrows by the scrollbar width (~15–17 px) and the centered pages can overflow horizontally by that much. Re-creating the preview does not help (the measurement repeats in the empty state). Give the container `scrollbar-gutter: stable` or account for the gutter in your layout if this matters.
 - **`devicePixelRatio` is captured per render** — moving the window across screens with a different DPR (or zooming) does not re-render existing pages; already-rendered pages keep their old bitmap sharpness until they are released and re-rendered.
@@ -15,7 +15,7 @@
 ## Formats
 
 - The `%PDF-` magic must appear within the **first 1024 bytes** (Adobe's own reader window). Adobe's spec allows junk before the header and the official viewer searches a wider window — pathological files with >1 KB of junk open there but report `UNSUPPORTED` here. This is a deliberate input tightening.
-- **Encrypted PDFs** are detected and reported as `PASSWORD_PROTECTED` (message distinguishes "needs a password" from "password rejected" upstream codes). No decryption in v1.
+- **Encrypted PDFs** are detected and reported as `PASSWORD_PROTECTED` ("needs a password"). The API has no password input, so the upstream "password rejected" code cannot occur in v1. No decryption.
 - **XFA forms** do not render (`enableXfa` is pinned to `false`); XFA-only documents show blank pages.
 - **Node.js server-side calls are not supported**: the modern pdf.js build (which this package bundles) crashes in `getDocument` under Node. Importing the package is safe; calling `createPdfPreview` requires a browser. Server-side text extraction is out of scope.
 
@@ -23,7 +23,7 @@
 
 Parsing normally runs in a pdf.js Web Worker, but pdf.js itself silently falls back to a **main-thread fake worker** when the worker cannot be constructed — a CSP `worker-src` block, a wrong MIME type, or a module-worker restriction in the host. In that mode parsing still works (usually a `Setting up fake worker.` warning in the console at most) but happens on the main thread: long documents will jank the UI. Two things to know:
 
-- pdf.js's "worker disabled" flag is **sticky for the page session** — once any construction fails, every later instance on the page (from this or any other pdf.js copy) uses the fake worker until reload.
+- pdf.js's "worker disabled" flag is **sticky for the page session** — once any construction fails, every later instance on the page (from this or any other pdf.js copy) uses the fake worker until reload. pdf.js also caches the failed fake-worker import promise, so passing a corrected `workerSrc` to a later instance on the same page does **not** recover; reload the page after fixing the URL.
 - Only when even the main-thread import of the worker module fails does the package surface it as an `UNKNOWN` error mentioning `workerSrc`. If you require worker isolation, verify in DevTools that a `pdf.worker` thread exists rather than trusting the render to succeed.
 
 ## Security hardening (what the wrapper does)

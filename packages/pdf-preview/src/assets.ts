@@ -80,12 +80,23 @@ function resolveWorkerUrl(): string {
   return new URL("./pdf.worker.min.mjs", import.meta.url).href;
 }
 
-/** 从 worker URL 推导同层资产目录（相对 URL 先按页面基址绝对化）。 */
+/**
+ * 从 worker URL 推导同层资产目录（相对 URL 先按页面基址绝对化）。
+ *
+ * blob:/data: 等非层级 URL 不能作为 URL base（`new URL("cmaps/", blobUrl)`
+ * 抛 Invalid URL）——这类 workerSrc 无法推导同层目录，退回包内默认
+ * worker 的同层资产（通常就是随包分发的 cmaps/standard_fonts）。需要
+ * 自托管目录时仍应显式传 cMapUrl/standardFontDataUrl。
+ */
 function siblingDir(
   workerUrl: string,
   dir: "cmaps" | "standard_fonts",
 ): string {
-  return new URL(`${dir}/`, absoluteUrl(workerUrl)).href;
+  try {
+    return new URL(`${dir}/`, absoluteUrl(workerUrl)).href;
+  } catch {
+    return new URL(`${dir}/`, resolveWorkerUrl()).href;
+  }
 }
 
 export function resolveAssetUrls(explicit: {

@@ -20,6 +20,10 @@ const STYLE_ID = "marcusok-pdf-preview-styles";
 export const ROOT_CLASS = "mop-pdf-root";
 export const PAGE_CLASS = "mop-pdf-page";
 
+const ROOT_PADDING_Y = 12;
+/** `.mop-pdf-root` 的上下 padding 总和（fit-page 量测时预留）。 */
+export const ROOT_VERTICAL_PADDING_PX = ROOT_PADDING_Y * 2;
+
 const CSS = `
 .${ROOT_CLASS} {
   /* 连续滚动容器：页垂直堆叠、水平居中（PDF 允许逐页尺寸不同） */
@@ -27,7 +31,7 @@ const CSS = `
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 12px 0;
+  padding: ${ROOT_PADDING_Y}px 0;
 }
 .${PAGE_CLASS} {
   /* 官方 viewer 的 .page 变量链：JS 侧按页写 --scale-factor（viewport.scale），
@@ -96,6 +100,20 @@ const CSS = `
 .${PAGE_CLASS} .textLayer ::selection {
   background: rgb(0 0 255 / 0.25);
   color: transparent;
+}
+
+/* 旋转页（/Rotate 90/180/270）：pdf.js 在 .textLayer 上写
+ * data-main-rotation，span 坐标仍按未旋转的 viewport 计算；缺这几条
+ * transform 时文本层与 canvas 像素完全错位（选中高亮/复制/查找定位失效）。
+ * 规则与 pdfjs-dist 6.4.299 web/pdf_viewer.css 同名段一致。 */
+.${PAGE_CLASS} .textLayer[data-main-rotation="90"] {
+  transform: rotate(90deg) translateY(-100%);
+}
+.${PAGE_CLASS} .textLayer[data-main-rotation="180"] {
+  transform: rotate(180deg) translate(-100%, -100%);
+}
+.${PAGE_CLASS} .textLayer[data-main-rotation="270"] {
+  transform: rotate(270deg) translateX(-100%);
 }
 `;
 

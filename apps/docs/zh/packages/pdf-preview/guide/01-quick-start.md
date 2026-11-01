@@ -1,6 +1,6 @@
 # 快速上手
 
-前提：浏览器 DOM。import 本包是 SSR 安全的（模块顶层不求值任何 DOM 全局——已对 pdfjs-dist 6.4.29 实测验证），但 `createPdfPreview` 本身必须在浏览器中调用。
+前提：浏览器 DOM。import 本包是 SSR 安全的（模块顶层不求值任何 DOM 全局——已对 pdfjs-dist 6.4.299 实测验证），但 `createPdfPreview` 本身必须在浏览器中调用。
 
 ## 1. 安装
 

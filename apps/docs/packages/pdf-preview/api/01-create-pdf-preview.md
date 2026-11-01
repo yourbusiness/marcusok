@@ -47,12 +47,12 @@ Everything else is taken over by the package: `data` (from `source`), `cMapUrl`/
 
 ## Error codes
 
-| Code                 | When                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `UNSUPPORTED`        | No `%PDF-` magic within the first 1024 bytes, or empty input                                                  |
-| `PASSWORD_PROTECTED` | Encrypted PDF (upstream `PasswordException`; the message distinguishes needs-password from rejected-password) |
-| `CORRUPT`            | Magic present but parsing/rendering failed (`InvalidPDFException` and unexpected errors; `cause` preserved)   |
-| `UNKNOWN`            | Outside the pipeline — source read failure, worker/asset URL unreachable, or invalid asset URL configuration  |
+| Code                 | When                                                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `UNSUPPORTED`        | No `%PDF-` magic within the first 1024 bytes, or empty input                                                    |
+| `PASSWORD_PROTECTED` | Encrypted PDF (upstream `PasswordException`; v1 has no password input, so this always means "needs a password") |
+| `CORRUPT`            | Magic present but parsing/rendering failed (`InvalidPDFException` and unexpected errors; `cause` preserved)     |
+| `UNKNOWN`            | Outside the pipeline — source read failure, worker/asset URL unreachable, or invalid asset URL configuration    |
 
 ## PdfPreviewInstance
 
