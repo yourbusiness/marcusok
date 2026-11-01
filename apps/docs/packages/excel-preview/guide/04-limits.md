@@ -47,6 +47,6 @@ Formula cells render their **cached** `<v>` values — the same convention as Sh
 ## Scale
 
 Parsing is not streaming (OOXML parts cross-reference each other; browsers cannot stream-parse a zip of interdependent parts) — the whole file is read into memory inside the worker. 100k rows × 10 cols parse in ~1.5s (measured); virtual scrolling keeps the DOM at viewport size regardless of file dimensions. Multi-hundred-MB files will hit memory limits before anything else.
-The repo's performance test asserts a different, looser bound: 100k rows × 8 cols parse + model build < 4s, measured inside happy-dom without real rendering, and skipped in CI and the release pipeline (`RUN_PERF=0`).
+The repo's performance test asserts a different, looser bound: 100k rows × 8 cols parse + model build < 4s, measured inside happy-dom without real rendering. CI skips it (`RUN_PERF=0`); the release pipeline runs it with a shared-runner tolerance (`PERF_SLACK=4`).
 
 **Row-count ceiling (a browser limit, not memory)**: the grid is one tall container element, and at 20px per row (15pt) roughly 890k rows (~17.9M px) hit the element-size cap in Firefox / Safari — rows past that point are unreachable. Chrome's cap is ~33.5M px (about 1.67M rows). Headers and row/column labels stay viewport-sized either way; only the scrollable range is cut short. A full 1,048,576-row sheet sits between the two caps (~21M px at 20px rows — reachable in Chrome, truncated in Firefox / Safari), and exceeds every browser once rows are taller.

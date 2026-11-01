@@ -77,15 +77,21 @@ function normalizeCellType(t: CellData["cellType"]): PreviewCellType {
 function decodeRef(reference: string): number {
   // 快路径：直接从 A1 引用解析列号（0-based）。decodeCellRef 往返一次，
   // 百万格级模型构建下字符串解析成本可见，这里用本地实现。
+  // `$A$1` 这类绝对引用在合法 OOXML 中出现时列号同 A1（`$` 直接跳过）。
   let col = 0;
-  let i = 0;
-  for (; i < reference.length; i++) {
+  let letters = 0;
+  for (let i = 0; i < reference.length; i++) {
     const c = reference.charCodeAt(i);
-    if (c >= 65 && c <= 90) col = col * 26 + (c - 64);
-    else if (c >= 97 && c <= 122) col = col * 26 + (c - 96);
-    else break;
+    if (c === 36) continue; // "$"
+    if (c >= 65 && c <= 90) {
+      col = col * 26 + (c - 64);
+      letters++;
+    } else if (c >= 97 && c <= 122) {
+      col = col * 26 + (c - 96);
+      letters++;
+    } else break;
   }
-  return col - 1;
+  return letters === 0 ? -1 : col - 1;
 }
 
 /** 空值/undefined 归一化到统一缺省形态的工具。 */
@@ -309,16 +315,34 @@ function buildStyles(
 function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
   const rows: PreviewRow[] = [];
   let maxCol = 0;
+  // ECMA-376 中 `<row r>` / `<c r>` 的 r 都是可选的，缺省位置按文档顺序
+  // 推导。引擎对缺失 r 返回 index=0 / reference=""（实测 modern-xlsx 1.2.0），
+  // 旧实现把 0 当越界行报 CORRUPT、把空引用解码为 -1 后丢格——合法的最小化
+  // OOXML 因此整表变空或报损坏。维护隐含游标：缺失时取“上一行/上一列 + 1”。
+  let implicitRow = 0;
   for (const r of (ws.rows ?? []) as RowData[]) {
-    if (!r || typeof r.index !== "number") continue;
+    if (!r) continue;
+    const declaredRow =
+      typeof r.index === "number" && Number.isInteger(r.index) && r.index > 0
+        ? r.index
+        : null;
+    const rowIndex = declaredRow ?? implicitRow + 1;
+    implicitRow = rowIndex;
     // 文件声明的行号直接决定布局数组长度：越界（含超大值）在模型层拒绝，
     // 不能留给主线程 buildLayout 分配。
-    assertRowIndex(ws.name ?? "", r.index);
+    assertRowIndex(ws.name ?? "", rowIndex);
     const cells: PreviewCell[] = [];
+    let implicitCol = -1;
     for (const c of r.cells ?? []) {
-      if (!c || typeof c.reference !== "string") continue;
-      const col = decodeRef(c.reference);
-      if (col < 0) continue;
+      if (!c) continue;
+      let col: number;
+      if (typeof c.reference === "string" && c.reference !== "") {
+        col = decodeRef(c.reference);
+        if (col < 0) continue; // 显式引用非法（非 A1 形态）：跳过该格
+      } else {
+        col = implicitCol + 1;
+      }
+      implicitCol = col;
       assertColIndex(ws.name ?? "", col);
       // 空单元格（无值且无样式）不进模型——稀疏化，虚拟渲染受益
       if (c.value == null && c.styleIndex == null) continue;
@@ -335,7 +359,7 @@ function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
     // 形态），跳过会让渲染层把该行回落默认行高，拉高留白的行整体塌掉
     if (cells.length === 0 && !r.hidden && r.height == null) continue;
     rows.push({
-      index: r.index,
+      index: rowIndex,
       // 负/非有限行高在 OOXML 中非法；归一为默认行高，避免布局出现负高度
       height: normalizeRowHeight(r.height),
       hidden: !!r.hidden,

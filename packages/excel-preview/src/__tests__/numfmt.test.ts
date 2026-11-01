@@ -90,6 +90,23 @@ describe("数字段字面量补偿（引擎丢弃字面量的补偿层）", () =
   });
 });
 
+describe("可选小数位 #（Excel 裁尾零语义）", () => {
+  it("0.## 去掉尾零", () => {
+    expect(F("number", "1.5", "0.##")).toBe("1.5");
+    expect(F("number", "1.25", "0.##")).toBe("1.25");
+    expect(F("number", "0", "0.##")).toBe("0");
+  });
+  it("0.0# 保留强制位、裁掉可选尾零", () => {
+    expect(F("number", "1.25", "0.0#")).toBe("1.25");
+    expect(F("number", "1.2", "0.0#")).toBe("1.2");
+    expect(F("number", "1", "0.0#")).toBe("1.0");
+  });
+  it("带分组与百分号时同样裁尾零", () => {
+    expect(F("number", "1234.5", "#,##0.##")).toBe("1,234.5");
+    expect(F("number", "0.125", "0.0#%")).toBe("12.5%");
+  });
+});
+
 describe("颜色段", () => {
   it("[Red] 提取为 CSS 色", () => {
     expect(C("number", "-1234.5", "#,##0.00;[Red]-#,##0.00")).toBe("#ff0000");
@@ -97,6 +114,14 @@ describe("颜色段", () => {
   });
   it("[Color n] indexed 色表", () => {
     expect(C("number", "1", "[Color 3]0")).toBe("#00ff00");
+  });
+  it("[ColorN]（无空格）同样识别，不污染数字文本", () => {
+    // 旧实现只认 "[Color 10]"；"[Color10]" 被当字面量，输出
+    // "[Color11234.50" 一类污染文本。
+    expect(C("number", "1234.5", "[Color10]0.00")).toBe("#ff0000");
+    expect(F("number", "1234.5", "[Color10]0.00")).toBe("1234.50");
+    expect(C("number", "1234.5", "[Color10]#,##0.00")).toBe("#ff0000");
+    expect(F("number", "1234.5", "[Color10]#,##0.00")).toBe("1,234.50");
   });
 });
 

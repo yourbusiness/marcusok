@@ -463,6 +463,26 @@ describe("SheetRenderer", () => {
     document.body.appendChild(container);
   });
 
+  it("空白单元格也绘制网格线占位（showGridLines 开启时）", async () => {
+    const model = await parse(sampleWorkbookBytes());
+    const r = new SheetRenderer(container);
+    r.render(model, { showGridLines: true });
+    // 模型稀疏：缺失 (row,col) 仍需要有边框占位，否则表格断线
+    expect(
+      container.querySelectorAll(".xpv-cell.xpv-empty").length,
+    ).toBeGreaterThan(0);
+    r.destroy();
+
+    // 关闭网格线时不产生占位（无谓 DOM）
+    document.body.textContent = "";
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const r2 = new SheetRenderer(container);
+    r2.render(model, { showGridLines: false });
+    expect(container.querySelectorAll(".xpv-cell.xpv-empty").length).toBe(0);
+    r2.destroy();
+  });
+
   it("挂载即渲染首屏：格子/表头/页签", async () => {
     const model = await parse(sampleWorkbookBytes());
     const r = new SheetRenderer(container);
@@ -753,6 +773,59 @@ describe("SheetRenderer", () => {
     const l = buildLayout(model.sheets[0]);
     expect(span.style.maxWidth).toBe(`${l.colLeft[3] - l.colLeft[0]}px`);
     expect(l.colLeft[3] - l.colLeft[0]).toBe(192); // 64×3，构造自检
+    r.destroy();
+  });
+
+  it("横向滚动后已存在溢出格的 max-width 随窗口更新", async () => {
+    // 溢出上限按窗口右界计算；已渲染格横向滚动时不重建，旧实现不更新
+    // span.max-width，文本在旧的列边界被提前截断。
+    const model = await parse(sampleWorkbookBytes());
+    model.sheets[0] = {
+      ...model.sheets[0],
+      rowCount: 1,
+      colCount: 200,
+      rows: [
+        {
+          index: 1,
+          height: null,
+          hidden: false,
+          cells: [
+            {
+              col: 2,
+              type: "string",
+              value: "很长的溢出文本".repeat(10),
+              styleIndex: null,
+            },
+          ],
+        },
+      ],
+      colSpans: [],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+    };
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const cell = () =>
+      [...container.querySelectorAll(".xpv-cell")].find((c) =>
+        c.textContent?.includes("溢出"),
+      ) as HTMLElement | undefined;
+    const before = cell()!.querySelector("span") as HTMLElement;
+    const beforeLimit = before.style.maxWidth;
+    expect(beforeLimit).not.toBe("");
+
+    const viewport = container.querySelector(".xpv-viewport") as HTMLElement;
+    viewport.scrollLeft = 100;
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+
+    const after = cell();
+    expect(after).toBeTruthy();
+    const afterLimit = (after!.querySelector("span") as HTMLElement).style
+      .maxWidth;
+    expect(Number.parseFloat(afterLimit)).toBeGreaterThan(
+      Number.parseFloat(beforeLimit),
+    );
     r.destroy();
   });
 

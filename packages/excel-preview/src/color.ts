@@ -204,7 +204,8 @@ export function indexedColor(index: number): string | null {
 
 /** [Color n] / 命名色（[Red] 等）→ CSS 色（统一 # 前缀）。 */
 export function colorCodeToCss(name: string): string | null {
-  const m = /^color\s+(\d+)$/i.exec(name.trim());
+  // [Color10] 与 [Color 10] 均为合法 Excel 语法
+  const m = /^color\s*(\d+)$/i.exec(name.trim());
   if (m) return argbToCss(indexedColor(Number(m[1])));
   const hex = NAMED_COLORS.get(name.trim().toLowerCase());
   return hex ? `#${hex}` : null;

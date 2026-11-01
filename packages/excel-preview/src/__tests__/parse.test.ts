@@ -31,6 +31,49 @@ import { csvToWorkbook, parseCsvText } from "../parse/csv";
 import { buildLayout } from "../render/layout";
 import { strToU8, zipSync } from "fflate";
 
+// ECMA-376 中 <row r> / <c r> 的 r 均可选，缺省位置按文档顺序推导。
+// 引擎对缺失 r 返回 index=0 / reference=""；模型层必须自建隐含游标，
+// 否则合法的最小化 OOXML 会被误报 CORRUPT 或整表空白。
+describe("optional row/cell r attributes", () => {
+  it("derives row and column positions when r is omitted", async () => {
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "S",
+          xml:
+            '<row><c t="inlineStr"><is><t>a</t></is></c><c t="inlineStr"><is><t>b</t></is></c></row>' +
+            '<row><c t="inlineStr"><is><t>c</t></is></c></row>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    const model = buildPreviewWorkbook(await readBuffer(bytes), bytes);
+    const sheet = model.sheets[0];
+    expect(sheet.rows.map((r) => r.index)).toEqual([1, 2]);
+    expect(sheet.rows[0].cells.map((c) => [c.col, c.value])).toEqual([
+      [0, "a"],
+      [1, "b"],
+    ]);
+    expect(sheet.rows[1].cells.map((c) => [c.col, c.value])).toEqual([
+      [0, "c"],
+    ]);
+  });
+
+  it("accepts absolute $ references", async () => {
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "S",
+          xml: '<row r="1"><c r="$B$1" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    const model = buildPreviewWorkbook(await readBuffer(bytes), bytes);
+    expect(model.sheets[0].rows[0].cells.map((c) => c.col)).toEqual([1]);
+  });
+});
+
 // 畸形文件可以只声明一个超大行号/列跨度/合并，就让 layout 在主线程按声明
 // 维度分配数 GB TypedArray（worker 超时覆盖不到布局）。模型层必须按 Excel
 // 硬上限拒绝，且负/非有限几何要归一化，不能让负前缀和破坏窗口计算。

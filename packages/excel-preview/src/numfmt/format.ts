@@ -53,8 +53,11 @@ interface Section {
 // 颜色括号只认已知命名色与 [Color n]——宽匹配 [a-z]+ 会把累计时长记号
 // [h]/[m]/[s] 误吞成颜色（实测踩坑），时段记号必须留在码内交时长路径。
 const COLOR_NAMES = "black|blue|cyan|green|magenta|red|white|yellow";
+// Excel 同时接受 [Color 10] 与 [Color10]（后者在 Microsoft 示例中常见）；
+// 空格是可选的，不能只匹配带空格形态——否则合法格式落进“未知括号”分支、
+// 被字面量抽取逻辑拼进数字（[Color11234.50）。
 const COLOR_BRACKET = new RegExp(
-  `^\\[(?:color\\s+\\d+|${COLOR_NAMES})\\]$`,
+  `^\\[(?:color\\s*\\d+|${COLOR_NAMES})\\]$`,
   "i",
 );
 const CONDITION_BRACKET = /^\[(>=|<=|<>|>|<|=)\s*(-?\d+(?:\.\d+)?)\]$/i;
@@ -635,6 +638,72 @@ function coreDecimalPlaces(core: string): number {
 }
 
 /**
+ * 小数占位符中 `0`（强制）与 `#`（可选）的位数。返回 null 表示该段的小数
+ * 位全部是强制位（或没有小数段）——无需裁尾零。
+ */
+function optionalDecimalInfo(
+  core: string,
+): { mandatory: number; optional: number } | null {
+  const m = /\.([0#]*)/.exec(core);
+  if (!m) return null;
+  const group = m[1];
+  const firstHash = group.indexOf("#");
+  if (firstHash === -1) return null; // 全是 0：每位的零都必须显示
+  return { mandatory: firstHash, optional: group.length - firstHash };
+}
+
+/**
+ * 按 `#` 可选位裁掉多余尾零（引擎把 0 与 # 一律当固定小数位：
+ * 0.## + 1.5 → "1.50"，Excel 为 "1.5"）。只在输入是普通十进制文本时生效；
+ * 科学计数/分数没有匹配的小数尾巴，原样返回。百分比后缀保留。
+ */
+function trimOptionalDecimals(text: string, mandatory: number): string {
+  const m = /^(.*?)(\.\d+)(%?)$/.exec(text);
+  if (!m) return text;
+  const [, head, decimal, percent] = m;
+  let digits = decimal.slice(1);
+  if (digits.length <= mandatory) return text;
+  digits = digits.replace(/0+$/, "");
+  if (digits.length < mandatory) digits = digits.padEnd(mandatory, "0");
+  return digits.length === 0
+    ? `${head}${percent}`
+    : `${head}.${digits}${percent}`;
+}
+
+/**
+ * 含可选小数位（`0.##` / `#,##0.0#` / `0.0#%`）的数字段自行格式化。
+ *
+ * 引擎只按**强制位 0** 决定小数位数（0.0# + 1.25 → "1.3"，丢掉 Excel 应
+ * 显示的第二位；0.0#% + 0.125 → "13%"），裁尾零补不回已丢的精度。这里按
+ * 强制+可选总位数 toFixed（值已按 total 位 half-up 预舍入），再裁到强制位。
+ * 返回 null 表示该 core 不是简单数字形态（含内部字面量等），交回引擎。
+ */
+function formatOptionalDecimal(
+  display: number,
+  core: string,
+  info: { mandatory: number; optional: number },
+): string | null {
+  if (!/^[#0,]+(?:\.[#0]+)?%?$/.test(core)) return null;
+  const total = info.mandatory + info.optional;
+  if (total === 0) return null;
+  const percent = core.endsWith("%");
+  const value = percent ? display * 100 : display;
+  if (!Number.isFinite(value) || Math.abs(value) >= 1e21) return null;
+
+  let out = trimOptionalDecimals(value.toFixed(total), info.mandatory);
+  const intPattern = (core.split(".")[0] ?? "").replace("%", "");
+  if (intPattern.includes(",")) {
+    const m = /^(\d+)(\.\d+)?$/.exec(out);
+    if (m) {
+      out = m[1].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (m[2] ?? "");
+    }
+  }
+  // 整数位全是 #（无强制 0）时，0.x 不显示前导零（Excel "#.##" 0.5 → ".5"）
+  if (!intPattern.includes("0") && /^0\./.test(out)) out = out.slice(1);
+  return percent ? `${out}%` : out;
+}
+
+/**
  * Excel 口径的显示舍入：先取 15 位有效十进制表示，再按 d 位 half-up
  * （away from zero——调用方已取绝对值）做**十进制字符串**舍入。
  *
@@ -895,18 +964,29 @@ export function formatCellValue(
       ? decimalRoundHalfUp(display * 100, decimals) / 100
       : decimalRoundHalfUp(display, decimals);
   }
-  const r = engineText(display, coreNum);
   const sign = signFromSingle ? "-" : "";
+  // 含 # 可选小数位时自行格式化：引擎只按强制 0 位数输出，后半位精度会
+  // 在交给引擎之前就丢掉（见 formatOptionalDecimal）。
+  const optional = isFractionCore ? null : optionalDecimalInfo(coreNum);
+  const selfFormatted = optional
+    ? formatOptionalDecimal(display, coreNum, optional)
+    : null;
+  const r = selfFormatted === null ? engineText(display, coreNum) : null;
   // 科学计数：引擎指数不补零且不带符号（1.23E+4 / 1.2E-4），Excel 显示口径
   // 是指数至少两位且恒带符号（1.23E+04 / 1.20E-04）。工程计数法 ##0.0E+0 的
   // 尾数归一（指数取 3 的倍数）引擎也不支持，此处仅对齐指数书写形态。
-  const text = isSciCore
-    ? r.text.replace(/E([+-]?)(\d+)$/i, (_m, s: string, d: string) =>
-        `E${s || "+"}${d.padStart(2, "0")}`.toUpperCase(),
-      )
-    : r.text;
+  const text =
+    selfFormatted !== null
+      ? selfFormatted
+      : isSciCore
+        ? r!.text.replace(/E([+-]?)(\d+)$/i, (_m, s: string, d: string) =>
+            `E${s || "+"}${d.padStart(2, "0")}`.toUpperCase(),
+          )
+        : optional
+          ? trimOptionalDecimals(r!.text, optional.mandatory)
+          : r!.text;
   return {
     text: sign + prefix + text + suffix,
-    color: chosen.color ?? r.color,
+    color: chosen.color ?? r?.color,
   };
 }

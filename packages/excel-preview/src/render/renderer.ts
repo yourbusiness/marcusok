@@ -54,7 +54,8 @@ const BASE_CSS = `
 .xpv-viewport{position:relative;flex:1;overflow:auto;background:#fff;}
 .xpv-content{position:absolute;top:0;left:0;}
 .xpv-layer{position:absolute;}
-.xpv-cell{position:absolute;box-sizing:border-box;padding:0 3px;line-height:1.15;white-space:nowrap;overflow:hidden;display:flex;align-items:center;}
+.xpv-cell{position:absolute;box-sizing:border-box;padding:0 3px;line-height:1.15;white-space:nowrap;overflow:hidden;display:flex;align-items:center;z-index:1;}
+.xpv-empty{pointer-events:none;z-index:0;}
 .xpv-num{justify-content:flex-end;text-align:right;}
 .xpv-text{justify-content:flex-start;text-align:left;}
 .xpv-mid{justify-content:center;text-align:center;}
@@ -643,6 +644,30 @@ export class SheetRenderer {
     const l = this.layout!;
     const want = new Set<string>();
 
+    /** 空白占位格：模型是稀疏的，缺失 (row,col) 不渲染任何 DOM；但网格线
+     * 由 .xpv-cell 的右/下 border 绘制，空白处会断线（CSV 空列、稀疏表）。
+     * 只为可视窗口内的空格建占位（数量受视口约束），带 pointer-events:none
+     * 与低 z-index，不挡文本溢出与交互。 */
+    const ensureEmpty = (r: number, c: number): void => {
+      if (l.coveredBy.has(`${r}:${c}`)) return; // 合并内部由锚点格覆盖
+      const left = l.colLeft[c];
+      const top = l.rowTop[r];
+      const width = l.colWidths[c];
+      const height = l.rowHeights[r];
+      if (width <= 0 || height <= 0) return; // 隐藏行列
+      const key = `${prefix}${r}:${c}`;
+      want.add(key);
+      if (this.rendered.has(key)) return;
+      const el = this.doc.createElement("div");
+      el.className = "xpv-cell xpv-empty";
+      el.style.left = `${left}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${width}px`;
+      el.style.height = `${height}px`;
+      layer.appendChild(el);
+      this.rendered.set(key, el);
+    };
+
     // 单格渲染（含合并几何与隐藏行列检查）：窗口循环与 anchor 召回共用
     const ensure = (r: number, cell: PreviewCell): void => {
       const c = cell.col;
@@ -667,30 +692,56 @@ export class SheetRenderer {
       }
       const key = `${prefix}${r}:${c}`;
       want.add(key);
-      if (!this.rendered.has(key)) {
-        this.createCell(
-          layer,
-          key,
-          cell,
-          this.workbook!.sheets[this.sheetIndex],
-          left,
-          top,
-          width,
-          height,
-          spillPx,
-        );
+      const existing = this.rendered.get(key);
+      if (existing) {
+        // 溢出上限与窗口右界相关：横向滚动后窗口内格不一定重建，但
+        // max-width 必须同步更新，否则文本在旧的列边界被提前截断（每帧
+        // 已算出 spillPx，不更新等于白算）。
+        if (spillPx !== undefined && existing.classList.contains("xpv-spill")) {
+          const span = existing.firstElementChild as HTMLElement | null;
+          const next = `${spillPx}px`;
+          if (span && span.style.maxWidth !== next) {
+            span.style.maxWidth = next;
+          }
+        }
+        return;
       }
+      this.createCell(
+        layer,
+        key,
+        cell,
+        this.workbook!.sheets[this.sheetIndex],
+        left,
+        top,
+        width,
+        height,
+        spillPx,
+      );
     };
 
     for (let r = range.rowStart; r < range.rowEnd; r++) {
       const rowCells = this.rowIndex.get(r);
-      if (!rowCells) continue;
+      if (!rowCells) {
+        // 整行无模型格：网格线开启时铺满窗口空白占位
+        if (this.showGridLines) {
+          for (let c = range.colStart; c < range.colEnd; c++) ensureEmpty(r, c);
+        }
+        continue;
+      }
+      let cursor = range.colStart;
       // 有序数组 + 二分：每帧只触碰窗口内的格子。旧的 per-row Map 全量
       // 遍历在宽表（行内上万格）下每帧扫行内全部格（cell-index.ts 背景）
       forEachCellInRange(rowCells, range.colStart, range.colEnd, (cell) => {
+        if (this.showGridLines) {
+          for (let c = cursor; c < cell.col; c++) ensureEmpty(r, c);
+        }
+        cursor = Math.max(cursor, cell.col + 1);
         if (l.coveredBy.has(`${r}:${cell.col}`)) return;
         ensure(r, cell);
       });
+      if (this.showGridLines) {
+        for (let c = cursor; c < range.colEnd; c++) ensureEmpty(r, c);
+      }
     }
     for (const a of anchors) {
       // anchor 正常不是被覆盖格（coveredBy 不含 anchor 自身）；重叠合并的
