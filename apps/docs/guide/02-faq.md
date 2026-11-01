@@ -41,7 +41,7 @@ You are most likely on the `main` + `Workbook.toBuffer()` path, which has a clif
 
 ### Styles do not apply in stream mode
 
-The stream path supports multi-row headers (`children`) and data-area merges (`merges`), but not cell styles, header styles or layout features such as width, freeze and filter (a console warning is printed). Keep exports under 50k rows when you need full styling. See [Worker & streaming](/packages/excel-exporter/guide/06-worker-stream).
+The stream path supports multi-row headers (`children`) and data-area merges (`merges`), but not cell styles, header styles or layout features such as width, freeze and filter (a console warning is printed). Keep exports **below both stream gates** — rows < 50,000 **and** estimated cells < 1,500,000 — when you need full styling; a 20k×100 sheet (2M cells) already routes to stream despite the low row count. See [Worker & streaming](/packages/excel-exporter/guide/06-worker-stream).
 
 ### Date columns render as long text, not dates
 
@@ -71,7 +71,7 @@ Formula cells render their **cached** value — the same convention as SheetJS a
 
 ### Does previewing a huge file freeze the page?
 
-Parsing runs in a Web Worker (100k × 10 cells measured at ~1.5s) and the renderer mounts viewport cells only, so the tab stays responsive while the worker parses and while scrolling. Two caveats: the finished model is structured-cloned back to the main thread in one task that grows with cell count (~50ms at 10k rows, ~150ms at 50k, ~300ms at 100k in Chromium), and the whole file is read into memory inside the worker (multi-hundred-MB files hit memory limits first). The grid is one tall container element, so Firefox / Safari stop scrolling past ~890k rows (~1.67M in Chrome). Details in [Scope & Limits](/packages/excel-preview/guide/04-limits).
+Parsing runs in a Web Worker (100k rows × 10 columns measured at ~1.5s) and the renderer mounts viewport cells only, so the tab stays responsive while the worker parses and while scrolling. Two caveats: the finished model is structured-cloned back to the main thread in one task that grows with cell count (~50ms at 10k rows, ~150ms at 50k, ~300ms at 100k in Chromium), and the whole file is read into memory inside the worker (multi-hundred-MB files hit memory limits first). The grid is one tall container element, so Firefox / Safari stop scrolling past ~890k rows (~1.67M in Chrome). Details in [Scope & Limits](/packages/excel-preview/guide/04-limits).
 
 ## Progress overlay (exporter's `overlay` option)
 

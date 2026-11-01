@@ -41,7 +41,7 @@ worker 资产（`export.worker.js`）默认自动定位；回退发生在 Worker
 
 ### Stream 模式下样式不生效
 
-Stream 路径支持多行表头（`children`）与数据区合并（`merges`），但不支持单元格样式、表头样式与列宽/冻结/筛选等布局特性（会在 console 打印警告）。需要完整样式时，控制在 5 万行以内走 Workbook 路径。详见 [Worker 与流式](/zh/packages/excel-exporter/guide/06-worker-stream)。
+Stream 路径支持多行表头（`children`）与数据区合并（`merges`），但不支持单元格样式、表头样式与列宽/冻结/筛选等布局特性（会在 console 打印警告）。需要完整样式时，必须**同时低于两个 stream 门槛**——行 < 50,000 **且**估算单元格 < 1,500,000；例如 20k×100（200 万格）虽然行数远低于 5 万，仍会走 stream。详见 [Worker 与流式](/zh/packages/excel-exporter/guide/06-worker-stream)。
 
 ### 日期列显示为长文本，Excel 不识别为日期
 
