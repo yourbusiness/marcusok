@@ -183,6 +183,21 @@ describe("遮罩生命周期", () => {
     expect(root()).toBeNull();
   });
 
+  it("长 delay 调用方提前关闭后，剩余调用方按自己的截止时间揭示", () => {
+    const a = show({ delayMs: 800, text: { title: "A 的任务" } });
+    vi.advanceTimersByTime(50);
+    const b = show({ delayMs: 0, text: { title: "B 的任务" } });
+    // A 的 800ms 截止仍占着挂起定时器；B delayMs=0 本应立即揭示，
+    // 但揭示被 A 的 deadline 顺延。A 在 110ms 关闭后，剩余调用方 B
+    // 的截止时间早已过去，遮罩必须立即显示 B 的文案。
+    vi.advanceTimersByTime(60);
+    expect(root()).toBeNull();
+    a.close();
+    expect(root()).not.toBeNull();
+    expect(root()!.textContent).toContain("B 的任务");
+    b.close();
+  });
+
   it("并发后来者更晚的 delayMs 顺延揭示（回归：揭示曾被前任的定时器提前）", () => {
     const a = show({ delayMs: 200 });
     // B 要求 2000ms 内不打扰：揭示截止应取并发调用方中的最晚者

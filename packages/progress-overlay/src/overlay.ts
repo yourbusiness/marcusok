@@ -364,6 +364,12 @@ function renderSafely(run: () => void): void {
 interface OverlayDriver {
   state: OverlayState;
   text: ResolvedText;
+  /**
+   * 该调用方自己的揭示截止时刻（startedAt + delayMs）。并发揭示取所有
+   * 仍活动调用方的最大值；调用方提前 close 时必须据此重算，否则已结束
+   * 的长 delay 会把剩余调用方的揭示一直拖到它原本的截止时间。
+   */
+  deadline: number;
 }
 
 function createDom(cfg: ResolvedOptions): OverlayDom {
@@ -533,6 +539,30 @@ function reveal(h: ActiveOverlay): void {
   h.dom.root.style.opacity = "1";
 }
 
+/**
+ * 按当前仍活动的调用方重新计算揭示时间并重挂定时器。
+ *
+ * 并发语义：任一活动调用方的 delayMs 未过都不揭示（取最大截止），但已
+ * close 的调用方不参与计算。早退 close 时若不自此重算，一个自定义长
+ * delay 且提前结束的任务会把剩余任务的遮罩拖到它原本的截止时间。
+ */
+function scheduleReveal(h: ActiveOverlay): void {
+  if (h.revealed || h.refs <= 0 || h.driverStack.length === 0) return;
+  const deadline = Math.max(...h.driverStack.map((d) => d.deadline));
+  h.revealDeadline = deadline;
+  clearTimer(h.revealTimer);
+  h.revealTimer = null;
+  const wait = Math.max(0, deadline - Date.now());
+  if (wait === 0) {
+    renderSafely(() => reveal(h));
+  } else {
+    // 定时器回调里的渲染异常无人接住（会以 uncaught 上报），同样走兜底。
+    h.revealTimer = setTimeout(() => {
+      renderSafely(() => reveal(h));
+    }, wait);
+  }
+}
+
 const NOOP_HANDLE: ProgressOverlayHandle = {
   setProgress: () => {},
   setPhase: () => {},
@@ -649,31 +679,20 @@ export function showProgressOverlay(
     // refs 归零后的复用是全新生命周期：栈中理论上已空（每次 close 都摘除
     // 自己），再清一次兜底上一场可能的异常残留。
     if (h.refs === 0) h.driverStack.length = 0;
-    const driver: OverlayDriver = { state, text: cfg.text };
+    const driver: OverlayDriver = {
+      state,
+      text: cfg.text,
+      deadline: Date.now() + state.delayRemaining(),
+    };
     h.driverStack.push(driver);
     h.driver = driver;
     h.refs += 1;
 
     if (!h.revealed) {
-      // 揭示截止取并发调用方中的最晚者：任一活动调用方的 delayMs 未过都
-      // 不揭示——后来者不会被前任已挂的定时器提前揭开，前任时序也不变。
-      const deadline = Date.now() + state.delayRemaining();
-      const merged =
-        h.revealDeadline === null
-          ? deadline
-          : Math.max(h.revealDeadline, deadline);
-      clearTimer(h.revealTimer);
-      h.revealTimer = null;
-      const wait = Math.max(0, merged - Date.now());
-      if (wait === 0) {
-        renderSafely(() => reveal(h));
-      } else {
-        h.revealDeadline = merged;
-        // 定时器回调里的渲染异常无人接住（会以 uncaught 上报），同样走兜底。
-        h.revealTimer = setTimeout(() => {
-          renderSafely(() => reveal(h));
-        }, wait);
-      }
+      // 揭示截止取并发活动调用方中的最晚者：任一活动调用方的 delayMs
+      // 未过都不揭示——后来者不会被前任已挂的定时器提前揭开，前任时序
+      // 也不变。已 close 的调用方已从 driverStack 摘除（见 close 分支）。
+      scheduleReveal(h);
     } else {
       // 已揭示：并发接管显示中的遮罩（refs>1），或淡出/最短可见延迟窗口内
       // 的复活。立即按本次调用方重渲染——从接管的瞬间起，title/hint/label
@@ -725,6 +744,9 @@ export function showProgressOverlay(
             // 而不是已结束的本调用方（否则遮罩会以"已结束任务"的文案挂到
             // 仍活动任务的全程）。
             h.driver = h.driverStack[h.driverStack.length - 1] ?? null;
+            // 尚未揭示时重算截止：已结束的长 delay 不得继续占着挂起定时器
+            // 把剩余调用方的遮罩拖到它的原截止时间。
+            if (!h.revealed) scheduleReveal(h);
             return;
           }
           // 关键：从未显示过时必须清掉延迟定时器，否则它会在 close 之后触发
