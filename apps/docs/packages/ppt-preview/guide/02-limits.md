@@ -9,6 +9,7 @@ Everything this package deliberately does **not** do, and every environment cons
 - Decryption details you must know:
   - SHA-512 key derivation and AES-CBC run **on the main thread** via WebCrypto — a secure context (HTTPS / localhost) is required, and it typically adds **~1s** before parsing (spinCount-driven).
   - The upstream decryptor does **not verify the HMAC data-integrity tag**; tampered ciphertext is not detected by that mechanism.
+  - `spinCount` is taken from the file and **not capped in v1**: a malicious or abnormal value blocks the main thread for seconds to minutes (a modified file with `spinCount=5,000,000` measured ~33 s). Validate untrusted files before previewing them.
 
 ## Loading semantics — lazy rendering ≠ lazy parsing
 
@@ -49,6 +50,7 @@ This package intentionally does not inject the engine's optional renderer module
 ## Workers & multi-instance memory
 
 - Each instance owns its parser Worker and a WASM instantiation. Multiple instances on one page multiply that cost — for example a main preview plus thumbnails. Main-thread rendering is serialized per instance, but parsing workers run concurrently.
+- **Upstream Blob-URL leak**: each instance creates a ~78 KB parser-worker Blob URL; the engine revokes it only on a worker error, and `destroy()` terminates the worker without revoking it. Repeated create/destroy cycles (tab switches, file changes) accumulate ~78 KB each until the page unloads. This is an upstream engine limitation tracked here; the worker itself is terminated correctly.
 - The two build-time warnings consumer bundlers may print about `pptx-source-worker.mjs` / `assets/render-worker-*.js` reference engine assets for the `mode: "worker"` rendering path and the legacy path — **this package never loads them** (`mode: "main"` fixed). The warnings are safe to ignore; suppressing them would require shipping ~2 MB of dead assets.
 - **Vite 5–7 dev server**: dependency pre-bundling moves the package into `.vite/deps/`, so the wasm URL resolves to a missing file (HTML fallback/404) and loading reports `UNKNOWN`. Add `optimizeDeps: { exclude: ["@marcusok/ppt-preview"] }`; production builds are unaffected. See the quick start.
 
@@ -59,7 +61,7 @@ Valid files that exceed the engine's archive budgets (entry size, total inflated
 ## Layout & sizing
 
 - `slideWidth` is fixed at creation; there is **no resize re-layout** — destroy and re-create.
-- `dpr` has no upper clamp: a large value multiplies the canvas bitmap quadratically (e.g. `dpr: 10` at the default 960-px width allocates ~9600×5400 bitmaps, ≈200 MB RGBA per slide). Only override it when you know the target displays.
+- `dpr` is clamped by the engine's pixel budget: each canvas is limited to ≤32767 px per side and ≤16,777,216 pixels total (e.g. `dpr: 10` at the default 960-px width yields 5461×3072, ≈64 MB RGBA per slide rather than 9600×5400). Only override it when you know the target displays.
 - Empty decks (`slideCount = 0`) load without error and never fire `onRendered` — but the engine instance (parser Worker + WASM) stays alive until `destroy()`. Destroy empty-deck previews you are done with instead of leaving them mounted.
 - SSR: the module can be imported on the server; `createPptPreview` must only run where `Worker` and WebCrypto exist.
 - **Containers must live in the main document** — the wrapper creates slide/canvas/text-layer nodes through the global `document` and injects its layout/text-layer stylesheet into `document.head`. Rendering into a ShadowRoot or an iframe document is not supported in this version (the injected CSS would not reach the nodes, breaking placeholder layout and text selection).

@@ -179,6 +179,29 @@ export class LazySlideRenderer {
     }
   }
 
+  /**
+   * 容器创建时不可见（display:none 的 tab 面板）时，class 定义的高度在
+   * 那一刻量不到，findScrollRoot 只能回退视口。容器变为可见并产生溢出后，
+   * 若仍不重探，导航会把滚动交给 window（滚动根错误），懒渲染也失去
+   * ±1 屏预载。这里只做 null → 真实滚动祖先的升级，并重建双 IO；
+   * 已有 root 时不重探，避免滚动过程中无谓重建。
+   */
+  private ensureScrollRoot(): void {
+    if (this.destroyed || this.scrollRoot !== null) return;
+    const root = findScrollRoot(this.container);
+    if (!root) return;
+    this.scrollRoot = root;
+    this.renderIO?.disconnect();
+    this.releaseIO?.disconnect();
+    this.renderIO = null;
+    this.releaseIO = null;
+    this.ensureObservers();
+    for (const e of this.entries) {
+      this.renderIO!.observe(e.el);
+      this.releaseIO!.observe(e.el);
+    }
+  }
+
   /** 串行队列：同一时刻最多 1 页在渲（scroll 洪峰限流）；离带/过期条目直接丢弃。 */
   private pump(): void {
     // 浏览器在 disconnect() 后仍可能投递已排队的 IO 回调；销毁后不得再
@@ -232,6 +255,8 @@ export class LazySlideRenderer {
 
   private async renderEntry(e: SlideEntry): Promise<void> {
     if (this.destroyed) return;
+    // 首次渲染意味着容器已可见：补一次滚动根探测（见 ensureScrollRoot）
+    this.ensureScrollRoot();
     e.state = "rendering";
     const tStart = performance.now();
     // canvas 由本模块创建：尺寸/挂载统一，释放路径（置 0 + remove）可控
@@ -266,6 +291,7 @@ export class LazySlideRenderer {
    */
   currentVisibleIndex(): number {
     if (this.entries.length === 0 || this.destroyed) return -1;
+    this.ensureScrollRoot();
     const viewTop = this.scrollRoot
       ? this.scrollRoot.getBoundingClientRect()
       : null;
@@ -295,6 +321,7 @@ export class LazySlideRenderer {
   scrollToIndex(index: number): void {
     const e = this.entries[index];
     if (!e || this.destroyed) return;
+    this.ensureScrollRoot();
     if (this.scrollRoot) {
       const rootRect = this.scrollRoot.getBoundingClientRect();
       const elRect = e.el.getBoundingClientRect();

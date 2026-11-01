@@ -626,6 +626,50 @@ describe("滚动祖先探测", () => {
     vi.unstubAllGlobals();
   });
 
+  it("隐藏创建后变为可见：滚动根从视口升级为面板，导航不再滚窗口", async () => {
+    // display:none 的 tab 面板（高度来自 class）在创建时量不到高度 →
+    // IO root=null；可见后首次交互必须重探，否则 goToSlide 滚 window。
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+    });
+    expect(renderIOs()[0].options?.root).toBeNull();
+
+    // 容器变为可见且成为真正的滚动容器（happy-dom 只看内联声明）
+    container.style.height = "400px";
+    container.style.overflowY = "auto";
+    container.scrollTop = 0;
+    const rects = new Map<Element, DOMRect>();
+    rects.set(container, new DOMRect(0, 0, 960, 400));
+    rects.set(pageAt(0), new DOMRect(0, 0, 960, 100));
+    rects.set(pageAt(1), new DOMRect(0, 120, 960, 100));
+    rects.set(pageAt(2), new DOMRect(0, 800, 960, 100));
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: Element) {
+        return rects.get(this) ?? new DOMRect();
+      });
+    const scrollBySpy = vi
+      .spyOn(window, "scrollBy")
+      .mockImplementation(() => {});
+
+    inst.goToSlide(1);
+
+    // 旧 IO 已断开、新 IO 绑定到面板
+    expect(renderIOs().at(-1)?.options?.root).toBe(container);
+    expect(releaseIOs().at(-1)?.options?.root).toBe(container);
+    expect(container.scrollTop).toBe(120);
+    expect(scrollBySpy).not.toHaveBeenCalled();
+
+    scrollBySpy.mockRestore();
+    rectSpy.mockRestore();
+    inst.destroy();
+    vi.unstubAllGlobals();
+  });
+
   it("无任何可判定祖先时回退视口（root:null）", async () => {
     vi.stubGlobal("IntersectionObserver", FakeIO);
     const outer = document.createElement("div");

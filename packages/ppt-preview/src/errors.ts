@@ -41,10 +41,12 @@ function errorCode(err: unknown): string | undefined {
 /** 资源限制类：message 带 limit/observed 详情，cause 保留原始错误。 */
 function limitError(err: unknown, label: string): PptPreviewError {
   const message = err instanceof Error ? err.message : String(err);
+  // label 以元音音素开头（archive / decoded image）时用 an
+  const article = /^(archive|image)\b/i.test(label) ? "an" : "a";
   return {
     code: "UNSUPPORTED",
     message:
-      `The file exceeds a ${label} budget and cannot be previewed safely. ` +
+      `The file exceeds ${article} ${label} budget and cannot be previewed safely. ` +
       `Details: ${message}`,
     cause: err,
   };

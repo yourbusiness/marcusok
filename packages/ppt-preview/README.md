@@ -7,7 +7,7 @@ Read-only `.pptx` preview in the browser: continuous scrolling with lazy per-sli
 - **Lazy continuous scroll** — slides render as they approach the viewport (±1 screen) and release their canvas memory beyond ±3 screens; placeholders are sized by the deck's aspect ratio (no scrollbar jumps).
 - **Text layer in one pass** — text runs are collected during the same render pass as the canvas paint (no double rendering); select and copy like real text. `enableTextSelection: false` for pure canvas.
 - **0-based navigation** — `goToSlide` / `nextSlide` / `prevSlide` track the most visible slide; hidden slides are all shown and counted in the original deck order.
-- **Encrypted files decryptable** — MS-OFFCRYPTO Agile ("password to open") via WebCrypto; missing vs. wrong passwords are distinguishable error codes. Main-thread decryption, ~+1s (spinCount-driven), secure context required.
+- **Encrypted files decryptable** — MS-OFFCRYPTO Agile ("password to open") via WebCrypto; missing vs. wrong passwords both report `PASSWORD_PROTECTED`, with distinct messages. Main-thread decryption, ~+1s (spinCount-driven), secure context required.
 - **Hardened defaults** — format sniffing before the engine, defensive copies of your input bytes (the parser transfers its buffer), inert hyperlinks, media as static posters, normalized error codes (`UNSUPPORTED` / `LEGACY_FORMAT` / `PASSWORD_PROTECTED` / `CORRUPT` / `UNKNOWN`).
 
 ## Install
@@ -16,7 +16,7 @@ Read-only `.pptx` preview in the browser: continuous scrolling with lazy per-sli
 pnpm add @marcusok/ppt-preview
 ```
 
-ESM-only, Node >= 22. The engine (~2.5 MB JS) and parser wasm (~2 MB, ~800 KB gzipped) ship inside `dist`. Production builds (Vite 8+, webpack 5) emit the wasm with **zero configuration**; two build-time warnings about worker assets are expected and safe to ignore (they reference the engine's worker-mode/legacy paths this package never loads — see the docs' Limits page). **Vite 5–7's dev server pre-bundles dependencies** and breaks the wasm URL — add `optimizeDeps: { exclude: ["@marcusok/ppt-preview"] }` (see the docs quick start). The preview container must live in the main document — ShadowRoot and iframe documents are not supported (the layout/text-layer stylesheet is injected into `document.head`).
+ESM-only, Node >= 22. The engine (~2.5 MB JS) and parser wasm (~2 MB, ~800 KB gzipped) ship inside `dist`. Production builds (Vite 5+, webpack 5) emit the wasm with **zero configuration**; two build-time warnings about worker assets are expected and safe to ignore (they reference the engine's worker-mode/legacy paths this package never loads — see the docs' Limits page). **Vite 5–7's dev server pre-bundles dependencies** and breaks the wasm URL — add `optimizeDeps: { exclude: ["@marcusok/ppt-preview"] }` (see the docs quick start). The preview container must live in the main document — ShadowRoot and iframe documents are not supported (the layout/text-layer stylesheet is injected into `document.head`).
 
 ## Usage
 
@@ -50,7 +50,7 @@ Node parsing baseline (regression gate in `performance.test.ts`): 200-slide full
 
 ## Limitations (v1)
 
-Legacy `.ppt`, animations/transitions, media playback, clickable hyperlinks and container resize re-layout are out of scope; optional engine renderers (MathJax, TIFF, ChartEx, 3-D, Region Maps) are not injected and degrade gracefully. Full list on the [docs Limits page](https://yourbusiness.github.io/marcusok/packages/ppt-preview/guide/02-limits).
+Legacy `.ppt`, animations/transitions, media playback, clickable hyperlinks and container resize re-layout are out of scope; optional engine renderers (MathJax, TIFF, ChartEx, 3-D, Region Maps) are not injected and degrade gracefully. Two upstream caveats are documented on the limits page: each engine instance leaves its ~78 KB parser-worker Blob URL un-revoked (creating/destroying previews accumulates them), and the encrypted-file `spinCount` is taken from the file without a v1 cap (a malicious value can stall the main thread). Full list on the [docs Limits page](https://yourbusiness.github.io/marcusok/packages/ppt-preview/guide/02-limits).
 
 ## Documentation
 

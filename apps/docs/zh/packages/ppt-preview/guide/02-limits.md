@@ -9,6 +9,7 @@
 - 解密的必知细节：
   - SHA-512 密钥派生与 AES-CBC 在**主线程**经 WebCrypto 执行 —— 需要安全上下文（HTTPS / localhost），通常在解析前增加**约 1s**（由 spinCount 决定）。
   - 上游解密**不校验 HMAC 数据完整性标签**；密文被篡改不会通过该机制被发现。
+  - `spinCount` 直接取自文件，**v1 没有上限**：恶意或异常值会让主线程停顿数秒到数分钟（把 `spinCount` 改为 5,000,000 的样本实测约 33s）。不可信文件建议先校验再预览。
 
 ## 加载语义 —— 懒渲染 ≠ 懒解析
 
@@ -49,6 +50,7 @@
 ## Worker 与多实例内存
 
 - 每个实例独占一个解析 Worker 与一份 WASM 实例化。同页多实例按倍数叠加该成本 —— 例如主预览 + 缩略图。每实例的主线程渲染是串行的，但各解析 Worker 并发运行。
+- **上游 Blob URL 泄漏**：每个实例会创建一个约 78 KB 的解析 worker Blob URL；引擎只在 worker error 时 revoke，`destroy()` 会 terminate worker 但不 revoke。反复 create/destroy（切 tab、换文件）会按约 78 KB/次累积到页面卸载。这是上游引擎的限制，Worker 本身已正确终止。
 - 消费方 bundler 可能打印的两条关于 `pptx-source-worker.mjs` / `assets/render-worker-*.js` 的构建警告，指向引擎 `mode: "worker"` 渲染路径与 legacy 路径的资产 —— **本包永不加载它们**（固定 `mode: "main"`）。警告可安全忽略；消除它们反而需要随包多发约 2 MB 死资产。
 
 ## 资源预算
@@ -58,7 +60,7 @@
 ## 布局与尺寸
 
 - `slideWidth` 创建时定型；**无 resize 重排** —— destroy 后重建。
-- `dpr` 没有上限钳制：过大的值会按平方放大 canvas 位图（例如默认 960px 宽下设置 `dpr: 10`，每页会分配约 9600×5400 的位图，RGBA 约占 200 MB）。只有明确目标显示设备时才应覆盖。
+- `dpr` 由引擎的像素预算钳制：单张 canvas 每边 ≤32767px、总面积 ≤16,777,216 像素（例如默认 960px 宽下设置 `dpr: 10` 得到 5461×3072，RGBA 约 64 MB/页，而不是 9600×5400）。只有明确目标显示设备时才应覆盖。
 - 空 deck（`slideCount = 0`）加载不报错，也不触发 `onRendered`；但引擎实例（解析 Worker + WASM）会一直存活到 `destroy()`。不再使用空 deck 预览时应销毁，不要只让它保持挂载。
 - SSR：模块可在服务端 import；`createPptPreview` 只能在存在 `Worker` 与 WebCrypto 的环境执行。
 - **容器必须位于主文档**——本包通过全局 `document` 创建幻灯片/canvas/文本层节点，并把布局与文本层样式表注入 `document.head`。本版本不支持渲染进 ShadowRoot 或 iframe 文档（注入的 CSS 到不了节点，占位布局与文本选择会失效）。

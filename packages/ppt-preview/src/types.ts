@@ -110,10 +110,10 @@ export interface PptPreviewOptions {
    *   解密、**全 deck preflight** 与渲染——非渐进加载会预检全部页，
    *   懒渲染只延迟绘制，不等于懒解析）。
    *
-   * 每实例最多触发一次，由首张**成功**页触发；全部页失败、空 deck
-   * （slideCount=0），或容器在创建时不可见/尺寸为 0（例如 `display:none`
-   * 的 tab 面板，占位永远进不了渲染带）都不触发。等容器可见后
-   * IntersectionObserver 才会开始渲染并触发回调。
+   * 每实例最多触发一次，由首张**成功**页触发；全部页失败或空 deck
+   * （slideCount=0）不触发。容器在创建时不可见/尺寸为 0（例如
+   * `display:none` 的 tab 面板）时不会立即触发；容器可见后
+   * IntersectionObserver 开始渲染并触发（durationMs 包含隐藏等待）。
    */
   onRendered?: (info: PptRenderedInfo) => void;
   /** 错误回调。destroy 触发的取消静默，不报错；destroy 后回调静默。 */
