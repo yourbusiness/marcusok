@@ -4,8 +4,8 @@
 
 - **懒渲染管线**——页面进入 1 屏预载带即渲染，离开 3 屏保留带即释放 canvas。快速滚动长文档时只渲染最终停留的页；已入队但不再需要的页会在开渲前被丢弃。
 - **单页串行**——每实例同时最多渲染一页（滚动洪峰不会并发引爆 canvas 工作），滚动交错时按观察器上报顺序处理。
-- **占位精度**——每页占位按该页自身 viewport 计算，混合尺寸文档（如 US Letter + A4 横向）不会出现滚动条跳动。全部页代理在挂载后立即预取，滚动总高一次成型。
-- **清晰度**——canvas 按 `devicePixelRatio` 分辨率绘制、CSS 尺寸占位，与官方 viewer 同款。
+- **占位精度**——每页占位按该页自身 viewport 计算，混合尺寸文档（如 US Letter + A4 横向）不会出现滚动条跳动。首页立即可滚动；其余占位（因此完整的滚动总高）要等挂载后对全部页的并行 `getPage` 预取完成才出现——超长文档上这段预取会有可感知的等待。
+- **清晰度**——canvas 按 `devicePixelRatio` 分辨率绘制、CSS 尺寸占位，与官方 viewer 同款；但单页受官方 viewer 的约 524 万像素预算约束，超大幅面页会降低位图 DPR，而不是分配超大 canvas。
 - **缩放只解析一次**——`fit-*` 在 create 时量测容器的内容盒（已扣除 padding）；`fit-page` 还会预留 wrapper 的 24px 上下 padding，保证整页落入容器而不产生滚动条。`fit-page` 需要可量测且高度受约束的容器（定高、`max-height` 或 flex 解析出的高度）；高度随内容增长的容器里量到的不是视口高度，请给定高或改用 `fit-width`。容器尺寸变化不会自动重排。`fit-width` 按**首页**宽度求缩放比，后续页更宽的混合尺寸文档可能横向溢出。
 - **容器必须位于主文档**——本包通过全局 `document` 创建页面/canvas/文本层节点，并把布局与文本层样式表注入 `document.head`。本版本不支持渲染进 ShadowRoot 或 iframe 文档（注入的 CSS 到不了节点，页面布局与文本选择会失效）。
 - **滚动条时机**——`fit-width` 的量测发生在页占位存在**之前**，即滚动容器出现竖向滚动条之前。在经典（非 overlay）滚动条平台上，内容盒随后收窄一个滚动条宽（约 15–17px），居中的页面可能横向溢出这一宽度。重新 create 无济于事（空态下重新量测复现同样问题）。在意的话给容器加 `scrollbar-gutter: stable` 或在布局中预留 gutter。
@@ -51,10 +51,12 @@ pdf.js 的 wasm 资产（`jbig2.wasm`、`openjpeg.wasm`、`qcms_bg.wasm`）与 I
 - `style-src`（样式表层）—— pdf.js 的 FontLoader 运行时向 `adoptedStyleSheets` 或 `<head><style>` 注入 `@font-face` 规则。这是上游行为，**不在**本包 `styleNonce` 的覆盖范围。
 - `style-src-attr 'unsafe-inline'` —— 文本层 span 与页占位使用内联 `style` 属性（`styleNonce` 只覆盖本包自己注入的样式表）。
 - `worker-src`/`script-src` —— pdf.js worker 是同源（或你指定的 `workerSrc` 位置）加载的 module worker；跨源 `workerSrc` 会让 pdf.js 用 blob worker 包一层 import。
+- `connect-src` —— cmaps、标准字体与可选的 `wasmUrl`/`iccUrl` 资产由 worker 发起 fetch。需放行其实际来源（自托管跨源或 CDN 时尤其重要），否则中文文本与字体回退会**静默**劣化（不触发 `onError`）。
 
 ## 内存
 
 - 被释放的页会取消在途文本层流、将 canvas 位图清零（`width = height = 0`）、移除文本层 DOM，并调用 pdf.js 的 `page.cleanup()` 释放主线程 operator list / objs；重新进入视口时按需重渲（不重复解析 PDF）。
+- 单页 canvas 位图上限约 524 万像素（pdf.js 自身的 `maxCanvasPixels`）：大幅面页 + 高 DPR 时自动降低位图 DPR，而不是分配超大 canvas。pdf.js 的文本层静态测量缓存会在最后一个预览实例销毁时清理。
 - `destroy()` 还会取消在途渲染任务与文本流、清零已渲染 canvas，并在摘除前清空 wrapper。
 - 文档代理与 worker 存活到 `destroy()` 为止；从 DOM 移除预览但不 `destroy()` 会泄漏 worker。文档级加载失败（`onError` 路径）会自行立即终止 worker——只有成功挂载的预览才会持有 worker。
 - 全页代理预取（占位尺寸需要）会让每页代理在文档生命周期内保留——这是 pdf.js `getPage` 缓存的正常行为；canvas 位图与 operator list 不会累积，因为释放时会清理。

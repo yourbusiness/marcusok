@@ -39,14 +39,14 @@ preview.destroy();
 
 ## Asset wiring — the one thing to get right
 
-The worker is located by a `new URL("./pdf.worker.min.mjs", import.meta.url)` literal. Production builds of Vite (8+), webpack 5 and similar pipelines rewrite the expression and emit the worker as a base-aware hashed asset — **zero config** for the worker in build mode, and correct as-is for direct ESM/CDN consumption of the package `dist`. **Vite 5–7's dev server is different** — see the caveat below.
+The worker is located by a `new URL("./pdf.worker.min.mjs", import.meta.url)` literal. Production builds of Vite (5+), webpack 5 and similar pipelines rewrite the expression and emit the worker as a base-aware hashed asset — **zero config** for the worker in build mode, and correct as-is for direct ESM/CDN consumption of the package `dist`. **Vite 5–7's dev server is different** — see the caveat below.
 
 `cmaps/` and `standard_fonts/` are **directories** — bundlers never copy those. What works per scenario:
 
 | Scenario                                        | Worker                                                                                               | cmaps / standard_fonts                                                                                         |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Direct ESM / CDN import of the package          | resolved from `dist`                                                                                 | derived from the worker URL (same directory) — works as-is                                                     |
-| Vite 8+ / webpack 5, defaults                   | emitted automatically ✅                                                                             | derived URL points into the hashed-assets directory → **404, silent CJK degradation** ❌                       |
+| Vite 5+ / webpack 5 production build, defaults  | emitted automatically ✅                                                                             | derived URL points into the hashed-assets directory → **404, silent CJK degradation** ❌                       |
 | Vite 5–7 dev server, npm install                | pre-bundled copy points into `.vite/deps` → **404** ❌                                               | derived URL is wrong for the same reason ❌                                                                    |
 | Vite + `vite-static-copy` / webpack + copy plug | emitted automatically ✅                                                                             | copy `dist/cmaps` + `dist/standard_fonts` to your public dir, pass explicit `cMapUrl`/`standardFontDataUrl` ✅ |
 | Self-hosting (serve the files yourself)         | a real served URL — e.g. `import workerSrc from "@marcusok/pdf-preview/dist/pdf.worker.min.mjs?url"` | serve `dist/cmaps/` + `dist/standard_fonts/` and pass their URLs ✅                                            |
@@ -58,7 +58,7 @@ The worker is located by a `new URL("./pdf.worker.min.mjs", import.meta.url)` li
 > export default { optimizeDeps: { exclude: ["@marcusok/pdf-preview"] } };
 > ```
 >
-> With the exclusion, Vite serves the package's ESM output and assets directly from `node_modules`, so `import.meta.url` points back at the real `dist/`. Production builds are unaffected. (Vite 8's rolldown-based optimizer rewrites the literal correctly; the docs site uses linked workspace packages, which are not pre-bundled, so it does not exercise this npm-install path.)
+> With the exclusion, Vite serves the package's ESM output and assets directly from `node_modules`, so `import.meta.url` points back at the real `dist/`. Production builds of every Vite 5+ version are unaffected (they rewrite the literal correctly); only the dev pre-bundler is the exception. The docs site uses linked workspace packages, which are not pre-bundled, so it does not exercise this npm-install path.
 
 The recommended bundler setup (Vite):
 

@@ -39,14 +39,14 @@ preview.destroy();
 
 ## 资产接入——唯一必须做对的事
 
-worker 通过 `new URL("./pdf.worker.min.mjs", import.meta.url)` 字面量定位。Vite（8+）、webpack 5 等管道的**生产构建**会改写该表达式并把 worker emit 为带 base 的哈希资产——build 模式零配置；直接以 ESM/CDN 引用包 `dist` 时也天然正确。**Vite 5–7 的 dev server 不同**——见下方注意事项。
+worker 通过 `new URL("./pdf.worker.min.mjs", import.meta.url)` 字面量定位。Vite（5+）、webpack 5 等管道的**生产构建**会改写该表达式并把 worker emit 为带 base 的哈希资产——build 模式零配置；直接以 ESM/CDN 引用包 `dist` 时也天然正确。**Vite 5–7 的 dev server 不同**——见下方注意事项。
 
 `cmaps/` 与 `standard_fonts/` 是**目录**——bundler 不会复制目录。分场景：
 
 | 场景                                            | Worker                                                                                         | cmaps / standard_fonts                                                                              |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | 直接 ESM / CDN 引用包                           | 从 `dist` 解析                                                                                 | 从 worker URL 推导同层目录——开箱即用                                                                |
-| Vite 8+ / webpack 5 默认                        | 自动 emit ✅                                                                                   | 推导 URL 落在哈希资产目录内 → **404、中文静默劣化** ❌                                              |
+| Vite 5+ / webpack 5 生产构建（默认）            | 自动 emit ✅                                                                                   | 推导 URL 落在哈希资产目录内 → **404、中文静默劣化** ❌                                              |
 | Vite 5–7 dev server（npm 安装）                 | 预打包副本指向 `.vite/deps` → **404** ❌                                                       | 推导 URL 因同一原因失效 ❌                                                                          |
 | Vite + `vite-static-copy` / webpack + copy 插件 | 自动 emit ✅                                                                                   | 把 `dist/cmaps` + `dist/standard_fonts` 拷到 public 目录，显式传 `cMapUrl`/`standardFontDataUrl` ✅ |
 | 自托管（自己提供文件）                          | 真实可访问 URL——如 `import workerSrc from "@marcusok/pdf-preview/dist/pdf.worker.min.mjs?url"` | 提供 `dist/cmaps/` + `dist/standard_fonts/` 的 URL 并显式传入 ✅                                    |
@@ -58,7 +58,7 @@ worker 通过 `new URL("./pdf.worker.min.mjs", import.meta.url)` 字面量定位
 > export default { optimizeDeps: { exclude: ["@marcusok/pdf-preview"] } };
 > ```
 >
-> 排除后 Vite 直接从 `node_modules` 提供包的 ESM 产物与资产，`import.meta.url` 重新指向真实 `dist/`。生产构建不受影响。（Vite 8 的 rolldown 预打包会正确改写该字面量；文档站使用 workspace 链接包、不参与预打包，因此不会走到 npm 安装形态。）
+> 排除后 Vite 直接从 `node_modules` 提供包的 ESM 产物与资产，`import.meta.url` 重新指向真实 `dist/`。Vite 5+ 各版本的生产构建均不受影响（都会正确改写该字面量），只有 dev 预打包是例外。文档站使用 workspace 链接包、不参与预打包，因此不会走到 npm 安装形态。
 
 推荐的 bundler 配置（Vite）：
 

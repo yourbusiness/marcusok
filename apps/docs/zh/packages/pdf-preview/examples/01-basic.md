@@ -4,24 +4,20 @@
 
 ```tsx
 import { useEffect, useRef, useState } from "react";
-import {
-  createPdfPreview,
-  type PdfPreviewInstance,
-} from "@marcusok/pdf-preview";
+import { createPdfPreview } from "@marcusok/pdf-preview";
 
 export function PdfPanel({ file }: { file: File }) {
   const ref = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<PdfPreviewInstance | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
+    setError(null); // 新文件从干净状态开始，旧错误不得残留
     const preview = createPdfPreview(ref.current, {
       source: file,
       scale: "fit-width",
       onError: (e) => setError(`${e.code}: ${e.message}`),
     });
-    previewRef.current = preview;
     return () => preview.destroy(); // 取消在途任务 + 终止 worker
   }, [file]);
 

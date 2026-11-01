@@ -18,9 +18,9 @@ import { getDocument } from "pdfjs-dist";
 import type { PDFDocumentLoadingTask } from "pdfjs-dist";
 import { makePdfBytes, STANDARD_FONT_DATA_URL } from "./fixtures";
 
-// 仓库各发布包统一口径：本地阈值即产品 SLA（PERF_SLACK 缺省 1）；CI /
-// release / pre-push 设 RUN_PERF=0 跳过；release.yml 以 PERF_SLACK=4 给
-// 共享 runner 宽限。机器高负载偶发失败先复跑排除抖动。
+// 仓库各发布包统一口径：本地阈值即产品 SLA（PERF_SLACK 缺省 1）；CI 与
+// pre-push 设 RUN_PERF=0 跳过；release.yml 以 PERF_SLACK=4 给共享 runner
+// 宽限、性能门照跑。机器高负载偶发失败先复跑排除抖动。
 const SLACK = Number(process.env.PERF_SLACK ?? "1") || 1;
 const RUN_PERF = process.env.RUN_PERF !== "0";
 

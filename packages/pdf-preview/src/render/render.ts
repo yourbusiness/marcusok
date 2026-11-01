@@ -51,7 +51,30 @@ const RENDER_MARGIN = "100% 0px 100% 0px";
  * 缓冲区避免快速滚动时的渲染/释放抖动。 */
 const RELEASE_MARGIN = "300% 0px 300% 0px";
 
+/**
+ * 单 canvas 像素预算，与 pdf.js 官方 viewer 的 `maxCanvasPixels`
+ * （5_242_880 ≈ 5M）一致。DPR 放大不能无上限：2000px 宽容器 + DPR 2 的
+ * Letter 页会产生 4000×5176 位图（RGBA ≈ 83MB/页），多页保留时直接撞
+ * iOS Safari 单 canvas 面积上限 / 浏览器分配上限——渲染失败还会被归一成
+ * “PDF 损坏”。超预算时按比例回退实际输出倍率（位图缩小，CSS 尺寸不变）。
+ */
+export const MAX_CANVAS_PIXELS = 5_242_880;
+
+/** 计算 canvas 实际输出倍率：min(dpr, sqrt(预算 / CSS 面积))。 */
+export function computeOutputScale(
+  cssWidth: number,
+  cssHeight: number,
+  dpr: number,
+): number {
+  const area = Math.max(1, cssWidth * cssHeight);
+  return Math.min(dpr, Math.sqrt(MAX_CANVAS_PIXELS / area));
+}
+
 type PageState = "empty" | "queued" | "rendering" | "rendered";
+
+/** 活跃预览实例数：TextLayer.cleanup() 是文档级静态清理，最后一个实例
+ * 销毁时才调用（见 createPdfPreview 的 releaseGlobalTextLayerCaches）。 */
+let activePreviewInstances = 0;
 
 /**
  * 判断滚动祖先是否真的可能裁剪内容，而不是"随内容一起长高"的 overflow:auto
@@ -69,10 +92,14 @@ function hasDefiniteHeight(
   style: CSSStyleDeclaration,
 ): boolean {
   const inlineHeight = el.style.height;
-  const inlineMaxHeight = el.style.maxHeight;
+  // 百分比 max-height 在父级高度 auto 时同样不定高（如 max-height:100%
+  // 的内容驱动包装层）——把它当作定高会误选 root，让预载带覆盖整份文档、
+  // 懒渲染退化成全量渲染。
+  const definiteMax = (value: string | undefined): boolean =>
+    Boolean(value && value !== "none" && !value.trim().endsWith("%"));
   return Boolean(
-    (style.maxHeight && style.maxHeight !== "none") ||
-    (inlineMaxHeight && inlineMaxHeight !== "none") ||
+    definiteMax(style.maxHeight) ||
+    definiteMax(el.style.maxHeight) ||
     // 百分比高度在父级高度 auto 时并不定高，不能作为"会滚动"的证据
     (inlineHeight && inlineHeight !== "auto" && !inlineHeight.endsWith("%")) ||
     (el.clientHeight > 0 && el.scrollHeight > el.clientHeight),
@@ -156,13 +183,17 @@ function fitPageContentHeight(el: HTMLElement, contentHeight: number): number {
   const maxHeight = /^(\d+(?:\.\d+)?)px$/.exec(style?.maxHeight ?? "");
   let height = contentHeight;
   if (maxHeight) {
+    const limit = Number(maxHeight[1]);
+    // max-height 的参照盒随 box-sizing 变化：content-box（默认）下它限制
+    // 内容盒，padding 不在其中，不能再扣一次；border-box 才需要扣除
+    // 容器自身 padding（contentHeight 已是内容盒，同样不能重复扣）。
     const paddingY =
       Number.parseFloat(style?.paddingTop ?? "0") +
       Number.parseFloat(style?.paddingBottom ?? "0");
-    height = Math.max(
-      0,
-      Number(maxHeight[1]) - (Number.isFinite(paddingY) ? paddingY : 0),
-    );
+    height =
+      style?.boxSizing === "border-box"
+        ? Math.max(0, limit - (Number.isFinite(paddingY) ? paddingY : 0))
+        : limit;
   }
   return Math.max(0, height - ROOT_VERTICAL_PADDING_PX);
 }
@@ -186,23 +217,31 @@ interface PageEntry {
 
 // pdf.js 的 GetDocRequest 以 [data.buffer] 为 transfer list（pdf.mjs 源码
 // 实证），transfer 后调用方持有的字节立即 detach（length=0）。字节型
-// source 必须复制一份再交给引擎——否则同一 source 二次 create（本包文档
-// 倡导的"重 create 即可"路径）会在 sniff 阶段读到空字节、以
-// "File is empty." 假报错失败。复制成本一次性（MB 级 <2ms），远小于解析
-// 成本；File/Blob 每次 arrayBuffer() 都是新读，无需复制。
-async function toBytes(source: PdfSource): Promise<Uint8Array> {
+// source 必须在 sniff 通过后复制一份再交给引擎——否则同一 source 二次
+// create（本包文档倡导的"重 create 即可"路径）会在 sniff 阶段读到空字节、
+// 以 "File is empty." 假报错失败。File/Blob 每次 arrayBuffer() 都是新读，
+// 其 buffer 可直接交给引擎（owned=true，无需第二次复制）。
+interface SourceBytes {
+  /** 原始字节视图（字节型 source 不复制，仅供 sniff 使用）。 */
+  view: Uint8Array;
+  /** 底层 buffer 是否为本包独占（Blob 分支为 true，可直接 transfer）。 */
+  owned: boolean;
+}
+
+async function readSource(source: PdfSource): Promise<SourceBytes> {
   // 跨 realm 判定（见下方注释）：instanceof 对 iframe/vm 的 TypedArray
   // 恒为 false，会让源落到 `.arrayBuffer()`（Uint8Array 无此方法）。
   if (ArrayBuffer.isView(source)) {
-    return new Uint8Array(
-      source.buffer,
-      source.byteOffset,
-      source.byteLength,
-    ).slice();
+    return {
+      view: new Uint8Array(source.buffer, source.byteOffset, source.byteLength),
+      owned: false,
+    };
   }
-  if (isArrayBuffer(source)) return new Uint8Array(source).slice();
+  if (isArrayBuffer(source)) {
+    return { view: new Uint8Array(source), owned: false };
+  }
   const buf = await source.arrayBuffer();
-  return new Uint8Array(buf);
+  return { view: new Uint8Array(buf), owned: true };
 }
 
 /** 跨 realm ArrayBuffer 判定（instanceof 不可靠，用内部标签）。 */
@@ -343,6 +382,23 @@ export function createPdfPreview(
   wrapper.className = ROOT_CLASS;
   container.appendChild(wrapper);
 
+  // 文档级 TextLayer 测量缓存的活跃实例计数（见 releaseGlobalTextLayerCaches）
+  activePreviewInstances += 1;
+  let globalCachesReleased = false;
+  function releaseGlobalTextLayerCaches(): void {
+    if (globalCachesReleased) return;
+    globalCachesReleased = true;
+    activePreviewInstances = Math.max(0, activePreviewInstances - 1);
+    if (activePreviewInstances > 0) return;
+    const cleanup = (TextLayer as unknown as { cleanup?: () => void }).cleanup;
+    if (typeof cleanup !== "function") return;
+    try {
+      cleanup();
+    } catch (err) {
+      console.warn("[pdf-preview] TextLayer.cleanup failed; ignoring", err);
+    }
+  }
+
   const pages: PageEntry[] = [];
   const queue: PageEntry[] = [];
   let loadingTask: PDFDocumentLoadingTask | null = null;
@@ -369,10 +425,11 @@ export function createPdfPreview(
     render: IntersectionObserver;
     release: IntersectionObserver;
   } | null = null;
+  /** 当前观察器使用的滚动根（null = 视口）；用于重探时判断是否真的变化。 */
+  let observedRoot: HTMLElement | null = null;
 
-  function ensureObservers(): void {
-    if (observers) return;
-    const scrollRoot = findScrollRoot(container);
+  function createObservers(scrollRoot: HTMLElement | null): void {
+    observedRoot = scrollRoot;
     observers = {
       render: new IntersectionObserver(
         (entries) => {
@@ -412,6 +469,31 @@ export function createPdfPreview(
         { root: scrollRoot, rootMargin: RELEASE_MARGIN },
       ),
     };
+  }
+
+  function ensureObservers(): void {
+    if (observers) return;
+    createObservers(findScrollRoot(container));
+  }
+
+  /**
+   * 重探滚动根：观察器在首个占位后创建，若首页尚未撑出溢出（fit-page
+   * 固定高面板、高而窄的容器），root 会永久停在视口，1 屏预载带塌缩成
+   * 可视框（页面滚到眼前才渲染、离开即释放，滚动弹入/抖渲染）。全部占位
+   * 插入后、以及首次渲染（意味着容器已可见）时再探测一次；root 变化才
+   * 重建观察器，保持"root 不随滚动漂移"。
+   */
+  function refreshScrollRoot(): void {
+    if (!observers) return;
+    const root = findScrollRoot(container);
+    if (root === observedRoot) return;
+    observers.render.disconnect();
+    observers.release.disconnect();
+    createObservers(root);
+    for (const e of pages) {
+      observers.render.observe(e.el);
+      observers.release.observe(e.el);
+    }
   }
 
   /** 串行队列：同一时刻最多 1 页在渲（scroll 洪峰限流）；离带/过期条目直接丢弃。 */
@@ -478,9 +560,20 @@ export function createPdfPreview(
     e.state = "empty";
     e.pendingRelease = false;
     cleanupPage(e);
+    // 两个观察器的回调顺序没有跨观察器保证：releaseIO 的“离带”可能晚于
+    // renderIO 的“回带”到达（主线程被绘制阻塞时常见）。若此时 wanted 已
+    // 为 true，必须立即重新入队——否则该页停在 empty 且不会再有交叉事件，
+    // 永久空白。
+    if (e.wanted) {
+      e.state = "queued";
+      queue.push(e);
+      pump();
+    }
   }
 
   async function renderEntry(e: PageEntry): Promise<void> {
+    // 首次渲染说明容器已可见：补一次滚动根探测（见 refreshScrollRoot）
+    refreshScrollRoot();
     e.state = "rendering";
     const tStart = performance.now();
     try {
@@ -503,8 +596,15 @@ export function createPdfPreview(
         typeof devicePixelRatio === "number" && devicePixelRatio > 0
           ? devicePixelRatio
           : 1;
-      canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
-      canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+      // 高分屏按 dpr 放大位图、CSS 尺寸不变；但受官方 viewer 同款像素预算
+      // 约束（见 computeOutputScale），避免宽页 + 高 DPR 生成超大位图。
+      const outputScale = computeOutputScale(
+        viewport.width,
+        viewport.height,
+        dpr,
+      );
+      canvas.width = Math.max(1, Math.floor(viewport.width * outputScale));
+      canvas.height = Math.max(1, Math.floor(viewport.height * outputScale));
       canvas.style.width = `${cssW}px`;
       canvas.style.height = `${cssH}px`;
       e.canvas = canvas;
@@ -513,8 +613,10 @@ export function createPdfPreview(
       const task = page.render({
         canvas,
         viewport,
-        // 高分屏按 dpr 放大位图、CSS 尺寸不变（官方 viewer 同款做法）
-        transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+        transform:
+          outputScale !== 1
+            ? [outputScale, 0, 0, outputScale, 0, 0]
+            : undefined,
       });
       e.task = task;
       await task.promise;
@@ -643,12 +745,16 @@ export function createPdfPreview(
     loadingTask = null;
     wrapper.replaceChildren();
     wrapper.remove();
+    // pdf.js 的 TextLayer 把测量 canvas 与 ascent 缓存挂在模块级静态表上，
+    // 只有静态 cleanup() 会移除；最后一个实例销毁时统一回收（多实例期间
+    // 调用会清掉仍存活实例的缓存）。
+    releaseGlobalTextLayerCaches();
   }
 
   const boot = async (): Promise<void> => {
-    let bytes: Uint8Array;
+    let sourceBytes: SourceBytes;
     try {
-      bytes = await toBytes(options.source);
+      sourceBytes = await readSource(options.source);
     } catch (err) {
       if (destroyed) return;
       teardown();
@@ -675,13 +781,18 @@ export function createPdfPreview(
         return;
       }
 
-      const sniffed = sniffPdf(bytes);
+      // sniff 只读前 1024 字节：直接在原视图上做，非法输入无需先付整份
+      // 复制成本；字节型 source 的独立副本在 sniff 通过后再建立。
+      const sniffed = sniffPdf(sourceBytes.view);
       if (!sniffed.ok) {
         teardown();
         onError?.(sniffed.error);
         return;
       }
       if (destroyed) return;
+      const bytes = sourceBytes.owned
+        ? sourceBytes.view
+        : sourceBytes.view.slice();
 
       // 资产 URL 配置错误属调用方输入问题（UNKNOWN），不要落到 CORRUPT
       let urls: PdfAssetUrls;
@@ -740,6 +851,13 @@ export function createPdfPreview(
           resolvedScale = cw / base.width;
         } else {
           const fitHeight = fitPageContentHeight(container, ch);
+          if (fitHeight <= 0) {
+            // 高度不可量测（auto 高容器）：继续会静默退化成 fit-width，
+            // 与 0 宽的显式警告不对称，调用方无从发现模式已变。
+            console.warn(
+              "[pdf-preview] fit-page: container has no measurable height; falling back to fit-width.",
+            );
+          }
           resolvedScale = Math.min(
             cw / base.width,
             fitHeight > 0 ? fitHeight / base.height : Infinity,
@@ -762,6 +880,9 @@ export function createPdfPreview(
         if (destroyed) return;
         for (const p of proxies) createPageEntry(p.pageNumber, p);
       }
+      // 全部占位就位后重探滚动根：首页未撑出溢出时，观察器会永久绑定
+      // 视口（见 refreshScrollRoot）。
+      refreshScrollRoot();
     } catch (err) {
       if (destroyed) return;
       teardown();

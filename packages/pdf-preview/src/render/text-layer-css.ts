@@ -26,14 +26,23 @@ export const ROOT_VERTICAL_PADDING_PX = ROOT_PADDING_Y * 2;
 
 const CSS = `
 .${ROOT_CLASS} {
-  /* 连续滚动容器：页垂直堆叠、水平居中（PDF 允许逐页尺寸不同） */
+  /* 连续滚动容器：页垂直堆叠、水平居中（PDF 允许逐页尺寸不同）。
+   * safe center：页宽超过容器时按 start 对齐，左边界不会落到负坐标——
+   * 普通 center 下 scrollLeft 无法为负，页面左侧内容永久不可达（只提示
+   * 横向溢出、却没提示左侧被裁掉）。 */
   display: flex;
   flex-direction: column;
+  /* 旧内核不认识 safe 关键字：先声明 center 兜底，再声明 safe center
+   * （不支持的实现会忽略后者，保留前一条）。 */
   align-items: center;
+  align-items: safe center;
   gap: 12px;
   padding: ${ROOT_PADDING_Y}px 0;
 }
 .${PAGE_CLASS} {
+  /* 页占位不参与 flex 收缩：高度受限的父级里 flex 默认 shrink 会压扁
+   * 页面，canvas 位图与占位尺寸随之错位。 */
+  flex: none;
   /* 官方 viewer 的 .page 变量链：JS 侧按页写 --scale-factor（viewport.scale），
    * 文本层 span 的内联样式按 --total-scale-factor 计算字号与坐标 */
   --user-unit: 1;

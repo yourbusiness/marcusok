@@ -11,7 +11,11 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { runInNewContext } from "node:vm";
-import { createPdfPreview } from "../render/render";
+import {
+  MAX_CANVAS_PIXELS,
+  computeOutputScale,
+  createPdfPreview,
+} from "../render/render";
 import { ensurePdfStyles } from "../render/text-layer-css";
 import type { PdfPreviewError } from "../types";
 
@@ -55,6 +59,11 @@ function ioByMargin(marginPrefix: string): FakeIO[] {
   return FakeIO.instances.filter((io) =>
     String(io.options?.rootMargin ?? "").startsWith(marginPrefix),
   );
+}
+
+/** 只取仍连接中的观察器（滚动根重探会 disconnect 旧实例并重建）。 */
+function activeIoByMargin(marginPrefix: string): FakeIO[] {
+  return ioByMargin(marginPrefix).filter((io) => !io.disconnected);
 }
 
 /* ---------------------------- mocked pdfjs ---------------------------- */
@@ -383,6 +392,90 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     inst.destroy();
   });
 
+  it("fit-page with content-box max-height does not subtract container padding twice", async () => {
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    setClientSize(container, 400, 24);
+    container.style.padding = "20px";
+    container.style.maxHeight = "400px"; // content-box：400 已是内容盒高度
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      scale: "fit-page",
+    });
+    await waitForPages(container, 1);
+    const el = pageEls(container)[0];
+    // 可用高 = 400 - wrapper 24 = 376（不再扣容器 padding）；
+    // 360/612≈0.588 vs 376/792≈0.4747 → 290px。
+    expect(el.style.width).toBe("290px");
+    expect(Number.parseFloat(el.style.height)).toBeLessThanOrEqual(376);
+    inst.destroy();
+  });
+
+  it("fit-page with border-box max-height subtracts container padding", async () => {
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    setClientSize(container, 400, 24);
+    container.style.padding = "20px";
+    container.style.boxSizing = "border-box";
+    container.style.maxHeight = "400px"; // border-box：400 含上下 padding
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      scale: "fit-page",
+    });
+    await waitForPages(container, 1);
+    const el = pageEls(container)[0];
+    // 内容高 400-40=360，再扣 wrapper 24 → 336；宽比 360/612=0.588 vs
+    // 336/792≈0.424 → 259px。
+    expect(el.style.width).toBe("259px");
+    inst.destroy();
+  });
+
+  it("fit-page warns when the container height is not measurable", async () => {
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    setClientSize(container, 400, 0); // auto 高：内容盒高度 0
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      scale: "fit-page",
+    });
+    await waitForPages(container, 1);
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("fit-page"))).toBe(
+      true,
+    );
+    // 退化为 fit-width：400/612
+    expect(pageEls(container)[0].style.width).toBe("400px");
+    warn.mockRestore();
+    inst.destroy();
+  });
+
+  it("caps canvas bitmap pixels at the official viewer budget (high DPR)", async () => {
+    const page = fakePage(1);
+    const { doc } = fakeDoc([page]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    vi.stubGlobal("devicePixelRatio", 2);
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      scale: 2,
+    });
+    await waitForPages(container, 1);
+    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    await vi.waitFor(() => expect(page.renderCalls).toHaveLength(1));
+
+    const { canvas, transform } = page.renderCalls[0];
+    const pixels = canvas.width * canvas.height;
+    expect(pixels).toBeLessThanOrEqual(MAX_CANVAS_PIXELS);
+    expect(pixels).toBeGreaterThan(MAX_CANVAS_PIXELS * 0.95);
+    // 1224×1584 CSS 像素、DPR 2 → 输出倍率被压到 sqrt(budget/area)
+    expect(transform?.[0]).toBeCloseTo(computeOutputScale(1224, 1584, 2), 5);
+    expect(transform?.[0]).toBeLessThan(2);
+    inst.destroy();
+  });
+
   it("missing IntersectionObserver reports UNKNOWN (environment, not corruption)", async () => {
     const { doc } = fakeDoc([fakePage(1)]);
     setupDocument(doc);
@@ -643,6 +736,38 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     inst.destroy();
   });
 
+  it("re-queues a page whose stale release event arrives after re-entering the render band", async () => {
+    // 两个观察器之间没有回调顺序保证：renderIO(true) 先到（wanted=true，
+    // 但页面已 rendered、不入队），随后 releaseIO(false) 才到并释放 canvas。
+    // 若不按最后 wanted 重新入队，页面停在 empty 且不会再有交叉事件。
+    const page = fakePage(1);
+    const { doc } = fakeDoc([page]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const onRendered = vi.fn();
+    const inst = createPdfPreview(container, {
+      source: magicSource(),
+      onRendered,
+    });
+    await waitForPages(container, 1);
+    const el = pageEls(container)[0];
+
+    ioByMargin("100%")[0].fire(el, true);
+    // onRendered 在 textLayer 收尾后触发 = 状态已落到 rendered
+    await vi.waitFor(() => expect(onRendered).toHaveBeenCalledTimes(1));
+
+    ioByMargin("100%")[0].fire(el, false);
+    ioByMargin("100%")[0].fire(el, true); // 回带：wanted=true
+    ioByMargin("300%")[0].fire(el, false); // 陈旧的离带事件
+    ioByMargin("300%")[0].fire(el, true);
+
+    await vi.waitFor(() => expect(page.render).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(el.querySelector("canvas")).not.toBeNull();
+    });
+    inst.destroy();
+  });
+
   it("does not leak pendingRelease across a failed render (no misfire release on retry)", async () => {
     // 在途渲染期间收到释放请求（pendingRelease=true），随后渲染以非取消错误
     // 失败。若失败分支不清 pendingRelease，下一次成功渲染会在完成瞬间被
@@ -894,15 +1019,19 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     expect(style!.getAttribute("nonce")).toBe("n-123");
     expect(style!.textContent).toContain("--total-scale-factor");
     expect(style!.textContent).toContain(".textLayer");
+    // 页宽超容器时左侧内容必须仍可达：unsafe center 会把左边界推到负坐标，
+    // scrollLeft 无法为负；页占位也不能被 flex 收缩。
+    expect(style!.textContent).toContain("align-items: safe center");
+    expect(style!.textContent).toMatch(/\.mop-pdf-page\s*\{[^}]*flex: none/);
     inst.destroy();
   });
 
   /* ---------------------- source re-use (transfer safety) ---------------------- */
 
   // 上游 GetDocRequest 以 [data.buffer] 为 transfer list（pdf.mjs 源码实证）：
-  // 引擎拿走字节后调用方持有的 source 立即 detach。toBytes 必须复制字节型
-  // source，否则同一 source 二次 create（"重 create 即可"路径，play demo
-  // 的切缩放/重建即此形态）会以 "File is empty." 假报错失败。
+  // 引擎拿走字节后调用方持有的 source 立即 detach。字节型 source 必须在
+  // sniff 通过后复制一份，否则同一 source 二次 create（"重 create 即可"
+  // 路径，play demo 的切缩放/重建即此形态）会以 "File is empty." 假报错失败。
   it.each([
     ["Uint8Array", (b: Uint8Array) => b],
     ["ArrayBuffer", (b: Uint8Array) => b.buffer as ArrayBuffer],
@@ -936,6 +1065,19 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       second.destroy();
     },
   );
+
+  it("does not copy a typed source when sniff rejects it", async () => {
+    // sniff 只读前 1024 字节：非法输入应在复制整份字节之前被拒。
+    const bad = new Uint8Array([1, 2, 3]);
+    bad.slice = () => {
+      throw new Error("source must not be copied before sniff");
+    };
+    const onError = vi.fn();
+    const inst = createPdfPreview(container, { source: bad, onError });
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(onError.mock.calls[0][0].code).toBe("UNSUPPORTED");
+    inst.destroy();
+  });
 
   /* ------------------------- scroll-root selection ------------------------- */
 
@@ -1008,6 +1150,52 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     inst.destroy();
   });
 
+  it("re-probes the scroll root once all placeholders are inserted", async () => {
+    // 首页 200px < 面板 300px 时不溢出（观察器创建时 root 只能回退视口）；
+    // 5 页全部插入后 outer 才真正可滚动。旧实现永不再探测，root 固定为
+    // 视口，1 屏预载带塌缩为可视框。
+    const outer = document.createElement("div");
+    outer.style.overflow = "auto";
+    const host = document.createElement("div");
+    outer.appendChild(host);
+    document.body.appendChild(outer);
+    Object.defineProperty(outer, "clientHeight", { get: () => 300 });
+    Object.defineProperty(outer, "scrollHeight", {
+      get: () => outer.querySelectorAll(".mop-pdf-page").length * 200,
+    });
+
+    const pages = Array.from({ length: 5 }, (_, i) =>
+      fakePage(i + 1, { width: 100, height: 200 }),
+    );
+    const { doc } = fakeDoc(pages);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const inst = createPdfPreview(host, { source: magicSource() });
+    await waitForPages(host, 5);
+
+    expect(activeIoByMargin("100%")[0].options?.root).toBe(outer);
+    expect(activeIoByMargin("300%")[0].options?.root).toBe(outer);
+    inst.destroy();
+  });
+
+  it("does not treat a percentage max-height as a definite scroll root", async () => {
+    const outer = document.createElement("div");
+    outer.style.overflow = "auto";
+    outer.style.maxHeight = "100%"; // auto 高父级下不定高，随内容长高
+    const host = document.createElement("div");
+    outer.appendChild(host);
+    document.body.appendChild(outer);
+
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const inst = createPdfPreview(host, { source: magicSource() });
+    await waitForPages(host, 1);
+
+    expect(activeIoByMargin("100%")[0].options?.root).toBeNull();
+    inst.destroy();
+  });
+
   /* ---------------------- worker/asset failure mapping ---------------------- */
 
   it("maps worker setup failures to UNKNOWN instead of CORRUPT", async () => {
@@ -1069,6 +1257,29 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     });
     expect(pages[0].cleanup).toHaveBeenCalled();
     inst.destroy();
+  });
+
+  it("calls the static TextLayer.cleanup only when the last instance is destroyed", async () => {
+    // pdf.js 把文本层测量 canvas / ascent 缓存挂在模块级静态表上，只有
+    // 静态 cleanup() 会移除；最后一个实例销毁前清理会误伤存活实例。
+    vi.resetModules();
+    const cleanup = vi.fn();
+    (TextLayerMock as unknown as { cleanup?: () => void }).cleanup = cleanup;
+    const mod = await import("../render/render");
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+
+    const a = mod.createPdfPreview(container, { source: magicSource() });
+    const b = mod.createPdfPreview(container, { source: magicSource() });
+    await vi.waitFor(() =>
+      expect(container.querySelectorAll(".mop-pdf-page").length).toBe(2),
+    );
+    a.destroy();
+    expect(cleanup).not.toHaveBeenCalled();
+    b.destroy();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    delete (TextLayerMock as unknown as { cleanup?: () => void }).cleanup;
   });
 
   it("zeroes rendered canvases and clears the wrapper on destroy", async () => {
