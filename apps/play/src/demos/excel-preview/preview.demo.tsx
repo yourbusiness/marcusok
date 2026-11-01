@@ -43,6 +43,8 @@ export default function ExcelPreviewDemo() {
   const [showHeaders, setShowHeaders] = useState(true);
   const [showTabs, setShowTabs] = useState(true);
   const [renderSeq, setRenderSeq] = useState(0);
+  // 快速连续选文件时，只允许最后一次选择生效（异步读取会乱序完成）。
+  const loadSeqRef = useRef(0);
 
   // 挂载统一由下方 effect 驱动（单一数据流）：onFile / 开关 / 重建按钮都
   // 只改状态，不在事件处理器里直接 mount——否则 fileName 变化会触发 effect
@@ -68,7 +70,9 @@ export default function ExcelPreviewDemo() {
   );
 
   const onFile = useCallback(async (file: File) => {
+    const seq = ++loadSeqRef.current;
     const buf = await file.arrayBuffer();
+    if (seq !== loadSeqRef.current) return false; // 期间又选了别的文件
     bytesRef.current = new Uint8Array(buf);
     setHasFile(true);
     setFileName(file.name); // 触发下方 effect 挂载
@@ -89,7 +93,12 @@ export default function ExcelPreviewDemo() {
 
   // 卸载销毁
   useEffect(() => {
+    // 捕获 ref 对象本身：cleanup 里递增 current 是刻意作废在途读取，
+    // 不是读取 React 渲染节点的 ref（exhaustive-deps 对 ref.current 的告警
+    // 在此不适用，捕获 ref 可让意图显式且不触发该告警）。
+    const seqRef = loadSeqRef;
     return () => {
+      seqRef.current++; // 作废仍在读取中的选择
       instanceRef.current?.destroy();
       instanceRef.current = null;
     };

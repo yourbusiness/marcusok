@@ -20,8 +20,13 @@ const hasFile = ref(false);
 const busy = ref(false);
 // 实例持有：createPreview 返回句柄，卸载/换文件时 destroy
 const instance = shallowRef<{ destroy(): void } | null>(null);
+// 快速连续选文件时，后一次加载必须作废前一次；否则先选的大文件若读得慢，
+// 会在后选的小文件之后才 createPreview，旧数据覆盖新选择（其余预览 demo
+// 同款序号保护）。
+let loadSeq = 0;
 
 onUnmounted(() => {
+  loadSeq++; // 作废仍在等待中的加载
   instance.value?.destroy();
   instance.value = null;
 });
@@ -70,20 +75,26 @@ async function onFile(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file || !containerRef.value) return;
+  const seq = ++loadSeq;
   busy.value = true;
   info.value = null;
   error.value = null;
-  instance.value?.destroy();
-  instance.value = null;
-  containerRef.value.textContent = "";
   fileName.value = file.name;
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
+    // 等待期间又选了别的文件或组件已卸载：本次结果作废（旧预览保持不动）
+    if (seq !== loadSeq || !containerRef.value) return;
     hasFile.value = true;
     const mod = await import("@marcusok/excel-preview");
+    if (seq !== loadSeq) return;
+    const container = containerRef.value;
+    if (!container) return;
+    instance.value?.destroy();
+    instance.value = null;
+    container.textContent = "";
     // 零配置：wasm/worker 资产默认随包定位（bundler 资产管线处理），
     // 与 ExportDemo 同一模式，无需 configureWasm。
-    instance.value = mod.createPreview(containerRef.value, {
+    instance.value = mod.createPreview(container, {
       source: bytes,
       onParsed: (i) => {
         info.value = {
@@ -100,12 +111,13 @@ async function onFile(e: Event) {
       },
     });
   } catch (err) {
+    if (seq !== loadSeq) return;
     error.value = {
       code: "UNKNOWN",
       message: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    busy.value = false;
+    if (seq === loadSeq) busy.value = false;
   }
 }
 </script>
