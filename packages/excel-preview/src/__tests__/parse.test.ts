@@ -871,6 +871,40 @@ describe("解析入口（主线程路径 + 错误归一）", () => {
   });
 });
 
+describe("XML 实体解码（读取侧补偿）", () => {
+  it("sheet 名与字体名解码为真实字符", async () => {
+    // modern-xlsx 读取路径不回解属性实体。sheet 名会直接进入 tab、
+    // onParsed.sheetNames 与 setSheet 查找（"R&amp;D" 永远匹配不上用户
+    // 看到的 "R&D"）；字体名会进入 CSS font-family。两处都必须解码。
+    const styles = `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="A&amp;B &lt;C&gt;"/></font></fonts><fills count="1"><fill/></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>`;
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "R&amp;D",
+          xml: '<row r="1"><c r="A1" s="0" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles,
+    });
+    const wb = await readBuffer(bytes);
+    const model = buildPreviewWorkbook(wb, bytes);
+    expect(model.sheets[0].name).toBe("R&D");
+    expect(model.sheets[0].styles.fonts.map((f) => f.name)).toEqual([
+      "A&B <C>",
+    ]);
+  });
+
+  it("SECURITY（zip 比例/炸弹防护）归为 CORRUPT 且不回退主线程", () => {
+    const info = normalizeEngineError(
+      Object.assign(new Error("security violation: compression ratio"), {
+        code: "SECURITY",
+      }),
+    );
+    expect(info.code).toBe("CORRUPT");
+    expect(info.domain).toBe(true);
+  });
+});
+
 describe("CSV 解析", () => {
   it("RFC 4180：引号转义与跨行字段", () => {
     const rows = parseCsvText('a,"b,c"\n"x""y",2\n', ",");

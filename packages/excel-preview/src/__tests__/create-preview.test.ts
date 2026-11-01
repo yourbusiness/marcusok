@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runInNewContext } from "node:vm";
 import { createPreview } from "../index";
+import { RICH_STYLES, buildXlsx } from "./fixtures";
 
 /**
  * createPreview 初始 sheet 选项的校验语义：
@@ -67,6 +68,34 @@ describe("createPreview 初始 sheet 校验", () => {
       });
       expect(onParsed).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it("sheet 名 XML 实体按真实字符暴露，初始 sheet 选项可直接匹配", async () => {
+    // 文件里存的是 R&amp;D；模型必须解码为 R&D，否则 sheet: "R&D"
+    // 会被判为不存在（旧实现："Sheet not found: R&D"）。
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "R&amp;D",
+          xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    const onParsed = vi.fn();
+    const onError = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    createPreview(container, {
+      source: bytes,
+      sheet: "R&D",
+      onParsed,
+      onError,
+    });
+    await flushBoot();
+    expect(onError).not.toHaveBeenCalled();
+    expect(onParsed).toHaveBeenCalledTimes(1);
+    expect(onParsed.mock.calls[0][0].sheetNames).toEqual(["R&D"]);
   });
 
   it("接受跨 realm 的 Uint8Array 源（不依赖 instanceof）", async () => {

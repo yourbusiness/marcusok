@@ -240,9 +240,11 @@ function parseFontElem(content: string): OverlayFont {
     const n = v !== undefined ? Number(v) : NaN;
     return Number.isFinite(n) && n >= 0 ? n : null;
   };
-  const name = /<name\b[^>]*?val="([^"]*)"/.exec(content)?.[1] ?? null;
+  // 这里直接读原始属性（未走 parseAttrs），必须自行解码实体，
+  // 否则 "A&amp;B" 会作为字面量进入 CSS font-family。
+  const rawName = /<name\b[^>]*?val="([^"]*)"/.exec(content)?.[1] ?? null;
   return {
-    name: name || null,
+    name: rawName ? decodeXmlEntities(rawName) : null,
     size: numVal("sz"),
     bold: flagElem(content, "b"),
     italic: flagElem(content, "i"),

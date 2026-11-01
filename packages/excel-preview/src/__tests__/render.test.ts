@@ -161,6 +161,42 @@ describe("layout 几何", () => {
     expect(l.totalHeight).toBeGreaterThan(0);
   });
 
+  it("buildLayout：col span 总量受预算约束（大量宽 span 不冻结主线程）", () => {
+    // 每条 <col min=1 max=16384> 都会循环写满整行；100k 条畸形 span 可在
+    // 主线程造成秒级冻结（布局不在 worker 内）。预算耗尽后剩余 span 跳过，
+    // 保留默认/已应用宽度。末尾 width=40 的 span 必须被跳过。
+    const spans = Array.from({ length: 200 }, () => ({
+      min: 1,
+      max: 16_384,
+      width: 20,
+      hidden: false,
+      customWidth: true,
+    }));
+    spans.push({
+      min: 1,
+      max: 16_384,
+      width: 40,
+      hidden: false,
+      customWidth: true,
+    });
+    const l = buildLayout({
+      name: "S",
+      visible: true,
+      showGridLines: true,
+      rightToLeft: false,
+      rowCount: 1,
+      colCount: 16_384,
+      rows: [],
+      colSpans: spans,
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+      styles: { fonts: [], fills: [], borders: [], xfs: [] },
+    });
+    expect(l.colWidths[0]).toBe(charsToPx(20));
+    expect(l.colWidths[16_383]).toBe(charsToPx(20));
+  });
+
   it("buildLayout：面积上限边界的合并仍逐格展开（不误伤正常大合并）", () => {
     // 1000 × 1000 = 1M 格，恰在上限：整列合并（A1:A100000 ≈ 10 万格）等
     // Excel 模板常态必须继续展开，否则覆盖格的抑制渲染失效

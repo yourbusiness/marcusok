@@ -24,6 +24,11 @@ const MAX_COVERED_CELLS = 1_000_000;
 // 模板的覆盖总量常态，同时把最坏展开时间与 Map 内存封顶在单条上限的
 // 两倍以内。
 const MAX_TOTAL_COVERED_CELLS = 2_000_000;
+// col span 的总覆盖预算：每条 <col min..max> 都会按跨度逐列写宽度，
+// 100k 条 <col min="1" max="16384"> 的 400KB 文件实测可在主线程造成
+// 1.1s 冻结（布局不在 worker 内，worker 超时保护管不到）。预算与合并
+// 展开同口径（2M 次写入），耗尽后剩余 span 跳过并保留默认/已应用宽度。
+const MAX_TOTAL_COL_SPAN_CELLS = 2_000_000;
 
 export function charsToPx(width: number): number {
   // 防御低层调用方传入负/NaN：负宽度会造出负前缀和，破坏二分窗口计算
@@ -95,6 +100,8 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
 
   const colWidths = new Float64Array(colCount);
   colWidths.fill(charsToPx(DEFAULT_COL_WIDTH_CHARS));
+  let colSpanBudget = MAX_TOTAL_COL_SPAN_CELLS;
+  let colSpanBudgetExhausted = false;
   for (const span of sheet.colSpans) {
     // 隐藏列宽 0；<col> 出现即采用其 width——引擎对未写 width 的 col 兜底
     // 8.43（与默认一致，无副作用），此前设 customWidth 门槛会把"只写 width
@@ -104,7 +111,24 @@ export function buildLayout(sheet: PreviewSheet): GridLayout {
     const start = Math.ceil(span.min) - 1;
     const end = Math.floor(span.max) - 1;
     if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
-    for (let c = Math.max(0, start); c <= end && c < colCount; c++) {
+    const from = Math.max(0, start);
+    const to = Math.min(end, colCount - 1);
+    if (to < from) continue;
+    const covered = to - from + 1;
+    // 预算耗尽（或被单条超宽 span 用尽）时跳过该 span，继续处理后续
+    // 小 span——与合并展开的降级口径一致，不让一条畸形声明拖垮全表。
+    // 降级不能静默：畸形/超大声明需要留下可诊断的痕迹。
+    if (covered > colSpanBudget) {
+      if (!colSpanBudgetExhausted) {
+        colSpanBudgetExhausted = true;
+        console.warn(
+          "[excel-preview] column spans exceed the layout budget; remaining spans were ignored (default/previous widths kept).",
+        );
+      }
+      continue;
+    }
+    colSpanBudget -= covered;
+    for (let c = from; c <= to; c++) {
       colWidths[c] = span.hidden ? 0 : w;
     }
   }

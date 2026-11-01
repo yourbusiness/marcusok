@@ -194,7 +194,9 @@ function stylesFromEngine(
 ): Pick<PreviewStyles, "fonts" | "fills" | "borders"> {
   const st = wb.styles;
   const fonts: PreviewFont[] = (st.fonts ?? []).map((f) => ({
-    name: f?.name ?? null,
+    // 引擎读取路径不回解属性实体；字体名含 & < > 等字符时需在此补偿，
+    // 否则 CSS font-family 指向一个不存在的名字并静默回退。
+    name: f?.name ? decodeXmlEntities(f.name) : null,
     size: typeof f?.size === "number" ? f.size : null,
     bold: !!f?.bold,
     italic: !!f?.italic,
@@ -437,11 +439,15 @@ export function buildPreviewWorkbook(
   const names = wb.sheetNames ?? [];
   const sheets: PreviewSheet[] = [];
   for (const name of names) {
+    // 引擎读取路径不回解属性实体（与 formatCode 同理）：sheet 名里的
+    // "R&amp;D" 必须解码后进入模型，否则 tab、onParsed.sheetNames 与
+    // setSheet("R&D") 都会对不上用户可见名称。查找仍用引擎原始名字。
+    const displayName = decodeXmlEntities(name);
     const ws = wb.getSheet(name);
     if (!ws) {
       // 名字取不到（异常文件）：占位空 sheet，保持索引对齐
       sheets.push({
-        name,
+        name: displayName,
         visible: false,
         showGridLines: true,
         rightToLeft: false,
@@ -456,7 +462,9 @@ export function buildPreviewWorkbook(
       });
       continue;
     }
-    sheets.push(buildSheet(ws, styles));
+    const sheet = buildSheet(ws, styles);
+    sheet.name = displayName;
+    sheets.push(sheet);
   }
 
   // 零 sheet 的 workbook：畸形/损坏文件实测会产出这种模型（zip 里只有

@@ -818,7 +818,22 @@ export function formatCellValue(
     return { text: generalNumber(n), color: chosen.color ?? undefined };
   }
 
-  // 零值走零段：实测引擎对零段字面量无损，整段直交（非日期形态）
+  // 文本格式 @：Excel 的文本格式直接显示数值本身（1234.5 → "1234.5"），
+  // 不参与小数舍入。旧实现把它当 0 位小数数字段，先舍成 1235 再交引擎。
+  // 只把 core（去掉边字面量后的段码）交给引擎——引擎对带字面量的整串
+  // @ 反而会舍入并丢字面量（实测 '"USD "@' → "1235"）。
+  const edge = extractEdgeLiterals(chosen.code);
+  if (edge.core.includes("@") && !/[0#?%]/.test(edge.core)) {
+    const r = engineText(n, edge.core);
+    return {
+      text: edge.prefix + r.text + edge.suffix,
+      color: chosen.color ?? r.color,
+    };
+  }
+
+  // 零值走零段。含真实数字占位符（0/#）的零段仍交引擎；只有 ? 或纯字面量
+  // 的零段（内置会计 41-44 的 "-"）引擎会错误输出 "0"，这里直接回注
+  // 段内字面量（如 "-" / "$-"）。
   if (
     n === 0 &&
     sections.length >= 3 &&
@@ -826,6 +841,13 @@ export function formatCellValue(
     !isDateSection(chosen.code) &&
     !ELAPSED_TOKEN.test(chosen.code)
   ) {
+    // "%" 是数字记号（引擎对 0 输出 "0%"），不能当纯字面量吞掉
+    if (!/[0#%]/.test(edge.core)) {
+      return {
+        text: edge.prefix + edge.suffix,
+        color: chosen.color ?? undefined,
+      };
+    }
     const r = engineText(0, chosen.code);
     return { text: r.text, color: chosen.color ?? r.color };
   }
@@ -841,7 +863,7 @@ export function formatCellValue(
   // 数字段：拆边字面量，|值| 交引擎，再拼回；单段负值补前导负号。
   // core 为空 = 段内无任何数字记号（纯字面量段，如 "yes"）：Excel 不显示
   // 数值本身（负号同理）——此前回退 General 会把数字拼成 "yes5"
-  const { prefix, suffix, core } = extractEdgeLiterals(chosen.code);
+  const { prefix, suffix, core } = edge;
   if (!core) {
     return { text: prefix + suffix, color: chosen.color ?? undefined };
   }

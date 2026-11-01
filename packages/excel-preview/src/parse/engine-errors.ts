@@ -39,6 +39,9 @@ const PASSWORD_MSG =
   "The workbook is password-protected (Agile AES-256). Pass the `password` option to open it.";
 const WASM_MSG =
   "The WebAssembly engine is unavailable or failed to load (a blocked/404 asset URL, a CSP that forbids WebAssembly, or an environment without it). Check the configured `wasmUrl` and the console.";
+/** 引擎的 zip 比例/炸弹防护（SECURITY 码）。对相同字节确定性成立。 */
+const SECURITY_MSG =
+  "The workbook was rejected by the engine's security limits (for example an excessive ZIP compression ratio). The file may be a zip bomb.";
 
 /**
  * 结构类错误码（引擎读路径实测抛出，2026-09）：ZIP 打不开（ZIP_READ）、
@@ -94,6 +97,11 @@ export function normalizeEngineError(err: unknown): EngineErrorInfo {
     return /ole2/i.test(message)
       ? { code: "LEGACY_FORMAT", message: LEGACY_MSG, domain: true }
       : { code: "CORRUPT", message: CORRUPT_MSG, domain: true };
+  }
+  // 引擎的安全限制（zip 压缩比/解压炸弹防护）：同一份字节必然复现，
+  // 不是环境问题，按 CORRUPT 上报并禁止主线程重跑。
+  if (rawCode === "SECURITY") {
+    return { code: "CORRUPT", message: SECURITY_MSG, domain: true };
   }
   // 结构类错误：对相同字节确定性成立，标 domain 免去主线程复跑
   if (STRUCTURAL_CODES.has(rawCode)) {
