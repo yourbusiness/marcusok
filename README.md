@@ -59,11 +59,11 @@ marcusok/
 │   └── xlsx-core/              # Private: modern-xlsx engine layer (bundled into the two Excel packages)
 ├── docs/                       # Design documents (Chinese) — intentionally
 │                               # untracked (.gitignore), local-only
-│   ├── excel-export-design.md  # Excel export core design doc (~250k chars, the main one)
-│   ├── excel-preview-plan.md   # Excel preview design & verification notes
-│   ├── word-preview-plan.md    # Word preview design & verification notes
+│   ├── audit-*.md              # Past repo audits: findings / progress / task plan
 │   ├── pdf-preview-plan.md     # PDF preview design & verification notes
-│   └── release-*.md / ci-*.md  # Release & CI walkthroughs, debug notes, docs-site plan
+│   ├── ppt-preview-plan.md     # PPTX preview design & verification notes
+│   ├── ppt-preview-spike-record.md # PPTX preview spike & browser acceptance record
+│   └── word-preview-plan.md    # Word preview design & verification notes
 ├── scripts/                    # Repo-level scripts (dev.mjs unified dev launcher)
 ├── .changeset/                 # Changesets config
 ├── .github/workflows/          # CI/CD
@@ -115,19 +115,13 @@ pnpm changeset publish         # publish with the next dist-tag
 
 > These are internal design documents, deliberately **not tracked** by git (`.gitignore` ignores `/docs/`): they exist only on the maintainer's machine. The links below resolve only there — a fresh clone has no `docs/` directory.
 
-- [`docs/excel-export-design.md`](./docs/excel-export-design.md) — Excel export core design doc
-- [`docs/excel-preview-plan.md`](./docs/excel-preview-plan.md) — Excel preview design & verification notes
+- [`docs/audit-findings.md`](./docs/audit-findings.md) — Past repo audit findings
+- [`docs/audit-progress.md`](./docs/audit-progress.md) — Past repo audit progress log
+- [`docs/audit-task-plan.md`](./docs/audit-task-plan.md) — Past repo audit task plan
 - [`docs/word-preview-plan.md`](./docs/word-preview-plan.md) — Word preview design & verification notes
 - [`docs/pdf-preview-plan.md`](./docs/pdf-preview-plan.md) — PDF preview design & verification notes
 - [`docs/ppt-preview-plan.md`](./docs/ppt-preview-plan.md) — PPTX preview design & verification notes
 - [`docs/ppt-preview-spike-record.md`](./docs/ppt-preview-spike-record.md) — PPTX preview spike & browser acceptance record
-- [`docs/release-guide.md`](./docs/release-guide.md) — Release guide
-- [`docs/release-publish-logic.md`](./docs/release-publish-logic.md) — Release logic in depth
-- [`docs/release-workflow-analysis.md`](./docs/release-workflow-analysis.md) — Release workflow analysis
-- [`docs/ci-workflow-analysis.md`](./docs/ci-workflow-analysis.md) — CI workflow analysis
-- [`docs/changeset-walkthrough.md`](./docs/changeset-walkthrough.md) — Changesets usage notes
-- [`docs/vitepress-docs-plan.md`](./docs/vitepress-docs-plan.md) — Docs site planning
-- [`docs/debug.md`](./docs/debug.md) — Debugging guide
 
 ## License
 
