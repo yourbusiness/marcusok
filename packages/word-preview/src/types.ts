@@ -68,10 +68,9 @@ export interface WordPreviewOptions {
   /**
    * 是否渲染 altChunk（文档内嵌 HTML 片段，经 `<iframe srcdoc>` 呈现）。
    * 默认 **false**：上游的 iframe 无 `sandbox` 属性，不可信文档可借
-   * `srcdoc` 执行脚本。开启仅限受信文档——本包会在渲染完成后补
-   * `sandbox` 属性，但属性赋值与首帧加载的先后不保证（各浏览器行为
-   * 不一，残余时序风险见 limits 文档）；iframe 内部文档也不在超链接
-   * scheme 白名单的覆盖范围内。
+   * `srcdoc` 执行脚本。开启仅限受信文档——本包在创建 iframe 之时即带上
+   * `sandbox`（早于 `srcdoc` 赋值；上游自身的创建时序不变），但 iframe
+   * 内部文档不在超链接 scheme 白名单的覆盖范围内。
    */
   allowAltChunks?: boolean;
   /**

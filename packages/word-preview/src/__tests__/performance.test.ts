@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll } from "vitest";
 import { renderAsync } from "docx-preview";
+import { createWordPreview } from "../index";
 import { bigDocxBytes } from "./fixtures";
 
 // 与 excel-exporter / excel-preview 同一模式：本地阈值即产品 SLA
@@ -47,6 +48,34 @@ describe.runIf(RUN_PERF)(
       expect(container.querySelectorAll("p").length).toBe(1500);
       expect(container.querySelectorAll("tr").length).toBe(100);
       expect(dt).toBeLessThan(150 * SLACK);
+    });
+
+    // 全链路门：createWordPreview → onRendered（源读取 + 嗅探的 JSZip
+    // 中央目录解析 + [Content_Types].xml/_rels 解压 + 引擎渲染 + 安全
+    // 后处理）。引擎直调基线不覆盖嗅探链路——嗅探若引入回归（如部件
+    // 查找复杂度恶化）此前无任何门可拦。阈值拦数量级回归，不追精确：
+    // 引擎基线 150ms + 嗅探/二次解析/后处理实测 <100ms + 负载余量。
+    it("createWordPreview full pipeline < 400ms", async () => {
+      container.textContent = ""; // 隔离上一用例的 DOM 产物
+      const bytes = bigDocxBytes(1000, 100, 5);
+      let rendered: (() => void) | null = null;
+      const renderedPromise = new Promise<void>((res) => {
+        rendered = res;
+      });
+      const t0 = performance.now();
+      createWordPreview(container, {
+        source: bytes,
+        onRendered: () => rendered?.(),
+      });
+      await renderedPromise;
+      const dt = performance.now() - t0;
+      expect(container.querySelectorAll("p").length).toBeGreaterThanOrEqual(
+        1500,
+      );
+      expect(container.querySelectorAll("tr").length).toBeGreaterThanOrEqual(
+        100,
+      );
+      expect(dt).toBeLessThan(400 * SLACK);
     });
   },
 );

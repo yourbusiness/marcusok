@@ -7,8 +7,11 @@
  * zip 里装的是 docx、xlsx 还是 odt——必须再做 zip 目录的必需部件校验。
  *
  * 主部件路径不能硬编码 word/document.xml：OPC 允许任意主部件路径，由
- * 根关系 `_rels/.rels` 的 officeDocument 关系决定；上游按该关系解析，
- * 嗅探必须同口径，否则会把引擎可渲染的合法文档误拒为 UNSUPPORTED。
+ * 根关系 `_rels/.rels` 的 officeDocument 关系决定；上游按该关系解析。
+ * 注意两侧并非严格同口径：本层的路径归一（反斜杠→斜杠、去 `./` 前缀）
+ * 比引擎侧（只去前导 `/`）更宽松，`Target="./word/document.xml"` 这类
+ * OPC 合法包会过嗅探、在引擎侧落空、以 CORRUPT 收场——方向是"宁可放过
+ * 归 CORRUPT"而非误拒（误拒会把引擎可渲染的文档挡在 UNSUPPORTED）。
  */
 import type { WordPreviewErrorCode } from "./types";
 import JSZip from "jszip";

@@ -95,9 +95,15 @@ const TAKEN_OVER_OPTION_KEYS = [
  * scheme 白名单判定。用 `URL` 解析而非 `startsWith`：WHATWG URL 规范在
  * 解析时剔除前后 C0 控制字符与空白、把协议名归一为小写——`" JavaScript:x"`
  * 一类的绕过形态都会被正确解析为 `javascript:` 并拒绝。无 scheme 的相对
- * 形态（含 `#anchor`、`//host`）经 baseURI 解析后继承 http(s)，放行。
+ * 形态（`//host`、路径）经 baseURI 解析后继承 http(s)，放行；`#anchor`
+ * 走函数开头的短路（不经协议判定）。
  */
 function isSafeHref(raw: string): boolean {
+  // `#` 前缀的锚点永远指向当前文档（纯片段，无导航/协议语义），先于
+  // 协议白名单无条件放行：否则在 file:// 或自定义协议页面（Electron、
+  // 本地打开的 HTML 报告）上片段会继承页面协议（file:）而被误剥，
+  // 与 README/limits "保留锚点形态" 的承诺不符。
+  if (raw.startsWith("#")) return true;
   try {
     const url = new URL(raw, document.baseURI);
     return SAFE_HREF_PROTOCOLS.has(url.protocol);

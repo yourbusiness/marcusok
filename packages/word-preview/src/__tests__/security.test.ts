@@ -206,6 +206,31 @@ describe("超链接 scheme 白名单", () => {
     expect(container.querySelector("#c3")!.getAttribute("href")).toBeNull();
     expect(container.querySelector("#c4")!.getAttribute("href")).toBeTruthy();
   });
+
+  it("file:// 等非 http(s) 页面上 #锚点 仍放行（片段永远同文档）", async () => {
+    // happy-dom 默认 baseURI 是 http://localhost/，覆盖为 file:// 模拟
+    // Electron / 本地打开的 HTML 报告场景——锚点经 base 解析会继承 file:
+    // 协议，若只按协议白名单判定会被误剥（README 承诺保留锚点形态）。
+    Object.defineProperty(document, "baseURI", {
+      get: () => "file:///report/index.html",
+      configurable: true,
+    });
+    try {
+      mockRender(
+        `<a href="#section1" id="f1">anchor</a>` +
+          // 对照：file:// 页面上的 javascript: 仍必须拒绝
+          `<a href="javascript:alert(1)" id="f2">x</a>`,
+      );
+      const container = makeContainer();
+      createWordPreview(container, { source: simpleDocx("x") });
+      await waitFor(() => container.querySelector("#f1") !== null);
+
+      expect(container.querySelector("#f1")!.getAttribute("href")).toBeTruthy();
+      expect(container.querySelector("#f2")!.getAttribute("href")).toBeNull();
+    } finally {
+      Reflect.deleteProperty(document, "baseURI");
+    }
+  });
 });
 
 describe("altChunk 加固", () => {
