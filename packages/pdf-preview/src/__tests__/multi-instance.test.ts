@@ -30,12 +30,31 @@ class FakeIO {
 }
 
 const getDocumentMock = vi.hoisted(() => vi.fn());
+// 模拟 pdfjs 真实形态：cleanup 是静态方法且内部读 this（#pendingTextLayers），
+// 接收者丢失（裸调用）会抛 TypeError——用于锁定 releaseGlobalTextLayerCaches
+// 必须以 TextLayer 自身为接收者调用 cleanup（此前裸调用在浏览器实测必抛、
+// 被包层 catch 降级，全局文本层缓存清理从未生效）。
+const textLayerCleanupMock = vi.hoisted(() =>
+  vi.fn(function (this: unknown) {
+    if (this === undefined || this === null) {
+      throw new TypeError(
+        "Cannot read properties of undefined (reading '#pendingTextLayers')",
+      );
+    }
+  }),
+);
+const TextLayerMock = vi.hoisted(() =>
+  vi.fn(function () {
+    return { render: vi.fn(async () => {}), cancel: vi.fn() };
+  }),
+);
+// vi.fn 的推断类型不带静态位，静态属性经 Object.assign 挂上（模拟 pdfjs
+// 的 class TextLayer { static cleanup }）
+Object.assign(TextLayerMock, { cleanup: textLayerCleanupMock });
 vi.mock("pdfjs-dist", () => ({
   getDocument: getDocumentMock,
   GlobalWorkerOptions: { workerSrc: "" },
-  TextLayer: vi.fn(function () {
-    return { render: vi.fn(async () => {}), cancel: vi.fn() };
-  }),
+  TextLayer: TextLayerMock,
   InvalidPDFException: class extends Error {},
   PasswordException: class extends Error {},
   RenderingCancelledException: class extends Error {},
@@ -72,6 +91,7 @@ beforeEach(() => {
   document.getElementById("marcusok-pdf-preview-styles")?.remove();
   FakeIO.instances = [];
   getDocumentMock.mockReset();
+  textLayerCleanupMock.mockClear();
   getDocumentMock.mockImplementation(() => ({
     promise: Promise.resolve({
       numPages: 1,
@@ -130,5 +150,19 @@ describe("multi-instance isolation", () => {
       expect(b.querySelector(".mop-pdf-page canvas")).not.toBeNull();
     });
     i2.destroy();
+  });
+
+  it("最后实例销毁时以 TextLayer 为接收者调用静态 cleanup", () => {
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const i1 = createPdfPreview(a, { source: magicSource() });
+    const i2 = createPdfPreview(b, { source: magicSource() });
+    // 双实例在世：cleanup 不得提前触发（活跃计数守护）
+    i1.destroy();
+    expect(textLayerCleanupMock).not.toHaveBeenCalled();
+    i2.destroy();
+    expect(textLayerCleanupMock).toHaveBeenCalledTimes(1);
+    // 静态方法依赖 this：裸调用（接收者 undefined）在真实 pdfjs 里抛
+    // TypeError。contexts 记录每次调用的 this——必须等于 TextLayer 本身。
+    expect(textLayerCleanupMock.mock.contexts[0]).toBe(TextLayerMock);
   });
 });

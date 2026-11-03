@@ -390,10 +390,15 @@ export function createPdfPreview(
     globalCachesReleased = true;
     activePreviewInstances = Math.max(0, activePreviewInstances - 1);
     if (activePreviewInstances > 0) return;
-    const cleanup = (TextLayer as unknown as { cleanup?: () => void }).cleanup;
+    // cleanup 是静态方法且内部以 this 读 #pendingTextLayers：把方法摘出
+    // 裸调用会以 undefined 接收者执行并抛 TypeError（浏览器实测每次
+    // destroy 必抛、被下方 catch 降级），必须以 TextLayer 自身为接收者。
+    const cleanup = (
+      TextLayer as unknown as { cleanup?: (this: unknown) => void }
+    ).cleanup;
     if (typeof cleanup !== "function") return;
     try {
-      cleanup();
+      cleanup.call(TextLayer);
     } catch (err) {
       console.warn("[pdf-preview] TextLayer.cleanup failed; ignoring", err);
     }
