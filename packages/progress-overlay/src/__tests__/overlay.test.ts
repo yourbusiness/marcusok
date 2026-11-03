@@ -183,6 +183,22 @@ describe("遮罩生命周期", () => {
     expect(root()).toBeNull();
   });
 
+  it("已揭示遮罩的并发早退 close 立即回退文案（回归：早退方向曾是 show 接管的对称遗漏）", () => {
+    // A、B 并发且遮罩已揭示（B 接管时渲染了 B 的文案）；B 先结束早退。
+    // 此前早退分支在 h.revealed 时不渲染——若 A 此后不再发出有效进度/
+    // 阶段事件，B 的 title/label 会挂满 A 的剩余全程。
+    const a = show({ text: { title: "A 的任务" } });
+    const b = show({ text: { title: "B 的任务" } });
+    expect(root()!.querySelector(".mxe-title")!.textContent).toBe("B 的任务");
+
+    b.close(); // 早退：driver 回退到 A，已揭示 → 必须立即重渲染
+    expect(root()!.querySelector(".mxe-title")!.textContent).toBe("A 的任务");
+
+    a.close();
+    vi.advanceTimersByTime(1_000);
+    expect(root()).toBeNull();
+  });
+
   it("长 delay 调用方提前关闭后，剩余调用方按自己的截止时间揭示", () => {
     const a = show({ delayMs: 800, text: { title: "A 的任务" } });
     vi.advanceTimersByTime(50);

@@ -794,7 +794,20 @@ export function showProgressOverlay(
             h.driver = h.driverStack[h.driverStack.length - 1] ?? null;
             // 尚未揭示时重算截止：已结束的长 delay 不得继续占着挂起定时器
             // 把剩余调用方的遮罩拖到它的原截止时间。
-            if (!h.revealed) scheduleReveal(h);
+            if (!h.revealed) {
+              scheduleReveal(h);
+              return;
+            }
+            // 已揭示：立即按回退后的现任调用方重渲染——show 接管分支的
+            // 对称缺口。不渲染的话，若现任此后不再发出有效进度/阶段事件
+            // （Workbook 路径仅 init/build 两个 phase，通常早已发完），
+            // 已结束调用方的 title/label 会挂满现任的剩余全程。
+            if (h.driver) {
+              const driver = h.driver;
+              renderSafely(() =>
+                render(h.dom, driver.state.snapshot(), driver.text),
+              );
+            }
             return;
           }
           // 关键：从未显示过时必须清掉延迟定时器，否则它会在 close 之后触发
