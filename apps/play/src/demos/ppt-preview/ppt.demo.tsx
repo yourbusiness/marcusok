@@ -89,13 +89,19 @@ export default function PptPreviewDemo() {
   const instanceRef = useRef<PptPreviewInstance | null>(null);
   const bytesRef = useRef<Uint8Array | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  // 密码分两层：password 只驱动受控输入框显示；appliedPassword 才进重建
+  // effect——每键重建会 destroy + 重 create（含加密文件的主线程密钥派生
+  // ~1s/次，limits 实测），输入 "hunter2" 最坏叠加 7 轮派生。回车/失焦应用。
   const [password, setPassword] = useState("");
+  const [appliedPassword, setAppliedPassword] = useState("");
   const [info, setInfo] = useState<PptRenderedInfo | null>(null);
   const [error, setError] = useState<PptPreviewError | null>(null);
   const [widthMode, setWidthMode] = useState<WidthMode>("960");
   const [textSel, setTextSel] = useState(true);
   const [renderSeq, setRenderSeq] = useState(0);
   const [navIndex, setNavIndex] = useState<number | null>(null);
+  // 导航参数错误（goToSlide 越界/非数字）：就地展示，不混入文件错误通道
+  const [navError, setNavError] = useState<string | null>(null);
   // 快速连续选文件/点合成按钮时，只允许最后一次选择生效（异步读取会乱序完成）
   const loadSeqRef = useRef(0);
 
@@ -127,7 +133,7 @@ export default function PptPreviewDemo() {
       source: bytesRef.current,
       slideWidth: Number(widthMode),
       enableTextSelection: textSel,
-      ...(password.trim() !== "" ? { password: password.trim() } : {}),
+      ...(appliedPassword !== "" ? { password: appliedPassword } : {}),
       onRendered: setInfo,
       onError: setError,
     });
@@ -135,7 +141,7 @@ export default function PptPreviewDemo() {
       instanceRef.current?.destroy();
       instanceRef.current = null;
     };
-  }, [renderSeq, widthMode, textSel, password]);
+  }, [renderSeq, widthMode, textSel, appliedPassword]);
 
   // 双实例：同源两份字节（source 复用安全性由包内防御性复制保证）
   useEffect(() => {
@@ -169,10 +175,10 @@ export default function PptPreviewDemo() {
       300,
     );
     return () => clearTimeout(t);
-  }, [renderSeq, widthMode, textSel, password]);
+  }, [renderSeq, widthMode, textSel, appliedPassword]);
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+    <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
       <Card size="small">
         <Flex wrap="wrap" gap="middle" align="center">
           <Upload
@@ -209,9 +215,22 @@ export default function PptPreviewDemo() {
           <Input
             style={{ width: 200 }}
             prefix={<LockOutlined />}
-            placeholder="加密文件密码"
+            placeholder="加密文件密码（回车应用）"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              // 清空即取消解密（清到空串时无需按回车）
+              if (e.target.value.trim() === "" && appliedPassword !== "") {
+                setAppliedPassword("");
+              }
+            }}
+            onPressEnter={() => setAppliedPassword(password.trim())}
+            onBlur={() => {
+              // 失焦对齐应用值，避免"输入框已改但未生效"的静默错位
+              if (password.trim() !== appliedPassword) {
+                setAppliedPassword(password.trim());
+              }
+            }}
             allowClear
           />
           <Segmented
@@ -278,22 +297,26 @@ export default function PptPreviewDemo() {
               size="small"
               style={{ width: 90 }}
               placeholder="0-based 页码"
+              status={navError ? "error" : undefined}
               value={navIndex ?? ""}
               onChange={(e) => {
                 const v = e.target.value.trim();
                 setNavIndex(v === "" ? null : Number(v));
+                setNavError(null);
               }}
               onPressEnter={() => {
                 if (navIndex === null) return;
                 try {
                   instanceRef.current?.goToSlide(Math.trunc(navIndex));
+                  setNavError(null);
                 } catch (err) {
-                  // 越界是 RangeError（demo 调用参数问题，不是文件不支持）：
-                  // 如实展示异常名，不得套用 UNSUPPORTED 误导观众
-                  setError({
-                    code: "UNKNOWN",
-                    message: `${err instanceof Error ? err.name : String(err)}: ${err instanceof Error ? err.message : String(err)}`,
-                  });
+                  // 越界抛 RangeError、非数字抛 TypeError——都是 demo 调用方
+                  // 参数问题，不是文件/基础设施错误：就地展示异常名，不进
+                  // 文件错误 Alert（套 UNKNOWN 的"未知错误（Worker / WASM /
+                  // 资产加载等）"文案会误导观众）
+                  setNavError(
+                    `${err instanceof Error ? err.name : String(err)}: ${err instanceof Error ? err.message : String(err)}`,
+                  );
                 }
               }}
             />
@@ -305,6 +328,7 @@ export default function PptPreviewDemo() {
               <RightOutlined />
             </Button>
             <Text type="secondary">slideCount = {total}</Text>
+            {navError && <Text type="danger">{navError}</Text>}
           </Space>
         }
       >
@@ -353,7 +377,7 @@ export default function PptPreviewDemo() {
       <Alert
         type="info"
         showIcon
-        message="验收提示"
+        title="验收提示"
         description={
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             <li>
@@ -371,7 +395,7 @@ export default function PptPreviewDemo() {
             </li>
             <li>
               goToSlide 输入 0-based 页码回车；越界抛 RangeError
-              的行为在控制台可见（demo 内转为 Alert）。
+              的异常名就地显示在导航栏（调用方参数错误，不是文件错误）。
             </li>
           </ul>
         }

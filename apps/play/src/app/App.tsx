@@ -226,7 +226,7 @@ function HomePage({ onOpen }: { onOpen: (name: string) => void }) {
         <Alert
           type="info"
           showIcon
-          message="还没有注册任何 demo"
+          title="还没有注册任何 demo"
           description="在 src/demos/<pkg>/index.ts 里调用 registerDemo() 后即可在此显示。"
         />
       ) : (
@@ -348,7 +348,7 @@ function LazyDemo({
       <Alert
         type="error"
         showIcon
-        message="Demo 加载失败"
+        title="Demo 加载失败"
         description={loadError.message}
       />
     );
@@ -386,7 +386,7 @@ class DemoErrorBoundary extends Component<
         <Alert
           type="error"
           showIcon
-          message="Demo 加载/渲染失败"
+          title="Demo 加载/渲染失败"
           description={this.state.error.message}
         />
       );

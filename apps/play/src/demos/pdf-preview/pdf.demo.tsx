@@ -191,7 +191,7 @@ export default function PdfPreviewDemo() {
               链路（建议上传真实中文文档验证）
             </p>
           </Upload.Dragger>
-          <Space direction="vertical" size={8}>
+          <Space orientation="vertical" size={8}>
             <Space size={8} wrap>
               <Button
                 icon={<FilePdfOutlined />}

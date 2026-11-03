@@ -203,7 +203,7 @@ export default function WordPreviewDemo() {
               老格式与加密文档会给出明确错误码
             </p>
           </Upload.Dragger>
-          <Space direction="vertical" size={8}>
+          <Space orientation="vertical" size={8}>
             <Button icon={<FileWordOutlined />} onClick={loadBigDoc}>
               合成大文档（1000 段落 + 100×5 表格）
             </Button>

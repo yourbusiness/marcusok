@@ -126,7 +126,7 @@ export default function ExcelPreviewDemo() {
               UI；加密文件错误码会提示需要密码
             </p>
           </Upload.Dragger>
-          <Space direction="vertical" size={8}>
+          <Space orientation="vertical" size={8}>
             <Checkbox
               checked={showHeaders}
               onChange={(e) => setShowHeaders(e.target.checked)}
