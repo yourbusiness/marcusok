@@ -1,5 +1,11 @@
 # @marcusok/pdf-preview
 
+## 0.1.6
+
+### Patch Changes
+
+- 8c7eca9: Call the pdf.js `TextLayer.cleanup()` static with `TextLayer` as the receiver. The method reads `this.#pendingTextLayers`; the previous detached invocation threw `TypeError` on every last-instance destroy and was swallowed by the catch, so the global text-layer measurement cache was never actually cleaned.
+
 ## 0.1.5
 
 ### Patch Changes
