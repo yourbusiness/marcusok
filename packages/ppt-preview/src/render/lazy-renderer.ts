@@ -56,17 +56,20 @@ function hasDefiniteHeight(
   style: CSSStyleDeclaration,
 ): boolean {
   const inlineHeight = el.style.height;
-  // 百分比 max-height 在父级高度 auto 时同样不定高（如 max-height:100%
-  // 的内容驱动包装层，Tailwind max-h-full）。把它当作定高会误选 root：
-  // root 高度等于整份内容，±100%/±300% 覆盖全部页 → 全量渲染；导航只改
-  // 它的 scrollTop 且不滚 window，表现为静默 no-op。
+  // 含百分比分量的 max-height 在父级高度 auto 时同样不定高（如
+  // max-height:100% 的内容驱动包装层，Tailwind max-h-full；以及
+  // calc(100% - 2rem) 一类不以 % 结尾但含 % 的形态）。把它当作定高会
+  // 误选 root：root 高度等于整份内容，±100%/±300% 覆盖全部页 →
+  // 全量渲染；导航只改它的 scrollTop 且不滚 window，表现为静默 no-op。
+  // 用 includes("%") 而非 endsWith("%")：真定高值（600px、
+  // calc(50vh - 2rem)）不含 %，不受影响。
   const definiteMax = (value: string | undefined): boolean =>
-    Boolean(value && value !== "none" && !value.trim().endsWith("%"));
+    Boolean(value && value !== "none" && !value.trim().includes("%"));
   return Boolean(
     definiteMax(style.maxHeight) ||
     definiteMax(el.style.maxHeight) ||
     // 百分比高度在父级高度 auto 时并不定高，不能作为"会滚动"的证据
-    (inlineHeight && inlineHeight !== "auto" && !inlineHeight.endsWith("%")) ||
+    (inlineHeight && inlineHeight !== "auto" && !inlineHeight.includes("%")) ||
     (el.clientHeight > 0 && el.scrollHeight > el.clientHeight),
   );
 }

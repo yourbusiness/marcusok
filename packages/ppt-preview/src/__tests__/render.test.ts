@@ -124,6 +124,43 @@ describe("renderSlide 参数合同", () => {
     inst.destroy();
   });
 
+  it("自定义 wasmUrl（string 与 URL）与 useGoogleFonts:true 透传进 loadOpts", async () => {
+    // resolveWasmUrl 的返回值有 assets.test 单测；这里锁 render.ts 的接线
+    // （options.wasmUrl → resolveWasmUrl → loadOpts.wasmUrl），防止将来
+    // 重构 loadOpts 时丢字段（src 直跑兜底分支覆盖在下一断言组）。
+    const first = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+      wasmUrl: "/self-hosted/pptx_parser_bg.wasm",
+      useGoogleFonts: true,
+    });
+    await vi.waitFor(() => {
+      expect(loadMock).toHaveBeenCalledTimes(1);
+    });
+    const [, opts1] = loadMock.mock.calls[0] as [
+      ArrayBuffer,
+      Record<string, unknown>,
+    ];
+    expect(opts1.wasmUrl).toBe("/self-hosted/pptx_parser_bg.wasm");
+    expect(opts1.useGoogleFonts).toBe(true);
+    first.destroy();
+
+    loadMock.mockClear();
+    const url = new URL("https://cdn.example.com/pptx_parser_bg.wasm");
+    const second = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+      wasmUrl: url,
+    });
+    await vi.waitFor(() => {
+      expect(loadMock).toHaveBeenCalledTimes(1);
+    });
+    const [, opts2] = loadMock.mock.calls[0] as [
+      ArrayBuffer,
+      Record<string, unknown>,
+    ];
+    expect(opts2.wasmUrl).toBe(url);
+    second.destroy();
+  });
+
   it("password 透传；skipMediaControls:true 静态预览；width 按选项（默认 960）", async () => {
     vi.stubGlobal("IntersectionObserver", FakeIO);
     loadMock.mockResolvedValue(fakeEngine(1));
@@ -633,6 +670,30 @@ describe("滚动祖先探测", () => {
     const outer = document.createElement("div");
     outer.style.overflow = "auto";
     outer.style.maxHeight = "100%";
+    document.body.appendChild(outer);
+    outer.appendChild(container);
+
+    const inst = createPptPreview(container, {
+      source: buildPptx({ texts: ["a"] }),
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+    });
+
+    expect(renderIOs()[0].options?.root).toBeNull();
+    expect(releaseIOs()[0].options?.root).toBeNull();
+    inst.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("calc 内含百分比的 max-height 同样不构成滚动根", async () => {
+    // calc(100% - 2rem) 不以 % 结尾，但父级 auto 高时百分比分量同样
+    // 使其不定高——只按"endsWith(%)"排除会把它误判为定高、选作 IO
+    // root，复现 0.1.6 修复的全量渲染 + 导航静默 no-op 同类问题。
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const outer = document.createElement("div");
+    outer.style.overflow = "auto";
+    outer.style.maxHeight = "calc(100% - 2rem)";
     document.body.appendChild(outer);
     outer.appendChild(container);
 
