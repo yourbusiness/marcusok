@@ -152,7 +152,7 @@ describe("multi-instance isolation", () => {
     i2.destroy();
   });
 
-  it("最后实例销毁时以 TextLayer 为接收者调用静态 cleanup", () => {
+  it("最后实例销毁时以 TextLayer 为接收者调用静态 cleanup", async () => {
     vi.stubGlobal("IntersectionObserver", FakeIO);
     const i1 = createPdfPreview(a, { source: magicSource() });
     const i2 = createPdfPreview(b, { source: magicSource() });
@@ -160,6 +160,10 @@ describe("multi-instance isolation", () => {
     i1.destroy();
     expect(textLayerCleanupMock).not.toHaveBeenCalled();
     i2.destroy();
+    // cleanup 推迟到微任务执行（2026-11：同步调用会被刚 cancel 的在途
+    // 文本层短路，见 destroy-cleanup.test.ts 的上游语义分析）
+    await Promise.resolve();
+    await Promise.resolve();
     expect(textLayerCleanupMock).toHaveBeenCalledTimes(1);
     // 静态方法依赖 this：裸调用（接收者 undefined）在真实 pdfjs 里抛
     // TypeError。contexts 记录每次调用的 this——必须等于 TextLayer 本身。

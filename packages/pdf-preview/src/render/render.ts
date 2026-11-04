@@ -420,11 +420,22 @@ export function createPdfPreview(
       TextLayer as unknown as { cleanup?: (this: unknown) => void }
     ).cleanup;
     if (typeof cleanup !== "function") return;
-    try {
-      cleanup.call(TextLayer);
-    } catch (err) {
-      console.warn("[pdf-preview] TextLayer.cleanup failed; ignoring", err);
-    }
+    // 推迟到微任务执行：teardown 的同一同步块里刚被 cancel 的文本层，其从
+    // 上游 #pendingTextLayers 自移除的回调此刻还排在微任务队列里（pdf.mjs
+    // 构造器把移除挂在 capability 的 settle 回调上，cancel 同步 settle 也
+    // 要等下一个微任务才真正出集）。同步调用 cleanup 会因 pending 非空直接
+    // return（pdf.mjs 6.4 实测 15284-15287），此后无人再调——测量 canvas
+    // 与 ascent 缓存常驻到页面卸载（2026-11 修复）。本排队发生在全部
+    // cancel 之后，保证先出队；回调内复查活跃实例计数，同帧新建的实例
+    // 不被误清（多实例期间 cleanup 会清掉存活实例的缓存）。
+    queueMicrotask(() => {
+      if (activePreviewInstances > 0) return;
+      try {
+        cleanup.call(TextLayer);
+      } catch (err) {
+        console.warn("[pdf-preview] TextLayer.cleanup failed; ignoring", err);
+      }
+    });
   }
 
   const pages: PageEntry[] = [];

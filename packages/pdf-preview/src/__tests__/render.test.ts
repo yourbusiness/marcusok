@@ -1333,6 +1333,10 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     a.destroy();
     expect(cleanup).not.toHaveBeenCalled();
     b.destroy();
+    // cleanup 推迟到微任务执行（2026-11：同步调用会被刚 cancel 的在途
+    // 文本层短路，见 destroy-cleanup.test.ts 的上游语义分析）
+    await Promise.resolve();
+    await Promise.resolve();
     expect(cleanup).toHaveBeenCalledTimes(1);
     delete (TextLayerMock as unknown as { cleanup?: () => void }).cleanup;
   });
