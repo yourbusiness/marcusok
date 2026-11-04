@@ -1308,3 +1308,138 @@ describe("spillLimitPx 溢出扫描语义（顺次迭代实现）", () => {
     r.destroy();
   });
 });
+
+describe("合并锚点格不外溢（Excel 语义，2026-11 修复）", () => {
+  let container: HTMLElement;
+  beforeEach(() => {
+    document.body.textContent = "";
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  /** 纵向合并 A1:A3 + 长文本；第 5 行放值把 colCount 撑到 3。 */
+  async function verticalMergeBytes(): Promise<Uint8Array> {
+    const { buildXlsx, RICH_STYLES } = await import("./fixtures");
+    return buildXlsx({
+      sheets: [
+        {
+          name: "S1",
+          xml:
+            `<row r="1"><c r="A1" t="inlineStr"><is><t>很长很长很长很长很长很长很长很长很长的纵向合并标题</t></is></c></row>` +
+            `<row r="5"><c r="A5" t="inlineStr"><is><t>a5</t></is></c><c r="B5" t="inlineStr"><is><t>b5</t></is></c><c r="C5" t="inlineStr"><is><t>c5</t></is></c></row>`,
+          extraAfter:
+            '<mergeCells count="1"><mergeCell ref="A1:A3"/></mergeCells>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+  }
+
+  it("纵向合并锚点长文本裁剪在合并列边界，不产生 xpv-spill 形态", async () => {
+    const model = await parse(await verticalMergeBytes());
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const a1 = Array.from(container.querySelectorAll(".xpv-cell")).find((el) =>
+      el.textContent?.includes("纵向合并标题"),
+    );
+    expect(a1).toBeTruthy();
+    // Excel 语义：合并单元格的文本永不外溢（横向纵向皆然）——不得带
+    // xpv-spill 类，也不得有 max-width 超过合并列宽的 span
+    expect(a1!.classList.contains("xpv-spill")).toBe(false);
+    expect(a1!.querySelector("span")).toBeNull();
+    r.destroy();
+  });
+
+  it("对照：普通（非合并）长文本格仍走溢出形态", async () => {
+    // 与纵向合并样本同构但去掉合并：A1 普通格、右侧 B/C 空 → 应有溢出形态
+    //（colCount 由第 5 行的值撑到 3，渲染范围右缘在 C 列外）
+    const { buildXlsx, RICH_STYLES } = await import("./fixtures");
+    const plain = await parse(
+      buildXlsx({
+        sheets: [
+          {
+            name: "S1",
+            xml:
+              `<row r="1"><c r="A1" t="inlineStr"><is><t>很长很长很长很长很长很长很长很长很长的普通长文本</t></is></c></row>` +
+              `<row r="5"><c r="A5" t="inlineStr"><is><t>a5</t></is></c><c r="B5" t="inlineStr"><is><t>b5</t></is></c><c r="C5" t="inlineStr"><is><t>c5</t></is></c></row>`,
+          },
+        ],
+        styles: RICH_STYLES,
+      }),
+    );
+    const r = new SheetRenderer(container);
+    r.render(plain, {});
+    const a1 = Array.from(container.querySelectorAll(".xpv-cell")).find((el) =>
+      el.textContent?.includes("普通长文本"),
+    );
+    expect(a1).toBeTruthy();
+    expect(a1!.classList.contains("xpv-spill")).toBe(true);
+    r.destroy();
+  });
+
+  it("横向合并锚点同样不外溢（由显式排除保证，回归锁定）", async () => {
+    const { buildXlsx, RICH_STYLES } = await import("./fixtures");
+    const model = await parse(
+      buildXlsx({
+        sheets: [
+          {
+            name: "S1",
+            xml:
+              `<row r="1"><c r="A1" t="inlineStr"><is><t>很长很长很长很长很长很长很长很长很长的横向合并标题</t></is></c></row>` +
+              `<row r="5"><c r="A5" t="inlineStr"><is><t>a5</t></is></c><c r="B5" t="inlineStr"><is><t>b5</t></is></c><c r="C5" t="inlineStr"><is><t>c5</t></is></c><c r="D5" t="inlineStr"><is><t>d5</t></is></c><c r="E5" t="inlineStr"><is><t>e5</t></is></c></row>`,
+            extraAfter:
+              '<mergeCells count="1"><mergeCell ref="A1:C1"/></mergeCells>',
+          },
+        ],
+        styles: RICH_STYLES,
+      }),
+    );
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const a1 = Array.from(container.querySelectorAll(".xpv-cell")).find((el) =>
+      el.textContent?.includes("横向合并标题"),
+    );
+    expect(a1).toBeTruthy();
+    expect(a1!.classList.contains("xpv-spill")).toBe(false);
+    r.destroy();
+  });
+});
+
+describe("全空合并区占位（2026-11 修复：网格破洞）", () => {
+  it("无值无样式的合并区渲染为完整合并外框，而非锚点单格", async () => {
+    const { buildXlsx, RICH_STYLES } = await import("./fixtures");
+    document.body.textContent = "";
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    // A1:C3 合且区域内无任何值/样式（模型稀疏化锚点不进 rowIndex）；
+    // 第 5 行有值把维度撑起来
+    const model = await parse(
+      buildXlsx({
+        sheets: [
+          {
+            name: "S1",
+            xml: `<row r="5"><c r="A5" t="inlineStr"><is><t>a5</t></is></c><c r="B5" t="inlineStr"><is><t>b5</t></is></c><c r="C5" t="inlineStr"><is><t>c5</t></is></c></row>`,
+            extraAfter:
+              '<mergeCells count="1"><mergeCell ref="A1:C3"/></mergeCells>',
+          },
+        ],
+        styles: RICH_STYLES,
+      }),
+    );
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    // 合并区（3 行 × 3 列 = 60px 高 × 192px 宽）内应恰有一个占位元素，
+    // 且几何为整个合并区（锚点单格 64×20 是修复前的破洞形态）
+    const inRegion = Array.from(
+      container.querySelectorAll<HTMLElement>(".xpv-cell"),
+    ).filter((el) => {
+      const t = parseFloat(el.style.top || "0");
+      const l = parseFloat(el.style.left || "0");
+      return t < 60 && l < 192;
+    });
+    expect(inRegion).toHaveLength(1);
+    expect(inRegion[0].style.width).toBe("192px");
+    expect(inRegion[0].style.height).toBe("60px");
+    r.destroy();
+  });
+});

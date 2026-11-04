@@ -685,8 +685,12 @@ export class SheetRenderer {
       // （Excel 溢出到第一个非空格前截断——此前无上限，长文本会视觉盖到
       // 远处内容格上）。formulaStr 是公式的缓存字符串结果，与文本同属
       // 左对齐类（见 cellClasses），Excel 同样溢出到相邻空格。
+      // 合并锚点格不溢出（Excel 语义：合并单元格文本裁剪在合并边界，横向
+      // 纵向皆然——2026-11 修复前仅横向合并因 coveredBy 阻挡碰巧正确，
+      // 纵向合并（colSpan=1）右侧邻格不被本合并覆盖，长文本以溢出形态
+      // 越过合并列边界盖到相邻空格上）。
       let spillPx: number | undefined;
-      if (cell.type === "string" || cell.type === "formulaStr") {
+      if ((cell.type === "string" || cell.type === "formulaStr") && !merge) {
         const limit = this.spillLimitPx(c, r, range.colEnd);
         if (limit > width) spillPx = limit;
       }
@@ -773,7 +777,41 @@ export class SheetRenderer {
       // 异常文件里后写覆盖先写，防御性跳过
       if (l.coveredBy.has(`${a.row}:${a.col}`)) continue;
       const cell = cellAt(this.rowIndex.get(a.row), a.col);
-      if (cell) ensure(a.row, cell);
+      if (cell) {
+        ensure(a.row, cell);
+        continue;
+      }
+      // 全空合并区（区域内无值无样式——模型稀疏化不进 rowIndex，Excel 允许、
+      // "先合并后清空"模板的常态）：锚点无模型格，覆盖格又被 ensureEmpty 的
+      // coveredBy 跳过，修复前整个合并区只剩锚点处一个单格占位、外框缺失
+      //（Excel 显示完整合并空格）。补按合并几何展开的空占位；与 ensureEmpty
+      // 同口径：仅网格线模式、隐藏行列（宽/高 ≤0）跳过。ensureEmpty 可能已
+      // 给锚点建过单格占位（同 key），原位改几何避免同帧建删。
+      const m = l.mergeByAnchor.get(`${a.row}:${a.col}`);
+      if (!m || !this.showGridLines) continue;
+      const left = l.colLeft[a.col];
+      const top = l.rowTop[a.row];
+      const width = l.colLeft[Math.min(a.col + m.colSpan, l.colCount)] - left;
+      const height = l.rowTop[Math.min(a.row + m.rowSpan, l.rowCount)] - top;
+      if (width <= 0 || height <= 0) continue;
+      const key = `${prefix}${a.row}:${a.col}`;
+      want.add(key);
+      const existing = this.rendered.get(key);
+      if (existing) {
+        const w = `${width}px`;
+        const h = `${height}px`;
+        if (existing.style.width !== w) existing.style.width = w;
+        if (existing.style.height !== h) existing.style.height = h;
+        continue;
+      }
+      const el = this.doc.createElement("div");
+      el.className = "xpv-cell xpv-empty";
+      el.style.left = `${left}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${width}px`;
+      el.style.height = `${height}px`;
+      layer.appendChild(el);
+      this.rendered.set(key, el);
     }
 
     for (const [key, el] of this.rendered) {
