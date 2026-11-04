@@ -43,6 +43,7 @@
   },
   "files": [
     "dist",
+    "THIRD_PARTY_NOTICES.md",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

@@ -146,4 +146,4 @@ Full diagnosis and `?url`-import alternatives:
 
 ## License
 
-MIT
+MIT. Third-party notices (modern-xlsx and fflate under MIT) are in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

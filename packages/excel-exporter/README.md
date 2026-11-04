@@ -295,4 +295,4 @@ Alternatively, `configureWasm({ wasmUrl })` accepts an HTTP(S) URL (fetched), a 
 
 ## License
 
-MIT
+MIT. Third-party notices (modern-xlsx and fflate under MIT) are in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
