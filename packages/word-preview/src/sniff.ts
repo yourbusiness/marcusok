@@ -195,7 +195,9 @@ export async function sniffWordDocument(
     bytes[2] === 0x03 &&
     bytes[3] === 0x04 &&
     bytes.length > 6 &&
-    (bytes[6] & 0x01) === 0x01
+    // bytes[6] 的存在性由前面的 length > 6 保证；?? 0 仅为通过
+    // noUncheckedIndexedAccess（严格模式下字节索引访问须显式收窄）
+    ((bytes[6] ?? 0) & 0x01) === 0x01
   ) {
     return fail(
       "PASSWORD_PROTECTED",

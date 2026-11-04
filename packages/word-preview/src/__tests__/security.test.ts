@@ -73,10 +73,16 @@ describe("上游晦涩错误归一", () => {
       const onError = vi.fn();
       createWordPreview(container, { source: simpleDocx("x"), onError });
       await waitFor(() => onError.mock.calls.length > 0);
-      const err = onError.mock.calls[0][0] as { code: string; message: string };
+      const err = onError.mock.calls[0]![0] as {
+        code: string;
+        message: string;
+      };
       expect(err.code).toBe("CORRUPT");
       expect(err.message).toContain("relationship part");
       expect(err.message).toContain("word/_rels/document.xml.rels");
+      // 文案按"常见原因"表述而非断言唯一原因：空引用形态也可能来自
+      // 引擎内部其他 null 崩溃，不得断言成文件问题。
+      expect(err.message).toContain("common cause");
     });
   }
 
@@ -86,7 +92,7 @@ describe("上游晦涩错误归一", () => {
     const onError = vi.fn();
     createWordPreview(container, { source: simpleDocx("x"), onError });
     await waitFor(() => onError.mock.calls.length > 0);
-    const err = onError.mock.calls[0][0] as { code: string; message: string };
+    const err = onError.mock.calls[0]![0] as { code: string; message: string };
     expect(err.message).toContain("something else broke");
     expect(err.message).not.toContain("relationship part");
   });
@@ -218,6 +224,10 @@ describe("超链接 scheme 白名单", () => {
     try {
       mockRender(
         `<a href="#section1" id="f1">anchor</a>` +
+          // 带前导空白的锚点：浏览器解析 href 前按 URL 规范剥 C0/空格，
+          // 点击时同样是锚点导航——锚点判定须同口径，否则在 file:// 页
+          // 被当协议继承形态误剥。
+          `<a href=" #section2" id="f3">spaced anchor</a>` +
           // 对照：file:// 页面上的 javascript: 仍必须拒绝
           `<a href="javascript:alert(1)" id="f2">x</a>`,
       );
@@ -226,6 +236,7 @@ describe("超链接 scheme 白名单", () => {
       await waitFor(() => container.querySelector("#f1") !== null);
 
       expect(container.querySelector("#f1")!.getAttribute("href")).toBeTruthy();
+      expect(container.querySelector("#f3")!.getAttribute("href")).toBeTruthy();
       expect(container.querySelector("#f2")!.getAttribute("href")).toBeNull();
     } finally {
       Reflect.deleteProperty(document, "baseURI");
@@ -460,7 +471,7 @@ describe("destroy 静默与错误归一", () => {
     await waitFor(() => onError.mock.calls.length > 0);
 
     expect(onError).toHaveBeenCalledTimes(1);
-    const err = onError.mock.calls[0][0];
+    const err = onError.mock.calls[0]![0];
     expect(err.code).toBe("CORRUPT");
     expect(err.message).toContain("boom inside docx-preview");
     expect(err.cause).toBeInstanceOf(Error);
@@ -503,7 +514,7 @@ describe("destroy 静默与错误归一", () => {
     await waitFor(() => onError.mock.calls.length > 0);
 
     expect(onError).toHaveBeenCalledTimes(1);
-    const err = onError.mock.calls[0][0];
+    const err = onError.mock.calls[0]![0];
     expect(err.code).toBe("UNKNOWN");
     expect(err.message).toContain("read source failed");
     expect(err.cause).toBeInstanceOf(Error);

@@ -39,7 +39,7 @@ Full details in the [docs site limits page](https://yourbusiness.github.io/marcu
 ## Performance
 
 - **Bundle**: ~291 KB / ~63 KB gzipped (unminified, matching this repo's convention), self-contained.
-- **happy-dom regression baseline** (DOM construction only, no real layout): 1000 paragraphs + a 100×5 table renders in ~96 ms median on the dev machine (single cold call incl. JIT); the `performance.test.ts` SLA is 150 ms.
+- **happy-dom regression baseline** (DOM construction only, no real layout): 1000 paragraphs + a 100×5 table renders in ~96 ms median on the dev machine (single cold call incl. JIT); the `performance.test.ts` SLA is 150 ms for the direct `renderAsync` call, plus a 400 ms full-pipeline gate through `createWordPreview` (sniff incl. its second ZIP pass + rendering, added 0.1.6).
 - **Real Chromium baseline** (measured 2026-10-22, six runs, full render cycle through `createWordPreview`, `onRendered.durationMs` semantics): 1000 paragraphs + a 100×5 table ≈ 16–28 ms (median ~20 ms; 1500 `<p>` + 100 table rows produced). Word-sized documents (tens of pages, no image floods) stay comfortably interactive.
 
 ## Install

@@ -103,7 +103,10 @@ function isSafeHref(raw: string): boolean {
   // 协议白名单无条件放行：否则在 file:// 或自定义协议页面（Electron、
   // 本地打开的 HTML 报告）上片段会继承页面协议（file:）而被误剥，
   // 与 README/limits "保留锚点形态" 的承诺不符。
-  if (raw.startsWith("#")) return true;
+  // 前导 C0 控制符/空格按 WHATWG URL 解析口径先剥（浏览器解析 href
+  // 同口径）：" #foo" 点击时就是锚点导航，不能因空白走协议判定被剥。
+  const stripped = raw.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, "");
+  if (stripped.startsWith("#")) return true;
   try {
     const url = new URL(raw, document.baseURI);
     return SAFE_HREF_PROTOCOLS.has(url.protocol);
@@ -184,8 +187,11 @@ const NULL_PROPERTY_ERROR_RE =
 
 /** 导出供测试直接覆盖三种浏览器文案（不进入包公开 API）。 */
 export function describeRenderFailure(message: string): string {
+  // 正则匹配的是"空引用崩溃"这一形态，不是缺关系部件这一唯一原因——
+  // 引擎内部其他 null 崩溃也长这样。文案按"常见原因"表述而非断言，
+  // 避免把引擎缺陷误报成文件问题（cause 链保留原始错误供诊断）。
   return NULL_PROPERTY_ERROR_RE.test(message)
-    ? "the document references a relationship part that is missing from the package (for example word/_rels/document.xml.rels). The file is incomplete or corrupt."
+    ? "the document likely references a part that is missing or unreadable — a common cause is a missing relationship part (for example word/_rels/document.xml.rels), though other broken references in the file produce the same engine error. The file may be incomplete or corrupt."
     : message;
 }
 

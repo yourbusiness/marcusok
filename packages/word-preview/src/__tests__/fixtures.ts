@@ -98,7 +98,7 @@ export function docxMissingPart(part: string): Uint8Array {
  */
 export function encryptedZipBytes(): Uint8Array {
   const bytes = new Uint8Array(simpleDocx("secret"));
-  bytes[6] |= 0x01;
+  bytes[6] = (bytes[6] ?? 0) | 0x01;
   return bytes;
 }
 
@@ -116,7 +116,7 @@ export function centralDirEncryptedZipBytes(): Uint8Array {
       bytes[i + 2] === 0x01 &&
       bytes[i + 3] === 0x02
     ) {
-      bytes[i + 8] |= 0x01;
+      bytes[i + 8] = (bytes[i + 8] ?? 0) | 0x01;
     }
   }
   return bytes;

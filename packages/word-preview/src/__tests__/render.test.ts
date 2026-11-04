@@ -82,8 +82,8 @@ describe("createWordPreview 渲染闭环", () => {
     expect(container.querySelector("style")).toBeTruthy();
     // 单 section（一页）
     expect(onRendered).toHaveBeenCalledTimes(1);
-    expect(onRendered.mock.calls[0][0].pageCount).toBe(1);
-    expect(onRendered.mock.calls[0][0].durationMs).toBeGreaterThanOrEqual(0);
+    expect(onRendered.mock.calls[0]![0].pageCount).toBe(1);
+    expect(onRendered.mock.calls[0]![0].durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("显式分页符：pageCount = 2（两个 section 元素）", async () => {
@@ -96,7 +96,7 @@ describe("createWordPreview 渲染闭环", () => {
     await waitFor(() => onRendered.mock.calls.length > 0);
 
     expect(container.querySelectorAll("section").length).toBe(2);
-    expect(onRendered.mock.calls[0][0].pageCount).toBe(2);
+    expect(onRendered.mock.calls[0]![0].pageCount).toBe(2);
   });
 
   it("错误归一：zip 非 docx → UNSUPPORTED（不透上游模糊错）", async () => {
@@ -106,7 +106,7 @@ describe("createWordPreview 渲染闭环", () => {
     await waitFor(() => onError.mock.calls.length > 0);
 
     expect(onError).toHaveBeenCalledTimes(1);
-    const err = onError.mock.calls[0][0] as WordPreviewError;
+    const err = onError.mock.calls[0]![0] as WordPreviewError;
     expect(err.code).toBe("UNSUPPORTED");
     expect(err.message).toContain("word/document.xml");
     expect(container.textContent).toBe("");
@@ -122,7 +122,7 @@ describe("createWordPreview 渲染闭环", () => {
     await waitFor(() => onError.mock.calls.length > 0);
 
     expect(onError).toHaveBeenCalledTimes(1);
-    expect((onError.mock.calls[0][0] as WordPreviewError).code).toBe(
+    expect((onError.mock.calls[0]![0] as WordPreviewError).code).toBe(
       "LEGACY_FORMAT",
     );
     expect(container.children.length).toBe(0);
