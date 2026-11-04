@@ -197,7 +197,7 @@ describe("destroy", () => {
     await vi.waitFor(() => expect(page.render).toHaveBeenCalled());
     inst.destroy();
     // destroy 显式取消在途 RenderTask
-    expect(page.tasks[0].cancel).toHaveBeenCalled();
+    expect(page.tasks[0]!.cancel).toHaveBeenCalled();
     // destroy 触发取消语义：上游以 RenderingCancelledException 拒绝
     page.release.reject(
       Object.assign(new Error("Rendering cancelled"), {

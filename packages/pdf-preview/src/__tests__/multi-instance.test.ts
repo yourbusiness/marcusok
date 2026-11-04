@@ -135,7 +135,7 @@ describe("multi-instance isolation", () => {
       String(io.options?.rootMargin).startsWith("100%"),
     );
     expect(io100).toHaveLength(2);
-    io100[0].fire(a.querySelector(".mop-pdf-page") as Element, true);
+    io100[0]!.fire(a.querySelector(".mop-pdf-page") as Element, true);
     await vi.waitFor(() => {
       expect(a.querySelector(".mop-pdf-page canvas")).not.toBeNull();
     });
@@ -145,7 +145,7 @@ describe("multi-instance isolation", () => {
     expect(a.children).toHaveLength(0);
     expect(b.querySelectorAll(".mop-pdf-page")).toHaveLength(1); // i2 不受影响
 
-    io100[1].fire(b.querySelector(".mop-pdf-page") as Element, true);
+    io100[1]!.fire(b.querySelector(".mop-pdf-page") as Element, true);
     await vi.waitFor(() => {
       expect(b.querySelector(".mop-pdf-page canvas")).not.toBeNull();
     });
@@ -163,6 +163,6 @@ describe("multi-instance isolation", () => {
     expect(textLayerCleanupMock).toHaveBeenCalledTimes(1);
     // 静态方法依赖 this：裸调用（接收者 undefined）在真实 pdfjs 里抛
     // TypeError。contexts 记录每次调用的 this——必须等于 TextLayer 本身。
-    expect(textLayerCleanupMock.mock.contexts[0]).toBe(TextLayerMock);
+    expect(textLayerCleanupMock.mock.contexts[0]!).toBe(TextLayerMock);
   });
 });

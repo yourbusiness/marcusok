@@ -77,6 +77,17 @@ type PageState = "empty" | "queued" | "rendering" | "rendered";
 let activePreviewInstances = 0;
 
 /**
+ * 内容驱动的尺寸关键字（max/min-content、fit-content 及其带参数与
+ * legacy 前缀变体、stretch）。这类值随内容增长：作为滚动根时高度等于
+ * 内容总高，与含 % 的形态同样使 IO root 覆盖全部页（全量渲染、预载/
+ * 释放带失效）。误排除真定高 root 的代价只是回退视口 root（懒渲染与
+ * 导航照常工作），远小于误包含，故按"含关键字即排除"的保守口径收紧。
+ * 与 ppt-preview 的同名常量保持同口径（滚动根启发式两包共享演进）。
+ */
+const CONTENT_SIZING_RE =
+  /\b(?:max-content|min-content|fit-content|stretch)\b|-moz-available|-webkit-fill-available/;
+
+/**
  * 判断滚动祖先是否真的可能裁剪内容，而不是"随内容一起长高"的 overflow:auto
  * 包装层（典型如 Ant Design 的 ant-card-body）。
  *
@@ -92,16 +103,28 @@ function hasDefiniteHeight(
   style: CSSStyleDeclaration,
 ): boolean {
   const inlineHeight = el.style.height;
-  // 百分比 max-height 在父级高度 auto 时同样不定高（如 max-height:100%
-  // 的内容驱动包装层）——把它当作定高会误选 root，让预载带覆盖整份文档、
-  // 懒渲染退化成全量渲染。
+  // 含百分比分量的 max-height 在父级高度 auto 时同样不定高（如
+  // max-height:100% 的内容驱动包装层、Tailwind max-h-full；以及
+  // calc(100% - 2rem) 一类不以 % 结尾但含 % 的形态）——把它当作定高会
+  // 误选 root，让预载带覆盖整份文档、懒渲染退化成全量渲染。用
+  // includes("%") 而非 endsWith("%")：真定高值（600px、calc(50vh - 2rem)）
+  // 不含 %，不受影响。内容驱动关键字同理排除（见 CONTENT_SIZING_RE）。
   const definiteMax = (value: string | undefined): boolean =>
-    Boolean(value && value !== "none" && !value.trim().endsWith("%"));
+    Boolean(
+      value &&
+      value !== "none" &&
+      !value.trim().includes("%") &&
+      !CONTENT_SIZING_RE.test(value),
+    );
   return Boolean(
     definiteMax(style.maxHeight) ||
     definiteMax(el.style.maxHeight) ||
-    // 百分比高度在父级高度 auto 时并不定高，不能作为"会滚动"的证据
-    (inlineHeight && inlineHeight !== "auto" && !inlineHeight.endsWith("%")) ||
+    // 百分比/内容驱动关键字高度在父级高度 auto 时并不定高，不能作为
+    // "会滚动"的证据
+    (inlineHeight &&
+      inlineHeight !== "auto" &&
+      !inlineHeight.includes("%") &&
+      !CONTENT_SIZING_RE.test(inlineHeight)) ||
     (el.clientHeight > 0 && el.scrollHeight > el.clientHeight),
   );
 }

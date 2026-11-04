@@ -45,7 +45,7 @@ Full details in the [docs site limits page](https://yourbusiness.github.io/marcu
 
 ## Performance
 
-- **Bundle** (measured at build time, unminified per repo convention): `dist/index.js` ~850 KB (~177 KB gzipped), worker 1.26 MB, `cmaps/` 1.6 MB (169 entries: 168 `.bcmap` files + LICENSE), `standard_fonts/` 816 KB (16 entries: 14 fonts + 2 licenses) — ~4.5 MB payload plus sourcemap, in the same class as `@marcusok/excel-preview`.
+- **Bundle** (measured at build time, unminified per repo convention): `dist/index.js` ~860 KB (~179 KB gzipped), worker 1.26 MB, `cmaps/` 1.6 MB (169 entries: 168 `.bcmap` files + LICENSE), `standard_fonts/` 816 KB (16 entries: 14 fonts + 2 licenses) — ~4.5 MB payload plus sourcemap, in the same class as `@marcusok/excel-preview`.
 - **Node parse baseline** (`performance.test.ts`): 200-page synthetic text PDF, `getDocument` + first-page `streamTextContent` ≈ 66 ms warm median on the dev machine (one-time pdf.js worker/module init is measured by a warm-up run, not the SLA); SLA 150 ms (`PERF_SLACK` honored, `RUN_PERF=0` skips).
 - **Rendering** is viewport-driven and serialized by design; `onRendered.firstPageMs` is the user-perceived first-paint number for your documents.
 

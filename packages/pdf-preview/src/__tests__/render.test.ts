@@ -275,10 +275,10 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     });
     await waitForPages(container, 2);
     const els = pageEls(container);
-    expect(els[0].style.width).toBe("1224px");
-    expect(els[0].style.height).toBe("1584px");
+    expect(els[0]!.style.width).toBe("1224px");
+    expect(els[0]!.style.height).toBe("1584px");
     // 页级 CSS 变量（文本层字号计算链输入）
-    expect(els[0].style.getPropertyValue("--scale-factor")).toBe("2");
+    expect(els[0]!.style.getPropertyValue("--scale-factor")).toBe("2");
     inst.destroy();
   });
 
@@ -289,7 +289,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     setClientSize(container, 306, 1000); // 306/612 = 0.5
     const inst = createPdfPreview(container, { source: magicSource() });
     await waitForPages(container, 2);
-    expect(pageEls(container)[0].style.width).toBe("306px");
+    expect(pageEls(container)[0]!.style.width).toBe("306px");
     inst.destroy();
   });
 
@@ -319,7 +319,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     await waitForPages(container, 1);
     // 官方 viewer 同口径：--total-scale-factor = --scale-factor × --user-unit。
     // 缺这一条时 /UserUnit=2 的文本层字号与坐标只剩一半。
-    expect(pageEls(container)[0].style.getPropertyValue("--user-unit")).toBe(
+    expect(pageEls(container)[0]!.style.getPropertyValue("--user-unit")).toBe(
       "2",
     );
     inst.destroy();
@@ -335,7 +335,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     // (340 - 20 - 20) / 612 = 0.4902 → 300px（含 padding 会得到 340px 并溢出）
     const inst = createPdfPreview(container, { source: magicSource() });
     await waitForPages(container, 1);
-    expect(pageEls(container)[0].style.width).toBe("300px");
+    expect(pageEls(container)[0]!.style.width).toBe("300px");
     inst.destroy();
   });
 
@@ -352,7 +352,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       scale: "fit-page",
     });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
     expect(el.style.width).toBe("336px");
     expect(Number.parseFloat(el.style.height) + 24).toBeLessThanOrEqual(460);
     inst.destroy();
@@ -369,7 +369,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       scale: "fit-page",
     });
     await waitForPages(container, 1);
-    expect(pageEls(container)[0].style.width).toBe("367px");
+    expect(pageEls(container)[0]!.style.width).toBe("367px");
     inst.destroy();
   });
 
@@ -386,7 +386,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       scale: "fit-page",
     });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
     expect(el.style.width).toBe("290px");
     expect(Number.parseFloat(el.style.height) + 24).toBeLessThanOrEqual(400);
     inst.destroy();
@@ -404,7 +404,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       scale: "fit-page",
     });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
     // 可用高 = 400 - wrapper 24 = 376（不再扣容器 padding）；
     // 360/612≈0.588 vs 376/792≈0.4747 → 290px。
     expect(el.style.width).toBe("290px");
@@ -425,7 +425,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       scale: "fit-page",
     });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
     // 内容高 400-40=360，再扣 wrapper 24 → 336；宽比 360/612=0.588 vs
     // 336/792≈0.424 → 259px。
     expect(el.style.width).toBe("259px");
@@ -447,7 +447,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       true,
     );
     // 退化为 fit-width：400/612
-    expect(pageEls(container)[0].style.width).toBe("400px");
+    expect(pageEls(container)[0]!.style.width).toBe("400px");
     warn.mockRestore();
     inst.destroy();
   });
@@ -463,10 +463,10 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       scale: 2,
     });
     await waitForPages(container, 1);
-    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    ioByMargin("100%")[0]!.fire(pageEls(container)[0]!, true);
     await vi.waitFor(() => expect(page.renderCalls).toHaveLength(1));
 
-    const { canvas, transform } = page.renderCalls[0];
+    const { canvas, transform } = page.renderCalls[0]!;
     const pixels = canvas.width * canvas.height;
     expect(pixels).toBeLessThanOrEqual(MAX_CANVAS_PIXELS);
     expect(pixels).toBeGreaterThan(MAX_CANVAS_PIXELS * 0.95);
@@ -486,8 +486,8 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       onError,
     });
     await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
-    expect(onError.mock.calls[0][0]).toMatchObject({ code: "UNKNOWN" });
-    expect(onError.mock.calls[0][0].message).toContain("IntersectionObserver");
+    expect(onError.mock.calls[0]![0]).toMatchObject({ code: "UNKNOWN" });
+    expect(onError.mock.calls[0]![0].message).toContain("IntersectionObserver");
     expect(container.querySelectorAll(".mop-pdf-page")).toHaveLength(0);
     inst.destroy();
   });
@@ -514,7 +514,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const inst = createPdfPreview(container, { source: magicSource() });
     await waitForPages(container, 1);
-    expect(pageEls(container)[0].style.width).toBe("612px");
+    expect(pageEls(container)[0]!.style.width).toBe("612px");
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
     inst.destroy();
@@ -533,25 +533,25 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     await waitForPages(container, 2);
     const els = pageEls(container);
 
-    ioByMargin("100%")[0].fire(els[0], true);
+    ioByMargin("100%")[0]!.fire(els[0]!, true);
     await vi.waitFor(() => {
-      expect(els[0].querySelector("canvas")).not.toBeNull();
+      expect(els[0]!.querySelector("canvas")).not.toBeNull();
     });
     await vi.waitFor(() => {
-      expect(els[0].querySelector(".textLayer")).not.toBeNull();
+      expect(els[0]!.querySelector(".textLayer")).not.toBeNull();
     });
-    expect(els[0].querySelector("canvas")!.style.width).toBe("612px");
+    expect(els[0]!.querySelector("canvas")!.style.width).toBe("612px");
 
     expect(onRendered).toHaveBeenCalledTimes(1);
-    const info = onRendered.mock.calls[0][0];
+    const info = onRendered.mock.calls[0]![0];
     expect(info.pageCount).toBe(2);
     expect(info.firstPageMs).toBeGreaterThanOrEqual(0);
     expect(info.durationMs).toBeGreaterThanOrEqual(0);
 
     // 第二页渲染不重复触发 onRendered
-    ioByMargin("100%")[0].fire(els[1], true);
+    ioByMargin("100%")[0]!.fire(els[1]!, true);
     await vi.waitFor(() => {
-      expect(pages[1].render).toHaveBeenCalled();
+      expect(pages[1]!.render).toHaveBeenCalled();
     });
     expect(onRendered).toHaveBeenCalledTimes(1);
     inst.destroy();
@@ -573,7 +573,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
         }) as never,
     });
     await waitForPages(container, 1);
-    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    ioByMargin("100%")[0]!.fire(pageEls(container)[0]!, true);
     await vi.waitFor(() => {
       expect(
         warn.mock.calls.some((c) => String(c[0]).includes("onRendered")),
@@ -593,11 +593,11 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       textLayer: false,
     });
     await waitForPages(container, 1);
-    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    ioByMargin("100%")[0]!.fire(pageEls(container)[0]!, true);
     await vi.waitFor(() => {
-      expect(pageEls(container)[0].querySelector("canvas")).not.toBeNull();
+      expect(pageEls(container)[0]!.querySelector("canvas")).not.toBeNull();
     });
-    expect(pageEls(container)[0].querySelector(".textLayer")).toBeNull();
+    expect(pageEls(container)[0]!.querySelector(".textLayer")).toBeNull();
     expect(TextLayerMock).not.toHaveBeenCalled();
     inst.destroy();
   });
@@ -613,14 +613,14 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       scale: 1.5,
     });
     await waitForPages(container, 1);
-    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    ioByMargin("100%")[0]!.fire(pageEls(container)[0]!, true);
     await vi.waitFor(() => {
-      expect(pages[0].render).toHaveBeenCalled();
+      expect(pages[0]!.render).toHaveBeenCalled();
     });
-    const call = pages[0].renderCalls[0];
+    const call = pages[0]!.renderCalls[0]!;
     expect(call.scale).toBe(1.5);
     expect(call.transform).toEqual([2, 0, 0, 2, 0, 0]);
-    const canvas = pageEls(container)[0].querySelector("canvas")!;
+    const canvas = pageEls(container)[0]!.querySelector("canvas")!;
     // 位图 = CSS 尺寸 × dpr
     expect(canvas.width).toBe(Math.floor(612 * 1.5 * 2));
     inst.destroy();
@@ -638,17 +638,17 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     await waitForPages(container, 2);
     const els = pageEls(container);
 
-    ioByMargin("100%")[0].fire(els[0], true);
-    ioByMargin("100%")[0].fire(els[1], true);
-    await vi.waitFor(() => expect(pages[0].render).toHaveBeenCalled());
+    ioByMargin("100%")[0]!.fire(els[0]!, true);
+    ioByMargin("100%")[0]!.fire(els[1]!, true);
+    await vi.waitFor(() => expect(pages[0]!.render).toHaveBeenCalled());
     // 串行：首页 render 挂起期间，第二页不得开渲
-    expect(pages[1].render).not.toHaveBeenCalled();
+    expect(pages[1]!.render).not.toHaveBeenCalled();
 
-    pages[0].renderDeferreds[0].resolve(); // 放行首页
-    await vi.waitFor(() => expect(pages[1].render).toHaveBeenCalled());
-    pages[1].renderDeferreds[0].resolve();
+    pages[0]!.renderDeferreds[0]!.resolve(); // 放行首页
+    await vi.waitFor(() => expect(pages[1]!.render).toHaveBeenCalled());
+    pages[1]!.renderDeferreds[0]!.resolve();
     await vi.waitFor(() => {
-      expect(els[1].querySelector("canvas")).not.toBeNull();
+      expect(els[1]!.querySelector("canvas")).not.toBeNull();
     });
     inst.destroy();
   });
@@ -660,28 +660,28 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     vi.stubGlobal("IntersectionObserver", FakeIO);
     const inst = createPdfPreview(container, { source: magicSource() });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
 
-    ioByMargin("100%")[0].fire(el, true);
+    ioByMargin("100%")[0]!.fire(el, true);
     await vi.waitFor(() => {
       expect(el.querySelector("canvas")).not.toBeNull();
     });
 
     // 离开渲染带（wanted=false）+ 离开保留带（释放）。释放可能经
     // pendingRelease 异步收尾（渲染在途时先记标记、完成后释放），用 waitFor
-    ioByMargin("100%")[0].fire(el, false);
-    ioByMargin("300%")[0].fire(el, false);
+    ioByMargin("100%")[0]!.fire(el, false);
+    ioByMargin("300%")[0]!.fire(el, false);
     await vi.waitFor(() => {
       expect(el.querySelector("canvas")).toBeNull();
     });
     expect(el.querySelector(".textLayer")).toBeNull();
 
     // 重新进入：按同路径重渲
-    ioByMargin("100%")[0].fire(el, true);
+    ioByMargin("100%")[0]!.fire(el, true);
     await vi.waitFor(() => {
       expect(el.querySelector("canvas")).not.toBeNull();
     });
-    expect(pages[0].render).toHaveBeenCalledTimes(2);
+    expect(pages[0]!.render).toHaveBeenCalledTimes(2);
     inst.destroy();
   });
 
@@ -717,15 +717,15 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       onError,
     });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
 
-    ioByMargin("100%")[0].fire(el, true);
+    ioByMargin("100%")[0]!.fire(el, true);
     await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(1));
 
     // 滚出渲染带 + 滚出保留带 → 取消在途渲染；随后立刻又进入渲染带
-    ioByMargin("100%")[0].fire(el, false);
-    ioByMargin("300%")[0].fire(el, false);
-    ioByMargin("100%")[0].fire(el, true);
+    ioByMargin("100%")[0]!.fire(el, false);
+    ioByMargin("300%")[0]!.fire(el, false);
+    ioByMargin("100%")[0]!.fire(el, true);
 
     // 取消落定后必须重新入队渲染（第二次调用 resolve）
     await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(2));
@@ -750,16 +750,16 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       onRendered,
     });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
 
-    ioByMargin("100%")[0].fire(el, true);
+    ioByMargin("100%")[0]!.fire(el, true);
     // onRendered 在 textLayer 收尾后触发 = 状态已落到 rendered
     await vi.waitFor(() => expect(onRendered).toHaveBeenCalledTimes(1));
 
-    ioByMargin("100%")[0].fire(el, false);
-    ioByMargin("100%")[0].fire(el, true); // 回带：wanted=true
-    ioByMargin("300%")[0].fire(el, false); // 陈旧的离带事件
-    ioByMargin("300%")[0].fire(el, true);
+    ioByMargin("100%")[0]!.fire(el, false);
+    ioByMargin("100%")[0]!.fire(el, true); // 回带：wanted=true
+    ioByMargin("300%")[0]!.fire(el, false); // 陈旧的离带事件
+    ioByMargin("300%")[0]!.fire(el, true);
 
     await vi.waitFor(() => expect(page.render).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => {
@@ -791,16 +791,16 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       onError,
     });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
 
-    ioByMargin("100%")[0].fire(el, true);
+    ioByMargin("100%")[0]!.fire(el, true);
     await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(1));
-    ioByMargin("300%")[0].fire(el, false); // pendingRelease = true
+    ioByMargin("300%")[0]!.fire(el, false); // pendingRelease = true
     d.reject(new Error("boom")); // 非取消错误
     await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
     expect(el.querySelector("canvas")).toBeNull();
 
-    ioByMargin("100%")[0].fire(el, true); // 重入 → 重试
+    ioByMargin("100%")[0]!.fire(el, true); // 重入 → 重试
     await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(2));
     // 成功渲染的页必须保留 canvas，而不是被残留的 pendingRelease 立即释放
     await vi.waitFor(() => {
@@ -819,12 +819,12 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const els = pageEls(container);
 
     // 页 1 占住渲染位（deferred 不放行），页 2 入队后立即滚出渲染带
-    ioByMargin("100%")[0].fire(els[0], true);
-    await vi.waitFor(() => expect(pages[0].render).toHaveBeenCalled());
-    ioByMargin("100%")[0].fire(els[1], true);
-    ioByMargin("100%")[0].fire(els[1], false); // wanted=false
+    ioByMargin("100%")[0]!.fire(els[0]!, true);
+    await vi.waitFor(() => expect(pages[0]!.render).toHaveBeenCalled());
+    ioByMargin("100%")[0]!.fire(els[1]!, true);
+    ioByMargin("100%")[0]!.fire(els[1]!, false); // wanted=false
     await new Promise((r) => setTimeout(r, 20));
-    expect(pages[1].render).not.toHaveBeenCalled();
+    expect(pages[1]!.render).not.toHaveBeenCalled();
     inst.destroy();
   });
 
@@ -836,7 +836,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const notPdf = new Uint8Array([1, 2, 3, 4]);
     const inst = createPdfPreview(container, { source: notPdf, onError });
     await vi.waitFor(() => expect(onError).toHaveBeenCalled());
-    const err = onError.mock.calls[0][0] as PdfPreviewError;
+    const err = onError.mock.calls[0]![0] as PdfPreviewError;
     expect(err.code).toBe("UNSUPPORTED");
     expect(getDocument).not.toHaveBeenCalled();
     expect(container.children).toHaveLength(0); // 失败即无副作用
@@ -862,7 +862,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
         onError,
       });
       await vi.waitFor(() => expect(onError).toHaveBeenCalled());
-      const err = onError.mock.calls[0][0] as PdfPreviewError;
+      const err = onError.mock.calls[0]![0] as PdfPreviewError;
       expect(err.code).toBe("PASSWORD_PROTECTED");
       expect(messageRe.test(err.message)).toBe(true);
       inst.destroy();
@@ -883,7 +883,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       onError,
     });
     await vi.waitFor(() => expect(onError).toHaveBeenCalled());
-    const err = onError.mock.calls[0][0] as PdfPreviewError;
+    const err = onError.mock.calls[0]![0] as PdfPreviewError;
     expect(err.code).toBe("CORRUPT");
     expect(err.cause).toBe(cause);
     inst.destroy();
@@ -917,7 +917,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       onError,
     });
     await waitForPages(container, 1);
-    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    ioByMargin("100%")[0]!.fire(pageEls(container)[0]!, true);
     await vi.waitFor(() => expect(first.render).toHaveBeenCalled());
 
     page2.reject(new Error("page 2 unavailable")); // 文档级失败
@@ -941,14 +941,14 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       onError,
     });
     await waitForPages(container, 1);
-    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    ioByMargin("100%")[0]!.fire(pageEls(container)[0]!, true);
     await vi.waitFor(() => expect(onError).toHaveBeenCalled());
-    const err = onError.mock.calls[0][0] as PdfPreviewError;
+    const err = onError.mock.calls[0]![0] as PdfPreviewError;
     expect(err.code).toBe("CORRUPT");
     expect(String(err.message)).toContain("boom");
     // 状态机回 empty：可重试重渲
-    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
-    await vi.waitFor(() => expect(pages[0].render).toHaveBeenCalledTimes(2));
+    ioByMargin("100%")[0]!.fire(pageEls(container)[0]!, true);
+    await vi.waitFor(() => expect(pages[0]!.render).toHaveBeenCalledTimes(2));
     inst.destroy();
   });
 
@@ -969,7 +969,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       renderOptions: { disableFontFace: true, useSystemFonts: false },
     });
     await waitForPages(container, 1);
-    const params = getDocumentMock.mock.calls[0][0] as Record<string, unknown>;
+    const params = getDocumentMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(params.disableFontFace).toBe(true);
     expect(params.useSystemFonts).toBe(false);
     expect(params.cMapPacked).toBe(true); // 接管项：bcmap 二进制格式
@@ -992,7 +992,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       iccUrl: "/icc/",
     });
     await waitForPages(container, 1);
-    const params = getDocumentMock.mock.calls[0][0] as Record<string, unknown>;
+    const params = getDocumentMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(params.cMapUrl).toBe("/cm/");
     expect(params.standardFontDataUrl).toBe("/sf/");
     expect(params.wasmUrl).toBe("/wasm/");
@@ -1075,7 +1075,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const onError = vi.fn();
     const inst = createPdfPreview(container, { source: bad, onError });
     await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
-    expect(onError.mock.calls[0][0].code).toBe("UNSUPPORTED");
+    expect(onError.mock.calls[0]![0].code).toBe("UNSUPPORTED");
     inst.destroy();
   });
 
@@ -1101,8 +1101,8 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const inst = createPdfPreview(host, { source: magicSource() });
     await waitForPages(host, 1);
 
-    expect(ioByMargin("100%")[0].options?.root).toBe(outer);
-    expect(ioByMargin("300%")[0].options?.root).toBe(outer);
+    expect(ioByMargin("100%")[0]!.options?.root).toBe(outer);
+    expect(ioByMargin("300%")[0]!.options?.root).toBe(outer);
     inst.destroy();
   });
 
@@ -1119,8 +1119,8 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const inst = createPdfPreview(host, { source: magicSource() });
     await waitForPages(host, 1);
 
-    expect(ioByMargin("100%")[0].options?.root).toBeNull();
-    expect(ioByMargin("300%")[0].options?.root).toBeNull();
+    expect(ioByMargin("100%")[0]!.options?.root).toBeNull();
+    expect(ioByMargin("300%")[0]!.options?.root).toBeNull();
     inst.destroy();
   });
 
@@ -1145,8 +1145,8 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const inst = createPdfPreview(host, { source: magicSource() });
     await waitForPages(host, 1);
 
-    expect(ioByMargin("100%")[0].options?.root).toBe(outer);
-    expect(ioByMargin("300%")[0].options?.root).toBe(outer);
+    expect(ioByMargin("100%")[0]!.options?.root).toBe(outer);
+    expect(ioByMargin("300%")[0]!.options?.root).toBe(outer);
     inst.destroy();
   });
 
@@ -1173,8 +1173,8 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const inst = createPdfPreview(host, { source: magicSource() });
     await waitForPages(host, 5);
 
-    expect(activeIoByMargin("100%")[0].options?.root).toBe(outer);
-    expect(activeIoByMargin("300%")[0].options?.root).toBe(outer);
+    expect(activeIoByMargin("100%")[0]!.options?.root).toBe(outer);
+    expect(activeIoByMargin("300%")[0]!.options?.root).toBe(outer);
     inst.destroy();
   });
 
@@ -1192,9 +1192,64 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     const inst = createPdfPreview(host, { source: magicSource() });
     await waitForPages(host, 1);
 
-    expect(activeIoByMargin("100%")[0].options?.root).toBeNull();
+    expect(activeIoByMargin("100%")[0]!.options?.root).toBeNull();
     inst.destroy();
   });
+
+  it("does not treat a calc() max-height containing a percentage as definite", async () => {
+    // calc(100% - 2rem) 不以 % 结尾，但父级 auto 高时百分比分量同样使其
+    // 不定高——只按 endsWith("%") 排除会误选作 IO root（root 覆盖整份
+    // 文档 → 全量渲染）。与 ppt-preview 0.1.7 的同类修复保持同口径。
+    const outer = document.createElement("div");
+    outer.style.overflow = "auto";
+    outer.style.maxHeight = "calc(100% - 2rem)";
+    const host = document.createElement("div");
+    outer.appendChild(host);
+    document.body.appendChild(outer);
+
+    const { doc } = fakeDoc([fakePage(1)]);
+    setupDocument(doc);
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    const inst = createPdfPreview(host, { source: magicSource() });
+    await waitForPages(host, 1);
+
+    expect(activeIoByMargin("100%")[0]!.options?.root).toBeNull();
+    inst.destroy();
+  });
+
+  it.each([
+    ["max-content", "maxHeight"],
+    ["min-content", "maxHeight"],
+    ["fit-content", "maxHeight"],
+    ["fit-content", "height"],
+    ["fit-content(100px)", "maxHeight"],
+    ["-moz-fit-content", "maxHeight"],
+  ] as const)(
+    "does not treat content-sizing %s (%s) as a definite scroll root",
+    async (keyword, prop) => {
+      // max/min-content、fit-content（含带参与 legacy 前缀变体）不含 %
+      // 也不等于 none/auto，但都随内容增长——当作定高会把 root 高度抬到
+      // 整份内容（全量渲染、释放带永不触发）。保守排除：误排除真定高
+      // 只是回退视口 root，懒渲染与导航仍工作。
+      const outer = document.createElement("div");
+      outer.style.overflow = "auto";
+      if (prop === "maxHeight") outer.style.maxHeight = keyword;
+      else outer.style.height = keyword;
+      const host = document.createElement("div");
+      outer.appendChild(host);
+      document.body.appendChild(outer);
+
+      const { doc } = fakeDoc([fakePage(1)]);
+      setupDocument(doc);
+      vi.stubGlobal("IntersectionObserver", FakeIO);
+      const inst = createPdfPreview(host, { source: magicSource() });
+      await waitForPages(host, 1);
+
+      expect(activeIoByMargin("100%")[0]!.options?.root).toBeNull();
+      inst.destroy();
+      outer.remove();
+    },
+  );
 
   /* ---------------------- worker/asset failure mapping ---------------------- */
 
@@ -1215,7 +1270,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       onError,
     });
     await vi.waitFor(() => expect(onError).toHaveBeenCalled());
-    const err = onError.mock.calls[0][0] as PdfPreviewError;
+    const err = onError.mock.calls[0]![0] as PdfPreviewError;
     expect(err.code).toBe("UNKNOWN");
     expect(err.message).toMatch(/worker/i);
     inst.destroy();
@@ -1243,19 +1298,19 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
 
     const inst = createPdfPreview(container, { source: magicSource() });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
+    const el = pageEls(container)[0]!;
 
-    ioByMargin("100%")[0].fire(el, true);
+    ioByMargin("100%")[0]!.fire(el, true);
     await vi.waitFor(() => expect(TextLayerMock).toHaveBeenCalled());
     // canvas 已完成、文本层仍在抽取：离开保留带应取消文本流并清页资源
-    ioByMargin("300%")[0].fire(el, false);
+    ioByMargin("300%")[0]!.fire(el, false);
 
     await vi.waitFor(() => expect(tlCancel).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => {
       expect(el.querySelector("canvas")).toBeNull();
       expect(el.querySelector(".textLayer")).toBeNull();
     });
-    expect(pages[0].cleanup).toHaveBeenCalled();
+    expect(pages[0]!.cleanup).toHaveBeenCalled();
     inst.destroy();
   });
 
@@ -1292,8 +1347,8 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
       scale: 1,
     });
     await waitForPages(container, 1);
-    const el = pageEls(container)[0];
-    ioByMargin("100%")[0].fire(el, true);
+    const el = pageEls(container)[0]!;
+    ioByMargin("100%")[0]!.fire(el, true);
     await vi.waitFor(() => {
       expect(el.querySelector("canvas")).not.toBeNull();
     });
@@ -1304,7 +1359,7 @@ describe("createPdfPreview render pipeline (mocked engine)", () => {
     expect(canvas.width).toBe(0);
     expect(canvas.height).toBe(0);
     expect(container.children).toHaveLength(0);
-    expect(pages[0].cleanup).toHaveBeenCalled();
+    expect(pages[0]!.cleanup).toHaveBeenCalled();
   });
 
   /* ------------------------------- sources ------------------------------- */
@@ -1350,7 +1405,7 @@ describe("用户回调异常隔离", () => {
       },
     });
     await waitForPages(container, 1);
-    ioByMargin("100%")[0].fire(pageEls(container)[0], true);
+    ioByMargin("100%")[0]!.fire(pageEls(container)[0]!, true);
     await vi.waitFor(() => {
       expect(
         warn.mock.calls.some((c) => String(c[0]).includes("onRendered")),
