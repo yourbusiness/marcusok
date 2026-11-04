@@ -206,9 +206,23 @@ export function indexedColor(index: number): string | null {
 export function colorCodeToCss(name: string): string | null {
   // [Color10] 与 [Color 10] 均为合法 Excel 语法
   const m = /^color\s*(\d+)$/i.exec(name.trim());
-  if (m) return argbToCss(indexedColor(Number(m[1])));
+  if (m) return argbToCss(legacyPaletteColor(Number(m[1])));
   const hex = NAMED_COLORS.get(name.trim().toLowerCase());
   return hex ? `#${hex}` : null;
+}
+
+/**
+ * numFmt 的 [Color n]（n=1..56）指向 Excel **旧版 56 色调色板**（1-based），
+ * 不是本文件 indexedColor 的 0-based ECMA indexed 表：1-8 对应 indexed
+ * [n-1]，9-56 对应 indexed[n+7]（跳过 indexed 表 8-15 的重复区段）。
+ * 2026-11 修复：此前把 n 直接当 0-based 序号查表，整组颜色错位——
+ * [Color 1] 查到白（与同文件 [Black] 的黑自相矛盾）、[Color 3] 绿而非红、
+ * [Color 9]/[Color 17] 各错一格，财务条件着色列整体不可用。越界
+ * （0 / >56）Excel 未定义，返回 null（不出颜色）。
+ */
+function legacyPaletteColor(n: number): string | null {
+  if (!Number.isInteger(n) || n < 1 || n > 56) return null;
+  return indexedColor(n <= 8 ? n - 1 : n + 7);
 }
 
 /** numFmt 颜色段支持的命名色（en-US 名 → 6 位 RGB）。 */

@@ -112,15 +112,25 @@ describe("颜色段", () => {
     expect(C("number", "-1234.5", "#,##0.00;[Red]-#,##0.00")).toBe("#ff0000");
     expect(F("number", "-1234.5", "#,##0.00;[Red]-#,##0.00")).toBe("-1,234.50");
   });
-  it("[Color n] indexed 色表", () => {
-    expect(C("number", "1", "[Color 3]0")).toBe("#00ff00");
+  it("[Color n] 指向旧版 56 色调色板（1-based，非 0-based indexed 表）", () => {
+    // Excel 语义：[Color 1]=黑（与 [Black] 等价）、[Color 3]=红、
+    // [Color 9]=深红 800000、[Color 17]=9999FF。1-8 → indexed[n-1]，
+    // 9-56 → indexed[n+7]（跳过 indexed 表 8-15 的重复区段）。
+    // 旧实现把 n 直接当 0-based indexed 序号，整体错一位。
+    expect(C("number", "1", "[Color 1]0")).toBe("#000000");
+    expect(C("number", "1", "[Color 3]0")).toBe("#ff0000");
+    expect(C("number", "1", "[Color 9]0")).toBe("#800000");
+    expect(C("number", "1", "[Color 17]0")).toBe("#9999ff");
+    // 越界（0 / 57）Excel 未定义：不出颜色、不污染文本
+    expect(C("number", "1", "[Color 0]0")).toBeUndefined();
+    expect(F("number", "1234.5", "[Color 57]0.00")).toBe("1234.50");
   });
   it("[ColorN]（无空格）同样识别，不污染数字文本", () => {
     // 旧实现只认 "[Color 10]"；"[Color10]" 被当字面量，输出
-    // "[Color11234.50" 一类污染文本。
-    expect(C("number", "1234.5", "[Color10]0.00")).toBe("#ff0000");
+    // "[Color11234.50" 一类污染文本。色值按旧版调色板：10 → 008000。
+    expect(C("number", "1234.5", "[Color10]0.00")).toBe("#008000");
     expect(F("number", "1234.5", "[Color10]0.00")).toBe("1234.50");
-    expect(C("number", "1234.5", "[Color10]#,##0.00")).toBe("#ff0000");
+    expect(C("number", "1234.5", "[Color10]#,##0.00")).toBe("#008000");
     expect(F("number", "1234.5", "[Color10]#,##0.00")).toBe("1,234.50");
   });
 });
@@ -455,5 +465,104 @@ describe("科学计数格式（内置 id 11/48 路径）", () => {
   });
   it("负值", () => {
     expect(F("number", "-12345678", "0.00E+00")).toBe("-1.23E+07");
+  });
+});
+
+// ===================== 以下为 2026-11-04 审计修复的回归测试 =====================
+
+describe("分数格式分母位数上限（Excel 语义，2026-11 修复）", () => {
+  it("一位占位符分母 ≤ 9：取区间内最逼近分数", () => {
+    // 引擎无视占位符位数恒搜到 99：3.14159 曾输出 "3 14/99"
+    expect(F("number", "3.14159", "# ?/?")).toBe("3 1/7");
+    expect(F("number", "0.777", "# ?/?")).toBe("7/9");
+    // 等值不同分母时约分到最简（55/99 → 5/9）
+    expect(F("number", "5.555", "# ?/?")).toBe("5 5/9");
+  });
+  it("两位占位符分母 ≤ 99", () => {
+    expect(F("number", "3.14159", "# ??/??")).toBe("3 14/99");
+    expect(F("number", "0.777", "# ??/??")).toBe("73/94");
+  });
+  it("既有正确形态不回归（int 0 隐藏、整数只出整数）", () => {
+    expect(F("number", "1.25", "# ?/?")).toBe("1 1/4");
+    expect(F("number", "0.5", "# ?/?")).toBe("1/2");
+    expect(F("number", "2", "# ?/?")).toBe("2");
+    expect(F("number", "0.375", "# ??/??")).toBe("3/8");
+  });
+  it("纯分数格式（无整数占位符）出假分数", () => {
+    expect(F("number", "1.25", "?/?")).toBe("5/4");
+  });
+  it("负值单段格式带负号", () => {
+    expect(F("number", "-1.25", "# ?/?")).toBe("-1 1/4");
+  });
+});
+
+describe("mm:ss.0 秒进位（2026-11 修复：不产生非法 60 秒）", () => {
+  it("59.9999 秒按显示精度进位到下一分", () => {
+    expect(F("number", String(59.99999 / 86400), "mm:ss.0")).toBe("01:00.0");
+  });
+  it("非边界值不回归", () => {
+    expect(F("number", String(12.34 / 86400), "mm:ss.0")).toBe("00:12.3");
+    expect(F("number", String(59.94 / 86400), "mm:ss.0")).toBe("00:59.9");
+  });
+});
+
+describe("条件括号支持科学计数与前导正负号（2026-11 修复）", () => {
+  it("[>1E+10] 命中段 1，段码不漏出", () => {
+    expect(F("number", "5e11", "[>1E+10]0;0.00")).toBe("500000000000");
+  });
+  it("未命中走无条件段", () => {
+    expect(F("number", "5", "[>1E+10]0;0.00")).toBe("5.00");
+  });
+  it("[<1e-3] 小写 e 与前导 + 同样识别", () => {
+    expect(F("number", "0.0005", "[<+1e-2]0.0000;0")).toBe("0.0005");
+  });
+});
+
+describe("段级 General 携带字面量（2026-11 修复）", () => {
+  it('General" kg" 数值保留、不漏 "General" 字样', () => {
+    expect(F("number", "5", 'General" kg"')).toBe("5 kg");
+  });
+  it('"前缀"General 前缀保留', () => {
+    expect(F("number", "1234.5", '"总数："General')).toBe("总数：1234.5");
+  });
+  it("负段 -General 不双写负号", () => {
+    expect(F("number", "-5", 'General;-General" 负"')).toBe("-5 负");
+  });
+  it("颜色段与 General 字面量共存", () => {
+    expect(C("number", "-5", '[Red]General" kg"')).toBe("#ff0000");
+    expect(F("number", "-5", '[Red]General" kg"')).toBe("-5 kg");
+  });
+});
+
+describe("文本段多个 @ 记号（2026-11 修复）", () => {
+  it("每个 @ 都替换为文本", () => {
+    expect(F("string", "abc", "@@@")).toBe("abcabcabc");
+    expect(F("string", "abc", "x@y@")).toBe("xabcyabc");
+  });
+  it("单个 @ 保持原行为", () => {
+    expect(F("string", "abc", '"文本:"@')).toBe("文本:abc");
+  });
+});
+
+describe("连续百分号逐个 ×100（2026-11 修复）", () => {
+  it("0.00%% 每个 % 各乘一次", () => {
+    expect(F("number", "0.001", "0.00%%")).toBe("10.00%%");
+  });
+  it("单个 % 不回归", () => {
+    expect(F("number", "0.12345", "0.00%")).toBe("12.35%");
+  });
+});
+
+describe("AM/PM 大小写跟随格式码（2026-11 修复）", () => {
+  it("小写 am/pm 输出小写", () => {
+    expect(F("number", "0.5", "h:mm am/pm")).toBe("12:00 pm");
+    expect(F("number", "0.25", "h:mm am/pm")).toBe("6:00 am");
+  });
+  it("大写保持大写", () => {
+    expect(F("number", "0.5", "h:mm AM/PM")).toBe("12:00 PM");
+  });
+  it("a/p 同口径", () => {
+    expect(F("number", "0.75", "h a/p")).toBe("6 p");
+    expect(F("number", "0.75", "h A/P")).toBe("6 P");
   });
 });

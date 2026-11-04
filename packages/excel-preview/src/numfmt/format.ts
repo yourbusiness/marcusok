@@ -60,7 +60,11 @@ const COLOR_BRACKET = new RegExp(
   `^\\[(?:color\\s*\\d+|${COLOR_NAMES})\\]$`,
   "i",
 );
-const CONDITION_BRACKET = /^\[(>=|<=|<>|>|<|=)\s*(-?\d+(?:\.\d+)?)\]$/i;
+// 条件值支持科学计数与前导正负号（工程表分级常用 [>1E+10] 一类写法）；
+// 此前只认纯十进制，未命中落入"未知括号原样保留"，段码被字面量抽取逻辑
+// 拼进数字输出乱码（[>1E+1500000000000）
+const CONDITION_BRACKET =
+  /^\[(>=|<=|<>|>|<|=)\s*([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\]$/i;
 
 /** 拆分格式码为段（引号/括号/转义内的 ";" 不拆）。 */
 export function splitSections(code: string): string[] {
@@ -316,7 +320,9 @@ function scanDateTokens(code: string): (DateTokens | string)[] {
       continue;
     }
     if (code.slice(i).toUpperCase().startsWith("AM/PM")) {
-      out.push({ tok: "AM/PM", isMinute: false });
+      // 保留原字符（大小写跟随格式码是 Excel 语义：am/pm → "pm"，
+      // AM/PM → "PM"）；归一成 "AM/PM" 会把小写格式渲染成大写
+      out.push({ tok: code.slice(i, i + 5), isMinute: false });
       i += 5;
       continue;
     }
@@ -328,7 +334,7 @@ function scanDateTokens(code: string): (DateTokens | string)[] {
       continue;
     }
     if (code.slice(i).toUpperCase().startsWith("A/P")) {
-      out.push({ tok: "A/P", isMinute: false });
+      out.push({ tok: code.slice(i, i + 3), isMinute: false });
       i += 3;
       continue;
     }
@@ -355,13 +361,37 @@ export function formatDateSection(
   const days = Math.floor(serial);
   const frac = serial - days;
   const totalSec = Math.round(frac * SECS_PER_DAY);
-  // 四舍五入到 86400（当天最后半秒内）→ 时间归 0 点且日期进到次日（Excel
-  // 显示次日 0:00；此前日期不联动，1.9999999 显示 "1/1 0:00"）。
+  const totalSecFloat = frac * SECS_PER_DAY;
+  // 小数秒显示精度（mm:ss.0 / ss.00 一类）：s 记号后紧跟 ".0+" 字面量的
+  // 最大位数。> 0 时时间基准按该精度舍入而非取整到秒——Excel 按显示精度
+  // 舍入后再分解时分秒（59.94s + mm:ss.0 → "0:59.9"，按整秒舍入会错成
+  // "1:00"）；舍入触到 60 时进位到下一分/时，绝不渲染非法的 60 秒。
+  // 2026-11 修复：此前整秒分量用整秒舍入、小数秒分量用未舍入原值，同一
+  // 秒记号两个口径，59.99999 秒渲染成 "01:60.0"。
+  const tokens = scanDateTokens(code);
+  let fracSecDigits = 0;
+  for (let ti0 = 0; ti0 < tokens.length; ti0++) {
+    const tk = tokens[ti0];
+    if (typeof tk === "string" || tk.tok[0].toLowerCase() !== "s") continue;
+    let k = ti0 + 1;
+    if (tokens[k] !== ".") continue;
+    k++;
+    const z = k;
+    while (tokens[k] === "0") k++;
+    if (k > z) fracSecDigits = Math.max(fracSecDigits, k - z);
+  }
+  // 四舍五入到 86400（当天最后半个显示单位内）→ 时间归 0 点且日期进到次日
+  // （Excel 显示次日 0:00；此前日期不联动，1.9999999 显示 "1/1 0:00"）。
   // 进位日期不能靠 d + 1 天推：引擎 serialToDate 在幽灵日邻域自身会进位
   //（60.99999… 直接返回 3/1 0 点）而普通区间不进位（1.9999999 返回
   // 23:59:59.992），再 +1 天会重复进位——改用取整后的序列号回询引擎
-  //（+0.5 锚在当天正午，日期分量稳定）。
-  const rollDay = totalSec >= SECS_PER_DAY;
+  //（+0.5 锚在当天正午，日期分量稳定）。小数秒段按显示精度判定跨天
+  // （86399.94s 在 0.1s 精度是 23:59:59.9，不跨天；整秒舍入会提前跨天）。
+  const rollDay =
+    fracSecDigits > 0
+      ? Math.round(totalSecFloat * 10 ** fracSecDigits) / 10 ** fracSecDigits >=
+        SECS_PER_DAY
+      : totalSec >= SECS_PER_DAY;
   const serialDay = days + (rollDay ? 1 : 0);
   const dd = rollDay ? (serialToDate(serialDay + 0.5) ?? d) : d;
   // 1900 幽灵日：serialDay 60 是 Excel 显示的 1900-02-29（真实不存在，继承
@@ -383,17 +413,20 @@ export function formatDateSection(
       ? 29
       : dd.getUTCDate();
   const secsOfDay = rollDay ? totalSec - SECS_PER_DAY : totalSec;
-  // 浮点秒仅小数秒（ss.0）显示路径使用；整秒路径保持 round 口径不变
-  const totalSecFloat = frac * SECS_PER_DAY;
-  const secsOfDayFloat =
-    totalSecFloat >= SECS_PER_DAY
-      ? totalSecFloat - SECS_PER_DAY
-      : totalSecFloat;
-  const hour24 = Math.floor(secsOfDay / 3600);
-  const minute = Math.floor((secsOfDay % 3600) / 60);
-  const second = secsOfDay % 60;
+  // 显示精度基准（仅小数秒段使用）：按 fracSecDigits 舍入的当天秒数；
+  // 触到 86400 时归 0（日期已由 rollDay 进位，同一半开区间两口径一致）。
+  // 时/分/整秒分量统一从该基准分解，与秒的显示口径不再分裂。
+  const secsDispRaw =
+    fracSecDigits > 0
+      ? Math.round(totalSecFloat * 10 ** fracSecDigits) / 10 ** fracSecDigits
+      : null;
+  const secsDisp =
+    secsDispRaw === null ? null : secsDispRaw >= SECS_PER_DAY ? 0 : secsDispRaw;
+  const timeBase = secsDisp ?? secsOfDay;
+  const hour24 = Math.floor(timeBase / 3600);
+  const minute = Math.floor((timeBase % 3600) / 60);
+  const second = timeBase % 60;
 
-  const tokens = scanDateTokens(code);
   const hasAmPm =
     tokens.some(
       (t) => typeof t !== "string" && t.tok.toUpperCase() === "AM/PM",
@@ -442,11 +475,9 @@ export function formatDateSection(
       const h = hasAmPm ? hour24 % 12 || 12 : hour24;
       out += len >= 2 ? pad(h) : String(h);
     } else if (head === "s") {
-      // 小数秒（ss.0，内置 47 形态）：紧随的 ".0+" 字面量决定小数位，按
-      // 显示精度四舍五入；这些字面量记号在此消费，避免 ".0" 被原样拼接。
-      // 进位边界（59.96s → "60.0" 而分钟不进位）是已知近似：仅在真实秒数
-      // 落入分钟翻转前半个显示精度内才出现，浮点尾差同量级，不值得为它
-      // 引入分钟级联重算。
+      // 小数秒（ss.0，内置 47 形态）：紧随的 ".0+" 字面量决定小数位；秒值
+      // 取自显示精度基准 timeBase（已含触 60 进位，恒 < 60，不再渲染非法
+      // 的 "60.0"）；这些字面量记号在此消费，避免 ".0" 被原样拼接。
       let fracDigits = 0;
       const j = ti + 1;
       if (tokens[j] === ".") {
@@ -455,7 +486,7 @@ export function formatDateSection(
         if (k > j + 1) fracDigits = k - (j + 1);
       }
       if (fracDigits > 0) {
-        const secInMinute = secsOfDayFloat % 60;
+        const secInMinute = timeBase % 60;
         out += secInMinute
           .toFixed(fracDigits)
           .padStart(len + 1 + fracDigits, "0");
@@ -464,11 +495,15 @@ export function formatDateSection(
       }
       out += len >= 2 ? pad(second) : String(second);
     } else if (tok.toUpperCase() === "AM/PM") {
-      out += hour24 < 12 ? "AM" : "PM";
+      // 大小写跟随格式码（Excel 语义：am/pm → "pm"、AM/PM → "PM"）；
+      // 记号扫描保留原字符，按首字母大小写决定输出形态
+      const lowerOut = tok[0] === tok[0].toLowerCase();
+      out += hour24 < 12 ? (lowerOut ? "am" : "AM") : lowerOut ? "pm" : "PM";
     } else if (tok === "上午/下午") {
       out += hour24 < 12 ? "上午" : "下午";
     } else if (tok.toUpperCase() === "A/P") {
-      out += hour24 < 12 ? "A" : "P";
+      const lowerOut = tok[0] === tok[0].toLowerCase();
+      out += hour24 < 12 ? (lowerOut ? "a" : "A") : lowerOut ? "p" : "P";
     } else {
       out += tok;
     }
@@ -704,6 +739,115 @@ function formatOptionalDecimal(
 }
 
 /**
+ * 段级 General 的顺序渲染：按段码字符序拼接引号串字面量与 General 记号
+ * 的数值（General" kg" + 5 → "5 kg"、"前缀"General → "前缀5"）。段首
+ * 负号跳过（负段的 "-General"：符号由 generalNumber 自带）。未出现
+ * General/G/通用格式记号时返回 null（调用方骨架判定已保证不会发生，
+ * 双保险）。
+ */
+function renderGeneralWithLiterals(code: string, n: number): string | null {
+  let out = "";
+  let sawValue = false;
+  let i = 0;
+  while (i < code.length) {
+    const ch = code[i];
+    if (ch === '"') {
+      const end = code.indexOf('"', i + 1);
+      const seg = end === -1 ? code.slice(i + 1) : code.slice(i + 1, end);
+      out += seg;
+      i = end === -1 ? code.length : end + 1;
+      continue;
+    }
+    if (ch === "\\") {
+      if (code[i + 1] !== undefined) out += code[i + 1];
+      i += 2;
+      continue;
+    }
+    if (/^[Gg]eneral/.test(code.slice(i))) {
+      out += generalNumber(n);
+      sawValue = true;
+      i += 7;
+      continue;
+    }
+    if (code.startsWith("G/通用格式", i)) {
+      out += generalNumber(n);
+      sawValue = true;
+      i += "G/通用格式".length;
+      continue;
+    }
+    if (ch === "-") {
+      i++;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return sawValue ? out : null;
+}
+
+/** 最大公约数（分数约分用）。 */
+function gcd(a: number, b: number): number {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y !== 0) [x, y] = [y, x % y];
+  return x;
+}
+
+/**
+ * 分数段自实现（Excel 语义，2026-11 修复）：引擎不按分母占位符位数约束
+ * 分母（"# ?/?" + 3.14159 → "3 14/99"——两位分母越权进一位占位格式），
+ * 纯分数格式（"?/?"）又被渲染成带分数。规则：
+ *  - 分母上限 = 10^d − 1，d 取**分子**占位符（0/?）个数（"??/100" 一类
+ *    带数字分母的写法同样按分子宽度取上限——0.37 → 27/73 是既有测试锁定
+ *    的口径）；在 [1, cap] 内取最逼近的 p/q（先到先得，天然偏好小分母），
+ *    gcd 约分到最简；p === q 时整数进位。
+ *  - 整数占位符：`#` 零值隐藏（连同其后分隔空格，与引擎既有输出一致：
+ *    0.5 + "# ?/?" → "1/2"）、`0` 恒显示；无整数占位符出假分数
+ *    （"?/?" + 1.25 → "5/4"）。
+ * 解析不了的形态返回 null，调用方落回引擎路径（行为不劣化）。
+ */
+function formatFraction(abs: number, core: string): string | null {
+  const m = /^([#0?]*)\s*([#0?]+)\s*\/\s*([#0?\d]+)$/.exec(core.trim());
+  if (!m) return null;
+  const intTok = m[1] ?? "";
+  const numTok = m[2];
+  const capDigits = Math.max(1, numTok.replace(/[^0?]/g, "").length);
+  const cap = 10 ** capDigits - 1;
+  const intVal = Math.floor(abs);
+  const frac = abs - intVal;
+  let bestP = 0;
+  let bestQ = 1;
+  let bestErr = Infinity;
+  for (let q = 1; q <= cap; q++) {
+    const p = Math.round(frac * q);
+    const err = Math.abs(frac - p / q);
+    if (err < bestErr) {
+      bestErr = err;
+      bestP = p;
+      bestQ = q;
+    }
+  }
+  const g = gcd(bestP, bestQ) || 1;
+  bestP /= g;
+  bestQ /= g;
+  if (bestP === bestQ) {
+    // 分数部分舍入到 1：整数进位、分数隐藏（Excel 显示裸整数）
+    return String(intVal + 1);
+  }
+  if (bestP === 0) {
+    // 恰为整数：# 零值隐藏但裸 0 仍需可见（与引擎 "2"/"0" 的输出一致）
+    return String(intVal);
+  }
+  if (!intTok) {
+    // 无整数占位符：假分数（1.25 + "?/?" → "5/4"）
+    const p = intVal * bestQ + bestP;
+    return p % bestQ === 0 ? String(p / bestQ) : `${p}/${bestQ}`;
+  }
+  const intHidden = intVal === 0 && !intTok.includes("0");
+  return `${intHidden ? "" : `${intVal} `}${bestP}/${bestQ}`;
+}
+
+/**
  * Excel 口径的显示舍入：先取 15 位有效十进制表示，再按 d 位 half-up
  * （away from zero——调用方已取绝对值）做**十进制字符串**舍入。
  *
@@ -818,6 +962,17 @@ export function formatCellValue(
     const at = sections.find((s) => s.code.includes("@"));
     if (!at) return { text: value };
     const { prefix, suffix, core } = extractEdgeLiterals(at.code);
+    // 多个 @ 记号：Excel 对每个 @ 各替换一次文本，中间字面量原样保留
+    // （"x@y@" + abc → "xabcyabc"）。引擎只处理单个 @，多余的 @ 连同中间
+    // 字面量被整体丢弃——2026-11 修复。单个 @ 维持引擎路径（着色等行为
+    // 不变）。
+    const atParts = core.split("@");
+    if (atParts.length > 2) {
+      return {
+        text: prefix + atParts.join(value) + suffix,
+        color: at.color ?? undefined,
+      };
+    }
     const inner = engineText(value, core || "@");
     return {
       text: prefix + inner.text + suffix,
@@ -879,12 +1034,26 @@ export function formatCellValue(
   }
 
   // 段级 General：[Red]General / General;-General / WPS 的 "G/通用格式"
-  // （本地化 General）。全串判断（函数开头）覆盖不了段内形态，此前这些段
-  // 按纯字面量渲染，单元格显示出 "General"/"G/通用格式" 字样而非数值。
-  // 负段的 "-General" 写法允许前导负号：数值的正负由 generalNumber 输出，
-  // 段上再拼负号会变成 "--5"。
-  if (/^-?general$/i.test(chosen.code) || chosen.code === "G/通用格式") {
-    return { text: generalNumber(n), color: chosen.color ?? undefined };
+  // （本地化 General），以及带边字面量的形态（General" kg" / "前缀"General
+  // ——2026-11 修复：此前整段恰为 General 才识别，带字面量时 General 被
+  // 字面量抽取吸进前缀、core 为空按纯字面量段输出，数值整体丢失且漏出
+  // "General" 字样）。负段的 "-General" 前导负号丢弃：数值正负由
+  // generalNumber 输出，段上再拼会变成 "--5"。
+  if (/general/i.test(chosen.code) || chosen.code.includes("G/通用格式")) {
+    // 骨架判定：剥掉引号串/转义/General 记号后只剩空或前导负号才走该路径
+    //（"0.00\"General\"" 一类把 General 当字面量的段不受影响）
+    const skeleton = chosen.code
+      .replace(/"[^"]*"/g, "")
+      .replace(/\\./g, "")
+      .replace(/general/gi, "")
+      .replace(/G\/通用格式/g, "")
+      .trim();
+    if (skeleton === "" || skeleton === "-") {
+      const gText = renderGeneralWithLiterals(chosen.code, n);
+      if (gText !== null) {
+        return { text: gText, color: chosen.color ?? undefined };
+      }
+    }
   }
 
   // 文本格式 @：Excel 的文本格式直接显示数值本身（1234.5 → "1234.5"），
@@ -948,35 +1117,60 @@ export function formatCellValue(
   }
   let display = Math.abs(n);
   if (scale > 0) display = display / 1000 ** scale;
+  const isFractionCore = coreNum.includes("/");
+  const isSciCore = /e/i.test(coreNum);
+  // 分数段自实现（Excel 分母位数上限语义，见 formatFraction）：引擎无视
+  // 分母占位符位数恒搜到 99（"# ?/?" + 3.14159 → "3 14/99"）。解析失败的
+  // 形态返回 null 落回引擎路径，行为不劣化。
+  if (isFractionCore && !isSciCore) {
+    const fr = formatFraction(display, coreNum);
+    if (fr !== null) {
+      return {
+        text: (signFromSingle ? "-" : "") + prefix + fr + suffix,
+        color: chosen.color ?? undefined,
+      };
+    }
+  }
+  // 连续百分号（%%）：Excel 对每个 % 各 ×100 且输出逐字面显示（0.00%% +
+  // 0.001 → "10.00%%"）。引擎只认一个 %，多余的丢字符——先剥净交引擎、
+  // 按显示域终值预舍入（引擎 core 已无 % 不会再 ×100），输出末尾按个数补回
+  //（% 在段尾是常态位置）。
+  const pctCount = (coreNum.match(/%/g) ?? []).length;
+  const pctExtras = pctCount > 1 ? pctCount : 0;
+  const coreEngine = pctExtras ? coreNum.replace(/%/g, "") : coreNum;
   // Excel 显示舍入（15 位十进制 half-up，见 decimalRoundHalfUp）。百分比段
   // 的引擎内部还有 ×100，先折到显示域舍入再折回，"0.00%" + 0.12345 才能
   // 得到 Excel 的 "12.35%" 而非引擎按二进制舍出的 "12.34%"。
   //
-  // 分数（含 "/"）与科学计数（含 "E"/"e"）两类 core 跳过预舍入：分数的
-  // coreDecimalPlaces 恒为 0（无小数点），会先把 1.25 舍成 1，而引擎本身
-  // 能正确输出 "1 1/4"；科学计数的舍入对象是**尾数**而非原值小数位，
-  // coreDecimalPlaces 数到 E 前截止，0.00012 + 0.00E+00 会被先舍成 0。
-  const isFractionCore = coreNum.includes("/");
-  const isSciCore = /e/i.test(coreNum);
+  // 分数（含 "/"）与科学计数（含 "E"/"e"）两类 core 跳过预舍入：分数由
+  // formatFraction 自行处理逼近；科学计数的舍入对象是**尾数**而非原值
+  // 小数位，coreDecimalPlaces 数到 E 前截止，0.00012 + 0.00E+00 会被先
+  // 舍成 0。
   if (!isFractionCore && !isSciCore) {
     const decimals = coreDecimalPlaces(coreNum);
-    display = coreNum.includes("%")
-      ? decimalRoundHalfUp(display * 100, decimals) / 100
-      : decimalRoundHalfUp(display, decimals);
+    if (pctExtras > 0) {
+      display = decimalRoundHalfUp(display * 100 ** pctExtras, decimals);
+    } else if (pctCount === 1) {
+      display = decimalRoundHalfUp(display * 100, decimals) / 100;
+    } else {
+      display = decimalRoundHalfUp(display, decimals);
+    }
   }
   const sign = signFromSingle ? "-" : "";
   // 含 # 可选小数位时自行格式化：引擎只按强制 0 位数输出，后半位精度会
-  // 在交给引擎之前就丢掉（见 formatOptionalDecimal）。
-  const optional = isFractionCore ? null : optionalDecimalInfo(coreNum);
+  // 在交给引擎之前就丢掉（见 formatOptionalDecimal）。%% 段不进该路径
+  //（formatOptionalDecimal 的 core 形态校验只认单个尾随 %）。
+  const optional =
+    isFractionCore || pctExtras > 0 ? null : optionalDecimalInfo(coreNum);
   const selfFormatted = optional
     ? formatOptionalDecimal(display, coreNum, optional)
     : null;
-  const r = selfFormatted === null ? engineText(display, coreNum) : null;
+  const r = selfFormatted === null ? engineText(display, coreEngine) : null;
   // 科学计数：引擎指数不补零且不带符号（1.23E+4 / 1.2E-4），Excel 显示口径
   // 是指数至少两位且恒带符号（1.23E+04 / 1.20E-04）。工程计数法 ##0.0E+0 的
   // 尾数归一（指数取 3 的倍数）引擎也不支持，此处仅对齐指数书写形态。
   const text =
-    selfFormatted !== null
+    (selfFormatted !== null
       ? selfFormatted
       : isSciCore
         ? r!.text.replace(/E([+-]?)(\d+)$/i, (_m, s: string, d: string) =>
@@ -984,7 +1178,7 @@ export function formatCellValue(
           )
         : optional
           ? trimOptionalDecimals(r!.text, optional.mandatory)
-          : r!.text;
+          : r!.text) + (pctExtras ? "%".repeat(pctExtras) : "");
   return {
     text: sign + prefix + text + suffix,
     color: chosen.color ?? r?.color,
