@@ -69,12 +69,26 @@ const WASM_CODES = new Set(["WASM", "WASM_ERROR", WASM_INIT_FAILED]);
  */
 const PASSTHROUGH_CODES = new Set<PreviewErrorCode>(["CORRUPT", "UNSUPPORTED"]);
 
+/**
+ * 提取错误消息：Error 取 message；带 message 字段的普通对象（未来引擎
+ * 新错误码、不经 Error 封装的传递路径）取其字符串形态——直接 String(err)
+ * 会得到 "[object Object]"，真实排障信息被抹掉（2026-11 修复）。
+ */
+function errorMessageOf(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null) {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === "string" && msg !== "") return msg;
+  }
+  return String(err);
+}
+
 export function normalizeEngineError(err: unknown): EngineErrorInfo {
   const rawCode = (err as ModernXlsxError)?.code;
   if (typeof rawCode !== "string") {
     return {
       code: "UNKNOWN",
-      message: err instanceof Error ? err.message : String(err),
+      message: errorMessageOf(err),
       domain: false,
     };
   }
@@ -93,7 +107,7 @@ export function normalizeEngineError(err: unknown): EngineErrorInfo {
     // .xls（BIFF8）判别双码兜底：真实/伪造 OLE2 复合文档实测抛
     // UNRECOGNIZED_FORMAT，真实复合文档预期抛 LEGACY_FORMAT——message 文本
     // 随输入形态变化（实测），判别依据只有 code 与是否含 OLE2 字样。
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessageOf(err);
     return /ole2/i.test(message)
       ? { code: "LEGACY_FORMAT", message: LEGACY_MSG, domain: true }
       : { code: "CORRUPT", message: CORRUPT_MSG, domain: true };
@@ -110,13 +124,13 @@ export function normalizeEngineError(err: unknown): EngineErrorInfo {
   if (PASSTHROUGH_CODES.has(rawCode as PreviewErrorCode)) {
     return {
       code: rawCode as PreviewErrorCode,
-      message: err instanceof Error ? err.message : String(err),
+      message: errorMessageOf(err),
       domain: true,
     };
   }
   return {
     code: "UNKNOWN",
-    message: err instanceof Error ? err.message : String(err),
+    message: errorMessageOf(err),
     domain: false,
   };
 }

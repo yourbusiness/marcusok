@@ -391,8 +391,13 @@ function buildSheet(ws: Worksheet, styles: PreviewStyles): PreviewSheet {
 
   const merges = (ws.mergeCells ?? [])
     .map((ref) => {
-      // "A1:C3" → 0-based {row, col, rowSpan, colSpan}
-      const m = /^([A-Za-z]+)(\d+):([A-Za-z]+)(\d+)$/.exec(ref ?? "");
+      // "A1:C3" → 0-based {row, col, rowSpan, colSpan}。四个组成部分各容许
+      // 可选的绝对引用前导 $（"$A$1:$C$3"——部分生产工具的合法写法；cell
+      // r 路径的 decodeRef 已支持同形态，2026-11 修复前此处不容 $，合并区
+      // 被静默整体丢弃）
+      const m = /^\$?([A-Za-z]+)\$?(\d+):\$?([A-Za-z]+)\$?(\d+)$/.exec(
+        ref ?? "",
+      );
       if (!m) return null;
       const c1 = decodeRef(m[1]);
       const c2 = decodeRef(m[3]);

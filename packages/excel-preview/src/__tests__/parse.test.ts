@@ -571,6 +571,42 @@ describe("模型构建（含覆盖层合并）", () => {
     expect(s.merges).toEqual([{ row: 0, col: 0, rowSpan: 3, colSpan: 3 }]);
   });
 
+  it("合并区绝对引用 $A$1:$C$3 同样解析（2026-11 修复）", async () => {
+    // 部分生产工具按绝对引用写 mergeCell（合法 OOXML；同文件 cell r 路径
+    // 的 decodeRef 已知并支持 $ 形态）。此前 merge 路径的正则不容 $，
+    // 合并区被静默丢弃（无告警、渲染层合并整体丢失）。
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: "M",
+          xml: `<row r="1"><c r="A1" t="inlineStr"><is><t>abs</t></is></c></row>`,
+          extraAfter:
+            '<mergeCells count="2"><mergeCell ref="$A$1:$C$3"/><mergeCell ref="B$5:$D5"/></mergeCells>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+    const model = buildPreviewWorkbook(await readBuffer(bytes), bytes);
+    const s = model.sheets[0];
+    // rowCount/colCount 并入合并末行/列（同上一用例口径）；$B$5:$D$5 只占
+    // B-D 列（col 1..3）、行 5（row 4）
+    expect(s.merges).toContainEqual({
+      row: 0,
+      col: 0,
+      rowSpan: 3,
+      colSpan: 3,
+    });
+    expect(s.merges).toContainEqual({
+      row: 4,
+      col: 1,
+      rowSpan: 1,
+      colSpan: 3,
+    });
+    expect(s.merges).toHaveLength(2);
+    expect(s.rowCount).toBe(5);
+    expect(s.colCount).toBe(4);
+  });
+
   it("大样本端到端（模型规模）", async () => {
     const { readBuffer } = await import("@marcusok/xlsx-core");
     const bytes = bigWorkbookBytes(2000, 10);
@@ -813,6 +849,14 @@ describe("解析入口（主线程路径 + 错误归一）", () => {
       code: "UNKNOWN",
       domain: false,
     });
+    // 带 message 字段的普通对象（未来引擎新码/非 Error 封装路径）：
+    // 消息取字符串形态而非 "[object Object]"（2026-11 修复）
+    expect(
+      normalizeEngineError({
+        code: "SOME_FUTURE_CODE",
+        message: "real engine detail",
+      }),
+    ).toMatchObject({ code: "UNKNOWN", message: "real engine detail" });
   });
 
   it("normalizeEngineError：结构类码 → CORRUPT，WASM 类码 → WASM", () => {
