@@ -151,11 +151,13 @@ in the component's `useEffect` cleanup, which runs automatically on navigation
 - Third-party subpaths not exposed via `exports`: add a
   `{ pkg, dir, excludeFromOptimizeDeps }` entry to `externalOverrides` in
   `vite.config.ts` and the resolver rewrites it to the physical file. The list
-  is currently empty — `@marcusok/excel-exporter` re-publishes its wasm/worker
-  under its own `exports` map (explicit `./dist/export.worker.js` and
-  `./dist/modern-xlsx.wasm` entries — there is no `./dist/*` wildcard, so a new
-  dist asset must be added to the exports map first),
-  so no third-party override is needed.
+  currently has one entry — `@silurus/ooxml` (the ppt-preview engine; its main
+  value is `excludeFromOptimizeDeps` + the `fs.allow` passthrough, see the
+  entry's comment in `vite.config.ts`). `@marcusok/excel-exporter`
+  re-publishes its wasm/worker under its own `exports` map (explicit
+  `./dist/export.worker.js` and `./dist/modern-xlsx.wasm` entries — there is
+  no `./dist/*` wildcard, so a new dist asset must be added to the exports map
+  first), so it needs no third-party override.
 - The pure-function resolution/alias logic lives in
   `src/vite/workspace-resolver.ts` with unit-test coverage
   (`src/__tests__/workspace-resolver.test.ts`).

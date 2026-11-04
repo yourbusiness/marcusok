@@ -2,7 +2,7 @@
 
 MarcusOK publishes five packages across two categories — how they relate is on the [Ecosystem](/guide/) page. This page starts with the one decision that comes first (which package to install), then walks through a first export with the most common one.
 
-Requirement: Node `>= 22`. Example commands use pnpm; npm / yarn work the same (`pnpm >= 9` is only a dev requirement of this repository, not of consumers).
+Requirement: Node `>= 22` (`@marcusok/pdf-preview` declares `>=22.13.0 || >=24` to match its pdf.js engine — on the 22.x line, 22.0–22.12 cannot install that one package). Example commands use pnpm; npm / yarn work the same (`pnpm >= 9` is only a dev requirement of this repository, not of consumers).
 
 ## Which package do I need?
 
@@ -76,5 +76,5 @@ No `main.ts` wiring, no bundler plugins: the shipped assets (this package's own 
 ## 3. Next steps
 
 - Learn how [auto mode routing](/packages/excel-exporter/guide/03-auto-mode) picks main / worker / stream
-- Try different modes and row counts in the [play](/play) — the same page also demos the preview package and the progress overlay
+- Try different modes and row counts in the [play](/play) — the same page also demos all four preview packages and the progress overlay
 - Start on another package from the [table above](#which-package-do-i-need), or see [Package Relationships & Selection](/guide/03-package-relationships) to compare them

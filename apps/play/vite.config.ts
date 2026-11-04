@@ -180,10 +180,14 @@ const srcAssetOverrides: {
     dir: resolve(packagesDir, "pdf-preview"),
     files: ["pdf.worker.min.mjs"],
   },
-  // ppt-preview 的 assets.ts 以 wasm 为唯一静态锚点；兜底分支以 anchor
-  // 变量为 base（源码里无 ../dist/ 静态字面量，不会漏改写——包内注释有
-  // 说明）。上游 @silurus/ooxml chunk 内的 wasm 字面量不经此处：那部分由
-  // externalOverrides 的 excludeFromOptimizeDeps 保真实路径。
+  // ppt-preview 的 assets.ts 无静态字面量锚点：src 直跑时它用运行时
+  // `new URL("../dist/pptx_parser_bg.wasm", moduleUrl)` 自行解析到包 dist
+  // （源码里刻意不用静态字面量，bundler 才不会把兜底路径当资产 emit），
+  // 因此本条目在当前实现下不会命中改写——保留作防御性登记：若未来
+  // assets.ts 引入 `new URL("./pptx_parser_bg.wasm", import.meta.url)`
+  // 字面量，改写立即生效。上游 @silurus/ooxml chunk 内的 wasm 字面量
+  // 不经此处：那部分由 externalOverrides 的 excludeFromOptimizeDeps
+  // 保真实路径。
   {
     pkg: "@marcusok/ppt-preview",
     dir: resolve(packagesDir, "ppt-preview"),

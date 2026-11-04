@@ -18,9 +18,11 @@ pnpm typecheck     # turbo 全仓类型检查（docs 执行 vue-tsc --noEmit）
 > 注意：不要直接在本目录裸跑 `pnpm build`，它依赖各发布包的 `dist/` 产物
 > （live demo import 包入口，registry 也读取各包的 `package.json` 版本号），
 > turbo 依赖图会保证顺序。
-> wasm/worker 资产无需拷贝：包内通过 `new URL(<file>, import.meta.url)` 自动定位，
-> 由 VitePress 的构建按 hashed asset 输出（仅当未来某个包确需 public/ 拷贝时，
-> 才在 `.vitepress/registry.ts` 的 `runtimeAssets` 登记）。
+> wasm/worker 单文件资产无需拷贝：包内通过 `new URL(<file>, import.meta.url)`
+> 自动定位，由 VitePress 的构建按 hashed asset 输出。**目录型资产**（pdf-preview
+> 的 `cmaps/`、`standard_fonts/`）不能用该模式定位，需在 `.vitepress/registry.ts`
+> 的 `runtimeAssets` 登记并由构建期拷入 `public/`（现状已有一条；未来新增目录型
+> 资产的包照此办理）。
 
 ## 目录约定
 
