@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { strToU8 } from "fflate";
 import { parseWorkbookSource } from "../worker/worker-client";
+import { csvToWorkbook } from "../parse/csv";
 
 /**
  * worker 响应分流回归（P4）：domain 标记的域错误必须直传调用方，不回退
@@ -9,7 +10,9 @@ import { parseWorkbookSource } from "../worker/worker-client";
  * CSV（主线程本可解析成功）——若 domain 错误仍触发回退，结果会变成 ok:true，
  * 与"直传错误"的期望立刻区分开。
  */
-let preset: { ok: false; code: string; message: string; domain?: boolean };
+let preset:
+  | { ok: false; code: string; message: string; domain?: boolean }
+  | { ok: true; workbook: ReturnType<typeof csvToWorkbook>; parseMs: number };
 
 class FakeWorker {
   onmessage: ((e: { data: unknown }) => void) | null = null;
@@ -51,6 +54,19 @@ describe("worker 响应分流（domain 直传 / 非 domain 回退主线程）", 
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.workbook.sheets[0].rowCount).toBe(2);
+    }
+  });
+
+  it("成功响应采用 worker 报告的纯解析耗时（不被主线程墙钟覆盖）", async () => {
+    // worker 路由的 parseMs 来自 worker 消息（sniff → 模型构建的纯解析
+    // 耗时）。若客户端仍用 enqueue 前起的墙钟覆盖，指标会混入 FIFO 排队
+    // 等待——与主线程路径同名不同义，且随并发抖动。哨兵值 42 直接断言
+    // 来源是 worker 消息。
+    preset = { ok: true, workbook: csvToWorkbook(csvBytes), parseMs: 42 };
+    const r = await parseWorkbookSource({ bytes: csvBytes });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.parseMs).toBe(42);
     }
   });
 });

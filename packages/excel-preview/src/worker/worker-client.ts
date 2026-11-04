@@ -159,6 +159,9 @@ function handleMessage(w: Worker, data: unknown): void {
     id: number;
     ok: boolean;
     workbook?: PreviewWorkbook;
+    /** worker 侧纯解析耗时（见 parse.worker.ts 的 WorkerResponse）。
+     * ?? 0 仅为类型收窄：同包同构建的 worker 必然回带该字段。 */
+    parseMs?: number;
     code?: string;
     message?: string;
     domain?: boolean;
@@ -168,7 +171,11 @@ function handleMessage(w: Worker, data: unknown): void {
   if (!active || active.worker !== w || active.id !== msg.id) return;
   const entry = active;
   if (msg.ok && msg.workbook) {
-    resolveEntry(entry, { ok: true, workbook: msg.workbook, parseMs: 0 });
+    resolveEntry(entry, {
+      ok: true,
+      workbook: msg.workbook,
+      parseMs: msg.parseMs ?? 0,
+    });
   } else {
     resolveEntry(entry, {
       ok: false,
@@ -385,13 +392,16 @@ export async function parseWorkbookSource(
   const w = getOrCreateWorker();
   if (!w) return parseOnMainThread(req);
 
-  const t0 = performance.now();
   const id = ++requestIdSeq;
   const result = await new Promise<ParseResult>((resolve) => {
     enqueue({ id, req, resolve, worker: null });
   });
   if (result.ok) {
-    return { ...result, parseMs: performance.now() - t0 };
+    // parseMs 用 worker 报告的纯解析耗时，不再以主线程墙钟覆盖——墙钟
+    // 含 FIFO 排队等待（并发/前置请求在途时显著偏大），与主线程路径的
+    // parseMs（sniff → 模型构建）口径不同义，会让消费方的性能指标随
+    // 调度抖动。
+    return result;
   }
   // 调用方取消：直传，不回退主线程（对取消的输入复跑违背取消意图）
   if (result.code === "ABORTED") return result;

@@ -96,7 +96,9 @@ docs site for the full
 
 The WASM binary (1.9MB, gzip ≈ 650KB) and the self-contained parse worker
 ship with this package and resolve automatically in bundlers and Node — the
-engine is bundled into this package's `dist` at build time, so each @marcusok
+engine is bundled into this package's `dist` at build time (zero runtime
+dependencies; there is no engine package for consumers to install, and
+upstream `engines` ranges stay inert at runtime), so each @marcusok
 spreadsheet package carries its own copy (identical binaries, usually
 deduplicated as an asset by content-hash naming and the HTTP cache).
 Self-hosted copies use the same `configureWasm({ wasmUrl, parseWorkerUrl })`

@@ -23,7 +23,15 @@ interface WorkerRequest {
 }
 
 type WorkerResponse =
-  | { id: number; ok: true; workbook: ReturnType<typeof buildPreviewWorkbook> }
+  | {
+      id: number;
+      ok: true;
+      workbook: ReturnType<typeof buildPreviewWorkbook>;
+      /** worker 侧纯解析耗时（sniff → 模型构建完成）。主线程据此上报
+       * parseMs——用它而不是客户端墙钟（墙钟含 FIFO 排队等待，随并发
+       * 抖动，与主线程路径的"纯解析"口径不同义）。 */
+      parseMs: number;
+    }
   | { id: number; ok: false; code: string; message: string; domain?: boolean };
 
 /** 见 export.worker.ts 的 loadedWasmKey 说明：initWasm 幂等，按字符串判重。 */
@@ -32,6 +40,7 @@ let loadedWasmKey: string | null = null;
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { id, bytes, password, wasmUrl } = e.data;
+  const t0 = performance.now();
   try {
     const form = sniffFormat(bytes);
     if (form === "text") {
@@ -40,6 +49,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         id,
         ok: true,
         workbook,
+        parseMs: performance.now() - t0,
       } satisfies WorkerResponse);
       return;
     }
@@ -69,6 +79,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       id,
       ok: true,
       workbook,
+      parseMs: performance.now() - t0,
     } satisfies WorkerResponse);
   } catch (err) {
     // 错误归一与主线程回退路径共用同一实现（parse/engine-errors）：code 直出
