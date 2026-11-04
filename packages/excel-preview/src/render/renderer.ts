@@ -703,6 +703,31 @@ export class SheetRenderer {
           if (span && span.style.maxWidth !== next) {
             span.style.maxWidth = next;
           }
+        } else if (
+          spillPx !== undefined &&
+          // 创建期走普通形态的另一种收尾：进入窗口时 stop 下限（col+2）内
+          // 恰全为隐藏列，上限 ≤ 自身宽度；窗口右移越过隐藏列后上限越过自身
+          // 宽度，须改按溢出形态重建，否则长文本在持续可见期间一直被裁在
+          // 列宽处。childElementCount === 0 且文本非空精确锁定普通文本形态
+          // ——旋转/溢出形态都有 span 子节点；带样式的空值格（value null
+          // + styleIndex，模型稀疏化的正常产物）无子节点也无文本，重建后
+          // 仍是空元素，排除在转换外以防每帧重建的 DOM churn。
+          existing.childElementCount === 0 &&
+          existing.textContent !== ""
+        ) {
+          existing.remove();
+          this.rendered.delete(key);
+          this.createCell(
+            layer,
+            key,
+            cell,
+            this.workbook!.sheets[this.sheetIndex],
+            left,
+            top,
+            width,
+            height,
+            spillPx,
+          );
         }
         return;
       }

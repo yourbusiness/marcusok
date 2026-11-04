@@ -829,6 +829,123 @@ describe("SheetRenderer", () => {
     r.destroy();
   });
 
+  it("紧邻隐藏列的溢出格：窗口右移越过隐藏列后转为溢出形态", async () => {
+    // 深层格进入窗口时 stop 下限为 col+2：紧邻列隐藏（宽 0）时创建上限
+    // 恰等于自身宽度，走普通形态（无溢出）。窗口继续右移、stop 越过隐藏
+    // 列后上限越过自身宽度，已渲染元素必须改按溢出形态重建——否则长文本
+    // 在持续可见期间一直被裁在列宽处（Excel 语义应越过隐藏空列继续溢出）。
+    const model = await parse(sampleWorkbookBytes());
+    model.sheets[0] = {
+      ...model.sheets[0],
+      rowCount: 1,
+      colCount: 60,
+      rows: [
+        {
+          index: 1,
+          height: null,
+          hidden: false,
+          cells: [
+            {
+              col: 20,
+              type: "string",
+              value: "很长的溢出文本".repeat(10),
+              styleIndex: null,
+            },
+          ],
+        },
+      ],
+      // col 21（min/max 1-based = 22）隐藏：宽度 0
+      colSpans: [
+        { min: 22, max: 22, width: 8.43, hidden: true, customWidth: false },
+      ],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+    };
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const cell = () =>
+      [...container.querySelectorAll(".xpv-cell")].find((c) =>
+        c.textContent?.includes("溢出"),
+      ) as HTMLElement | undefined;
+    const viewport = container.querySelector(".xpv-viewport") as HTMLElement;
+
+    // 滚到 col 20 恰好从窗口右缘进入：colEnd = 21、stop = 22，上限 =
+    // 自身宽度（col 21 宽 0）→ 普通形态（复现前提，同时锁定创建期语义）
+    viewport.scrollLeft = 424;
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+    const entered = cell();
+    expect(entered).toBeTruthy();
+    expect(entered!.classList.contains("xpv-spill")).toBe(false);
+
+    // 继续右移：stop 越过隐藏列，上限 = colLeft[25] - colLeft[20] > 自身宽度
+    viewport.scrollLeft = 550;
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+    const after = cell();
+    expect(after).toBeTruthy();
+    expect(after!.classList.contains("xpv-spill")).toBe(true);
+    const span = after!.querySelector("span");
+    expect(span).toBeTruthy();
+    expect(Number.parseFloat(span!.style.maxWidth)).toBeGreaterThan(64);
+    r.destroy();
+  });
+
+  it("空文本格不参与溢出转换（元素身份跨帧稳定，无 churn）", async () => {
+    // 带样式的空值格（value null + styleIndex）进模型但渲染为空文本：
+    // 普通形态无子节点也无文本。溢出上限越过自身宽度后同样满足 spillPx
+    // 条件，但重建产物仍是空元素——不排除会每帧 remove+recreate（无视觉
+    // 差异的 DOM churn）。
+    const model = await parse(sampleWorkbookBytes());
+    model.sheets[0] = {
+      ...model.sheets[0],
+      rowCount: 1,
+      colCount: 60,
+      rows: [
+        {
+          index: 1,
+          height: null,
+          hidden: false,
+          cells: [{ col: 20, type: "string", value: null, styleIndex: 0 }],
+        },
+      ],
+      colSpans: [
+        { min: 22, max: 22, width: 8.43, hidden: true, customWidth: false },
+      ],
+      merges: [],
+      frozenRows: 0,
+      frozenCols: 0,
+    };
+    const r = new SheetRenderer(container);
+    r.render(model, {});
+    const l = buildLayout(model.sheets[0]);
+    const cellAt20 = () =>
+      [...container.querySelectorAll(".xpv-cell")].find(
+        (c) => (c as HTMLElement).style.left === `${l.colLeft[20]}px`,
+      ) as HTMLElement | undefined;
+    const viewport = container.querySelector(".xpv-viewport") as HTMLElement;
+
+    viewport.scrollLeft = 424;
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+    const entered = cellAt20();
+    expect(entered).toBeTruthy();
+    expect(entered!.textContent).toBe("");
+
+    // 再滚两帧：元素引用保持稳定（未因溢出转换分支被重建）
+    viewport.scrollLeft = 550;
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+    const frame1 = cellAt20();
+    viewport.scrollLeft = 620;
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise((res) => requestAnimationFrame(() => res(null)));
+    expect(cellAt20()).toBe(frame1);
+    expect(frame1).toBe(entered);
+    r.destroy();
+  });
+
   it("冻结窗格分层存在", async () => {
     const model = await parse(sampleWorkbookBytes());
     const r = new SheetRenderer(container);
