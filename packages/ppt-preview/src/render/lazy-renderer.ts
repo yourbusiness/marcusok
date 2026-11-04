@@ -19,6 +19,16 @@ const RENDER_MARGIN = "100% 0px 100% 0px";
 /** 保留带（离开才释放 canvas）：视口上下各 3 屏，与渲染带之间构成缓冲。 */
 const RELEASE_MARGIN = "300% 0px 300% 0px";
 
+/**
+ * 内容驱动的尺寸关键字（max/min-content、fit-content 及其带参数与
+ * legacy 前缀变体、stretch）。这类值随内容增长：作为滚动根时高度等于
+ * 内容总高，与含 % 的形态同样使 IO root 覆盖全部页（全量渲染、导航
+ * no-op）。误排除真定高 root 的代价只是回退视口 root（懒渲染与导航
+ * 照常工作），远小于误包含，故按"含关键字即排除"的保守口径收紧。
+ */
+const CONTENT_SIZING_RE =
+  /\b(?:max-content|min-content|fit-content|stretch)\b|-moz-available|-webkit-fill-available/;
+
 export type SlideState = "empty" | "queued" | "rendering" | "rendered";
 
 export interface SlideEntry {
@@ -62,14 +72,24 @@ function hasDefiniteHeight(
   // 误选 root：root 高度等于整份内容，±100%/±300% 覆盖全部页 →
   // 全量渲染；导航只改它的 scrollTop 且不滚 window，表现为静默 no-op。
   // 用 includes("%") 而非 endsWith("%")：真定高值（600px、
-  // calc(50vh - 2rem)）不含 %，不受影响。
+  // calc(50vh - 2rem)）不含 %，不受影响。内容驱动关键字同理排除
+  // （取舍见 CONTENT_SIZING_RE 注释）。
   const definiteMax = (value: string | undefined): boolean =>
-    Boolean(value && value !== "none" && !value.trim().includes("%"));
+    Boolean(
+      value &&
+      value !== "none" &&
+      !value.trim().includes("%") &&
+      !CONTENT_SIZING_RE.test(value),
+    );
   return Boolean(
     definiteMax(style.maxHeight) ||
     definiteMax(el.style.maxHeight) ||
-    // 百分比高度在父级高度 auto 时并不定高，不能作为"会滚动"的证据
-    (inlineHeight && inlineHeight !== "auto" && !inlineHeight.includes("%")) ||
+    // 百分比/内容驱动关键字高度在父级高度 auto 时并不定高，不能作为
+    // "会滚动"的证据
+    (inlineHeight &&
+      inlineHeight !== "auto" &&
+      !inlineHeight.includes("%") &&
+      !CONTENT_SIZING_RE.test(inlineHeight)) ||
     (el.clientHeight > 0 && el.scrollHeight > el.clientHeight),
   );
 }

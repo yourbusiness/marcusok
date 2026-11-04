@@ -710,6 +710,71 @@ describe("滚动祖先探测", () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([
+    ["max-content", "maxHeight"],
+    ["min-content", "maxHeight"],
+    ["fit-content", "maxHeight"],
+    ["fit-content", "height"],
+  ] as const)(
+    "内容驱动关键字 %s 的 %s 不构成滚动根（随内容长高）",
+    async (keyword, prop) => {
+      // max/min-content、fit-content 不含 %、不等于 none/auto，按
+      // "仅排除含 % 值"的判定会被当作定高选作 IO root——但它们随内容
+      // 增长，root 高度等于整份内容，复现全量渲染 + 导航 no-op。这批
+      // 关键字（含带参数的 fit-content(100px) 与 legacy 前缀变体）一律
+      // 按内容驱动排除；误排除真定高 root 只是回退视口，代价远小。
+      vi.stubGlobal("IntersectionObserver", FakeIO);
+      const outer = document.createElement("div");
+      outer.style.overflow = "auto";
+      if (prop === "maxHeight") outer.style.maxHeight = keyword;
+      else outer.style.height = keyword;
+      document.body.appendChild(outer);
+      outer.appendChild(container);
+
+      const inst = createPptPreview(container, {
+        source: buildPptx({ texts: ["a"] }),
+      });
+      await vi.waitFor(() => {
+        expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+      });
+
+      expect(renderIOs()[0].options?.root).toBeNull();
+      expect(releaseIOs()[0].options?.root).toBeNull();
+      inst.destroy();
+      vi.unstubAllGlobals();
+    },
+  );
+
+  it("带参数与带前缀的 fit-content 变体同样排除", async () => {
+    // fit-content(100px) 与 legacy -moz/-webkit 前缀变体：虽可能给出
+    // 数值上限，但按"含关键字即排除"的保守口径统一不放行（漏检真
+    // 定高只是回退视口 root，懒渲染与导航仍工作）。
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    for (const value of [
+      "fit-content(100px)",
+      "-moz-fit-content",
+      "-webkit-fit-content",
+    ]) {
+      const outer = document.createElement("div");
+      outer.style.overflow = "auto";
+      outer.style.maxHeight = value;
+      document.body.appendChild(outer);
+      outer.appendChild(container);
+
+      const inst = createPptPreview(container, {
+        source: buildPptx({ texts: ["a"] }),
+      });
+      await vi.waitFor(() => {
+        expect(container.querySelectorAll(".mop-ppt-page")).toHaveLength(3);
+      });
+
+      expect(renderIOs().at(-1)?.options?.root).toBeNull();
+      inst.destroy();
+      outer.remove();
+    }
+    vi.unstubAllGlobals();
+  });
+
   it("隐藏创建后变为可见：滚动根从视口升级为面板，导航不再滚窗口", async () => {
     // display:none 的 tab 面板（高度来自 class）在创建时量不到高度 →
     // IO root=null；可见后首次交互必须重探，否则 goToSlide 滚 window。
