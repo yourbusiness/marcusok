@@ -1,5 +1,30 @@
 # @marcusok/excel-preview
 
+## 2.4.10
+
+### Patch Changes
+
+- c72358c: Keep the real message when an engine error arrives as a plain object with a `message` field (a future engine code, or any path that does not wrap it in `Error`). It previously stringified to `[object Object]`, discarding the only diagnostic detail.
+- c72358c: Parse absolute references in `<mergeCell>` (`$A$1:$C$3`). The merge parser only accepted plain `A1:C3` refs and silently dropped absolute-form merges some producers write (the cell-reference path already accepted the same `$` form), losing the merged region entirely with no warning.
+- da937e1: Fix merged-cell rendering to match Excel:
+
+  - Text in a merged anchor cell never overflows. Horizontal merges were already clipped by the covered-cell blocker, but vertical merges (single column) spilled long text across the merge's column boundary into adjacent empty cells — merged cells clip at the merge boundary in Excel, in both directions.
+  - A merge whose whole region is empty (no value, no style — model sparsification drops the anchor cell) no longer renders as a grid hole: it now gets a full merge-sized placeholder with the outer grid frame, instead of a single stray one-cell box at the anchor.
+
+- e6e9600: Fix a batch of number-format fidelity bugs, each verified against Excel semantics with regression tests:
+
+  - `[Color n]` now resolves through Excel's legacy 56-color palette (1-based) instead of treating `n` as a 0-based indexed-palette index — the whole group was shifted by one (`[Color 1]` rendered white while `[Black]` rendered black, `[Color 3]` green instead of red); values out of 1..56 produce no color.
+  - Fraction formats respect the denominator placeholder width: `# ?/?` picks the closest fraction with a denominator ≤ 9 (`3.14159` → `3 1/7`, previously `3 14/99`), reduces to lowest terms, and a fraction format without an integer placeholder renders an improper fraction (`?/?` + `1.25` → `5/4`).
+  - `mm:ss.0`-style fractional seconds round the whole time base at display precision and carry into the minute — `59.99999s` renders `1:00.0` instead of the illegal `01:60.0`, and `59.94s` stays `0:59.9` instead of wrongly carrying to `1:00`.
+  - Conditional sections accept scientific-notation thresholds and leading signs (`[>1E+10]`), which previously leaked the bracket into the output as literal garbage.
+  - Section-level `General` with edge literals keeps the value: `General" kg"` renders `5 kg` instead of dropping the number and leaking the word "General".
+  - A text section with multiple `@` tokens substitutes every `@` (`@@@` + `abc` → `abcabcabc`); previously only the first was replaced and the rest were dropped.
+  - Consecutive percent signs each multiply by 100 (`0.00%%` + `0.001` → `10.00%%`), matching Excel.
+  - `am/pm` and `a/p` mirror the case of the format code (`h:mm am/pm` + noon → `12:00 pm`, previously always `PM`).
+
+- b89c247: Queue `setSheet()` calls made before the parse resolves and replay the last one once the preview boots. Previously such calls were silent no-ops (the documented workaround was to call from `onParsed`), and the package's own JSDoc example walked into exactly that trap. Invalid queued names are reported through `onError` when the replay runs, with the same wording and code as a runtime call. `getSheetNames()` still returns `[]` until the parse resolves (synchronous getter), and `destroy()` drops any queued call. The docs site (en + zh) and the JSDoc now describe the queueing behavior.
+- 4ac912c: Ship `THIRD_PARTY_NOTICES.md` with the bundled third-party software (modern-xlsx — engine JS glue plus the re-shipped WASM binary — and fflate, both MIT), matching the word/pdf/ppt preview packages. MIT requires the copyright and permission notice to accompany substantial portions of the software, and the packages' `dist` embeds both.
+
 ## 2.4.9
 
 ### Patch Changes

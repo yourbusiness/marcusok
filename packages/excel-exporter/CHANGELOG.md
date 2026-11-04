@@ -1,5 +1,11 @@
 # @marcusok/excel-exporter
 
+## 3.4.7
+
+### Patch Changes
+
+- 4ac912c: Ship `THIRD_PARTY_NOTICES.md` with the bundled third-party software (modern-xlsx — engine JS glue plus the re-shipped WASM binary — and fflate, both MIT), matching the word/pdf/ppt preview packages. MIT requires the copyright and permission notice to accompany substantial portions of the software, and the packages' `dist` embeds both.
+
 ## 3.4.6
 
 ### Patch Changes
