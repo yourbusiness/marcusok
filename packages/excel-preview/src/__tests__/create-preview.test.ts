@@ -240,3 +240,115 @@ describe("createPreview 初始 sheet 校验", () => {
     expect(onParsed).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("setSheet 解析前排队重放（2026-11 修复）", () => {
+  // 双 sheet 样本：S1/S2 各有独有文本，DOM 上可判活跃 sheet
+  const twoSheetBytes = (): Uint8Array =>
+    buildXlsx({
+      sheets: [
+        {
+          name: "S1",
+          xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>s1-content</t></is></c></row>',
+        },
+        {
+          name: "S2",
+          xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>s2-content</t></is></c></row>',
+        },
+      ],
+      styles: RICH_STYLES,
+    });
+
+  it("createPreview 后同步调用的 setSheet 在解析完成后生效", async () => {
+    const onError = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const preview = createPreview(container, {
+      source: twoSheetBytes(),
+      onError,
+    });
+    // 此刻 renderer 必为 null（boot 的 await 尚未走完）——修复前静默丢弃
+    preview.setSheet("S2");
+    await flushBoot();
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("s2-content");
+    expect(container.textContent).not.toContain("s1-content");
+    preview.destroy();
+  });
+
+  it("多次排队取最后一次意图；索引形态同样重放", async () => {
+    const onError = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const preview = createPreview(container, {
+      source: twoSheetBytes(),
+      onError,
+    });
+    preview.setSheet("S1");
+    preview.setSheet(1);
+    await flushBoot();
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("s2-content");
+    preview.destroy();
+  });
+
+  it("排队的无效名在解析后经 onError 上报（与运行期同口径）", async () => {
+    const onParsed = vi.fn();
+    const onError = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const preview = createPreview(container, {
+      source: twoSheetBytes(),
+      onParsed,
+      onError,
+    });
+    preview.setSheet("Nope");
+    await flushBoot();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith({
+      code: "UNKNOWN",
+      message: "Sheet not found: Nope",
+    });
+    // 初始渲染照常完成（回退 activeSheet=S1）
+    expect(onParsed).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("s1-content");
+    preview.destroy();
+  });
+
+  it("destroy 后排队的请求作废：不渲染、不上报", async () => {
+    const onParsed = vi.fn();
+    const onError = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const preview = createPreview(container, {
+      source: twoSheetBytes(),
+      onParsed,
+      onError,
+    });
+    preview.setSheet("S2");
+    preview.destroy();
+    await flushBoot();
+
+    expect(onParsed).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(container.querySelectorAll(".xpv-cell").length).toBe(0);
+  });
+
+  it("解析完成后的 setSheet 仍即时生效（回归锁定）", async () => {
+    const onError = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const preview = createPreview(container, {
+      source: twoSheetBytes(),
+      onError,
+    });
+    await flushBoot();
+    expect(container.textContent).toContain("s1-content");
+    preview.setSheet("S2");
+    expect(container.textContent).toContain("s2-content");
+    expect(onError).not.toHaveBeenCalled();
+    preview.destroy();
+  });
+});

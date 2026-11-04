@@ -279,8 +279,15 @@ export interface PreviewInstance {
    * （worker-client.ts 的 enqueue 实现口径）。
    */
   destroy(): void;
-  /** 切换 sheet（名称或 0-based 索引）。 */
+  /**
+   * 切换 sheet（名称或 0-based 索引）。解析完成前的调用会排队、解析完成
+   * 后自动重放（无效名届时经 onError 上报，与运行期同口径）；destroy 后
+   * 为 no-op。
+   */
   setSheet(nameOrIndex: string | number): void;
-  /** 全部 sheet 名（含隐藏页签，按文件顺序）。 */
+  /**
+   * 全部 sheet 名（含隐藏页签，按文件顺序）。同步 getter：解析完成前返回
+   * []（sheet 名在解析产出后才存在）。
+   */
   getSheetNames(): string[];
 }

@@ -96,6 +96,7 @@ export async function parseWorkbookBytes(
  *   onParsed: (info) => console.log(info.sheetNames),
  *   onError: (e) => console.error(e.code, e.message),
  * });
+ * // 解析完成前的调用会排队，解析完成后自动生效（无效名届时经 onError）
  * preview.setSheet("Sheet2");
  * preview.destroy();
  * ```
@@ -145,6 +146,12 @@ export function createPreview(
   const abortController = new AbortController();
   let renderer: SheetRenderer | null = null;
   let workbook: PreviewWorkbook | null = null;
+  // 解析完成前排队的 setSheet 请求（2026-11 修复：此前 renderer 未建前的
+  // 调用被静默丢弃——createPreview 后同步调用的 setSheet 必然命中，包内
+  // JSDoc 示例的写法本身就会踩中）。只保留最后一次意图，boot 创建
+  // renderer 并完成初始渲染后重放（无效名届时经 onError，与运行期口径
+  // 一致）；destroy / 解析失败路径下自然作废。
+  let pendingSheet: string | number | undefined;
 
   const boot = async () => {
     const t0 = performance.now();
@@ -204,6 +211,20 @@ export function createPreview(
           });
         },
       });
+      // 重放解析前排队的 setSheet：在初始 render 之后执行，排队的用户
+      // 意图覆盖初始 sheet 选项（后到优先）；无效名与运行期同口径经
+      // onError 上报
+      if (pendingSheet !== undefined && renderer !== null) {
+        const pending = pendingSheet;
+        pendingSheet = undefined;
+        const idx = renderer.setSheet(pending);
+        if (idx < 0) {
+          onError?.({
+            code: "UNKNOWN",
+            message: `Sheet not found: ${String(pending)}`,
+          });
+        }
+      }
     } catch (err) {
       if (destroyed) return;
       onError?.({
@@ -222,9 +243,15 @@ export function createPreview(
       renderer?.destroy();
       renderer = null;
       workbook = null;
+      pendingSheet = undefined;
     },
     setSheet(nameOrIndex) {
-      if (!renderer) return;
+      // 解析未完成（renderer 未建）：排队等 boot 重放（destroyed 后丢弃），
+      // 不再静默吞掉（2026-11 修复）
+      if (!renderer) {
+        if (!destroyed) pendingSheet = nameOrIndex;
+        return;
+      }
       const idx = renderer.setSheet(nameOrIndex);
       if (idx < 0) {
         onError?.({

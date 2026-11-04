@@ -35,8 +35,9 @@ const preview = createPreview(el, {
   onError: (e) => console.error(e.code, e.message),
 });
 
-// setSheet()/getSheetNames() 在解析完成前是空操作；
-// destroy() 立即生效（阻断尚未完成的渲染与回调）
+// 解析完成前调用的 setSheet() 会排队、boot 结束后自动重放；
+// getSheetNames() 在此之前返回 []。
+// destroy() 立即生效（作废排队中的调用，阻断尚未完成的渲染与回调）
 preview.setSheet("Sheet2"); // 名称或索引
 preview.destroy(); // 卸载并释放资源
 ```
